@@ -2,7 +2,27 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)。
 
-> **0.6.0 是本次公开发布的最终版本**，作者不承诺后续更新——详见 README 的「维护状态」一节。
+> **0.7.0 是适配 DSH 0.2 的一次性版本**，之后作者仍不承诺后续更新——详见 README 的「维护状态」一节。
+
+## 0.7.0
+
+**适配 DSH 0.2：服务访问契约收紧**。0.2.1-rc.2 实测：插件能正常加载、正/反向链路照常，
+但 `qqbot` / `qqgroup` 两个模型工具**不会注册**，访客工具闸也**静默失效**——两个都是静默降级，
+日志里只有一行 `跳过 qqbot 工具注册`，很容易被当成正常启动。
+
+- **根因**：Cordis 4.0.5 的 Guard 规定，属性访问 `ctx.tools` 前必须在插件 `inject` 里声明 `tools`，
+  否则直接抛 `cannot get property "tools" without inject`。0.1.7 时代没有这条限制，所以 0.6.x 的
+  `ctx.effect(() => ctx.tools.register(tool))` 写法在 0.2 上必然抛错，被外层 `catch` 吞掉。
+  同一处问题也影响 `entry.agent.ctx.tools.guard(...)`（访客工具闸）。
+- **修法（不把 tools 写进 inject）**：`tools` 对 QQ 桥接是可选服务，写进模块级 `inject` 会让插件在
+  服务缺席时永远 park（连消息都不收）。改为 `ctx.get('tools')` 取值；若服务尚未注册，退回
+  `ctx.inject(['tools'], child => ...)` 动态挂载，语义与原来一致，且 0.1.7 上同样可用。
+- **访客工具闸**：`entry.agent.ctx.tools.guard(...)` 改为先 `entry.agent.ctx.get('tools')`；
+  拿不到就抛错走既有的 fail-closed 分支（`guardUnavailable` → 拒绝驱动非拥有者），不再静默放行。
+- **验证**：`0.2.1-rc.2` 运行时 + 桌面 profile 的实测日志，修复前 `跳过 qqbot 工具注册：cannot get
+  property "tools" without inject`，修复后 `已注册 qqbot 工具` / `已注册 qqgroup 工具`。
+- **兼容性**：0.7.0 要求 DSH ≥ 0.2.0；DSH 0.1.x 请继续用 0.6.1。`defineTool` / `sessionController`
+  （`create` + `resolveAgent`）/ `subprocess` / `timer` / `Config` + `.volatile()` 在 0.2 上没有变化。
 
 ## 0.6.1
 

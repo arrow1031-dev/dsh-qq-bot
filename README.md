@@ -2,11 +2,16 @@
 
 > ### ⚠️ 维护状态：**已封版，不承诺更新**
 > 功能完整、124 项测试全绿，但作者**不做持续性维护**——不修 bug、不适配上游变更、不接受功能请求。
+> 例外：**0.7.0 为适配 DSH 0.2 的一次性版本**（服务访问契约变更），之后不再跟进。
 > 遇到问题请 **fork 下来自己改**（MIT 许可，随便改随便发）。
 > 为方便动手，仓库里有 **[ARCHITECTURE.md](ARCHITECTURE.md)**：文件职责、数据流、设计决策原因、分步改动指南。
 >
-> **兼容性**：**0.6.1 起要求 DSH ≥ 0.1.7**。0.1.7 重做了设置契约（`settings.register` 已被移除），
-> 0.6.0 在 0.1.7 上注册设置会失败。DSH 0.1.6 及更早请用 0.6.0。
+> **兼容性**：
+> - **0.7.0 起要求 DSH ≥ 0.2.0**（0.2.1-rc.2 实测）。0.2 的 Cordis Guard 要求 `ctx.tools` 必须先
+>   `inject: ['tools']` 或经 `ctx.get('tools')` 取得，否则工具注册会被静默跳过；0.7.0 已改走
+>   `ctx.get` + `ctx.inject` 动态挂载。
+> - **0.6.1 起要求 DSH ≥ 0.1.7**。0.1.7 重做了设置契约（`settings.register` 已被移除）。
+> - DSH 0.1.x 请用 0.6.1；DSH 0.1.6 及更早请用 0.6.0。
 
 **作者** [@arrow1031](https://github.com/arrow1031) · **许可** [MIT](LICENSE) · **AI 生成声明与已知限制** [AI-DISCLOSURE.md](AI-DISCLOSURE.md) · **更新日志** [CHANGELOG.md](CHANGELOG.md)
 
@@ -89,14 +94,14 @@ dsh plugin --profile web add \
 
 # 方式三：本地 tarball（自己改了代码之后）
 npm pack
-dsh plugin --profile web add ./dsh-qq-bot-0.6.1.tgz
+dsh plugin --profile web add ./dsh-qq-bot-0.7.0.tgz
 ```
 
 `--profile` 换成你实际在用的 profile：**桌面版是 `--profile desktop`**，`dsh web` 部署一般是 `--profile web`。
 
 `dsh plugin` 本质是 pnpm 的前置封装：装完包后，它会**自动把声明了 `dsh.bundle.patch` 的依赖加入 profile 的层栈**（本包的 package.json 已声明），并连同唯一的运行时依赖 `@deepseek-ai/schemastery` 一起装上。装完**重启 DSH（桌面版重启应用 / CLI 重启 `dsh web`）**生效。
 
-> **版本要求**：`0.6.1` 及以后要求 **DSH ≥ 0.1.7**。DSH 0.1.6 及更早请用 `0.6.0`。
+> **版本要求**：`0.7.0` 及以后要求 **DSH ≥ 0.2.0**；DSH 0.1.x 用 `0.6.1`；DSH 0.1.6 及更早用 `0.6.0`。
 
 > **升级注意（重要）**：`dsh plugin add` 转发给 pnpm，而 pnpm 按 tarball 的**完整性哈希**缓存。
 > 改了代码必须**打成新的版本号文件名**再装（0.6.0 → 0.6.1）；沿用同一个文件名会被判成「lockfile 已最新」而跳过，装的还是旧内容。
@@ -459,7 +464,11 @@ MIT，见 [LICENSE](LICENSE)。作者 [@arrow1031](https://github.com/arrow1031)
 
 ### 维护状态：不承诺更新（请自行 fork）
 
-**本项目到此封版。** 作者不做持续性维护：不承诺修 bug、不适配上游破坏性变更、不接受功能请求。
+**本项目以 0.7.0 封版。** 作者不做持续性维护：不承诺修 bug、不适配上游破坏性变更、不接受功能请求。
+
+> 0.7.0 是「坏了就修」的一次性适配：DSH 0.2 的 Cordis Guard 收紧了服务访问，
+> `ctx.tools` 必须经 `ctx.get('tools')` 或在 `inject` 里声明，否则 `qqbot` / `qqgroup`
+> 两个工具会被静默跳过、访客工具闸也会失效。修复点在 `lib/index.js`，见 CHANGELOG 0.7.0。
 
 - 遇到问题：**fork 下来自己改**。MIT 许可，随便改、随便发，不用打招呼。
 - 上游变了（DSH 升级 / NapCat 改字段 / OneBot 实现换代）：自己跟。
