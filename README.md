@@ -601,7 +601,9 @@ MIT，见 [LICENSE](LICENSE)。维护者与贡献者见顶部（维护 [@arrow10
 
 ### 联系
 
-- 仓库：[arrow1031/dsh-qq-bot](https://github.com/arrow1031-dev/dsh-qq-bot)（issue / PR / Discussions）
+- 仓库：[arrow1031-dev/dsh-qq-bot](https://github.com/arrow1031-dev/dsh-qq-bot)（issue / PR / Discussions 都在这里）
+- QQ 群：**[1091766276](https://qun.qq.com/universal-share/share?ac=1&authKey=z%2FlfWodgOvkDnUTzUZ3%2BNoYGInkfTKCyMfmxO8uyGa%2Bx%2BKmF4ILvUvzqSb6mEJoE&busi_data=eyJncm91cENvZGUiOiIxMDkxNzY2Mjc2IiwidG9rZW4iOiJuY0Z3eEkzeUJWUkROYUNwWnNhblY3VlQrWWh1NURVbDZlUDRZNHZKSFlGWEJnOFRhazB6VUVaV0ZoMzVZVjg2IiwidWluIjoiMzE5NTQzODg2In0%3D&data=qPi85PPH3R-8HaJ9_U2u0zi7KCjzwplsRb-xisY3XAiBsWzopanij924BvV0sfj_cspqyTWemKx0YnNIHTjjGQ&svctype=4&tempid=h5_group_info)**（加群自动审批；报错请带上 [dsh-qq-bot] 开头的日志和复现步骤）
+- 个人网站：<https://sputnikzaychik.icu>
 - 维护者：[@arrow1031](https://github.com/arrow1031) · 核心贡献者：[@nd002723](https://github.com/nd002723)
 
 为了让你改得快，这些文档是为你写的：
@@ -638,7 +640,8 @@ tools 仍是可选服务：没有它时插件照常收发消息，只是少几�
 0.8.0 起本项目转入社区化维护，**完全解除封版**：安装跟随 `main`，功能与修复走 PR。
 
 - 贡献流程与代码约定：[CONTRIBUTING.md](CONTRIBUTING.md)
-- 提问与用法交流：[Discussions](https://github.com/arrow1031-dev/dsh-qq-bot/discussions)
+- 提问与用法交流：[Discussions](https://github.com/arrow1031-dev/dsh-qq-bot/discussions) 或 QQ 群 **1091766276**
+- 作者的其他东西：<https://sputnikzaychik.icu>
 - 安全问题：[SECURITY.md](SECURITY.md)（走私信，别开公开 issue 贴细节）
 - 行为准则：[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
 

@@ -390,5 +390,5 @@ node lib/onebot-adapter.mjs --ws ws://127.0.0.1:3001 --http http://127.0.0.1:300
 - 个人网站：<https://sputnikzaychik.icu> · QQ 群：[1091766276](https://qun.qq.com/universal-share/share?ac=1&authKey=z%2FlfWodgOvkDnUTzUZ3%2BNoYGInkfTKCyMfmxO8uyGa%2Bx%2BKmF4ILvUvzqSb6mEJoE&busi_data=eyJncm91cENvZGUiOiIxMDkxNzY2Mjc2IiwidG9rZW4iOiJuY0Z3eEkzeUJWUkROYUNwWnNhblY3VlQrWWh1NURVbDZlUDRZNHZKSFlGWEJnOFRhazB6VUVaV0ZoMzVZVjg2IiwidWluIjoiMzE5NTQzODg2In0%3D&data=qPi85PPH3R-8HaJ9_U2u0zi7KCjzwplsRb-xisY3XAiBsWzopanij924BvV0sfj_cspqyTWemKx0YnNIHTjjGQ&svctype=4&tempid=h5_group_info)
 - 致谢：[NapCat](https://napneko.github.io/)（灵感 / OneBot v11 接口 / 文档）· [梁圣](https://www.deepseek.com/)（忠！橙！）
 - 许可：[MIT](LICENSE)
-- **维护状态：不承诺更新，有问题请 fork 自行修改**（见 README 的「维护状态」一节）
+- **维护状态：社区化维护中（0.8.0 起不封版）**：安装跟随 main，功能与修复走 PR；见 README 的「维护状态」与「社区与贡献」
 - 生成方式与验证情况：[AI-DISCLOSURE.md](AI-DISCLOSURE.md)
