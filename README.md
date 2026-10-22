@@ -35,7 +35,9 @@ lib/index.js（Cordis 插件入口，0.8 起模块化拆分）
    ├ lib/http.js         fetch + 代理隧道
    ├ lib/websearch.js    多引擎搜索
    ├ lib/imgsearch.js    图床 + 反搜引擎
+   ├ lib/imagegen.js    生图（qq_draw：自填接口 + 失败重试 + 任务轮询）
    └ lib/moli.js         dsh-moli 渲染抓取（可选）
+| `lib/imagegen.js` | 生图引擎：OpenAI 兼容 `/images/generations`、失败重试、task_id 轮询、收图存盘 |
    ▲ 设置面板读写（lib/client.js）                        ← 「设置 → QQ 机器人」选项卡
    │ sessionController → agent.followup → whenIdle
    ▼
@@ -56,10 +58,11 @@ DSH Agent（默认模型 + preset 人格 + 工具）
 | HTTP / 代理层 | `node test/test-http.mjs` | **17/17** |
 | 配置合并与还原 | `node test/test-config.mjs` | **11/11** |
 | 多引擎搜索结果解析 | `node test/test-websearch.mjs` | **5/5** |
+| 生图引擎（重试 / 轮询 / 解析） | `node test/test-imagegen.mjs` | **16/16** |
 | 组合能否加载 | `dsh --profile web --dump-config --patch <补丁>` | 通过（行被正确插入） |
 | 装到 profile 后的模块解析 | 解包到 profile 后 `import('@deepseek-ai/dsh-tools')` | 通过 |
 | 真机（DSH 0.2.1-rc.2 + NapCat） | 装 0.8.x 后启动 | 6 个工具全部注册、OneBot 已连接 |
-| 一键全量 | `node test/run-all.mjs` | **8/8 套件 · 204 项** |
+| 一键全量 | `node test/run-all.mjs` | **9/9 套件 · 220 项** |
 
 `test-plugin.mjs` 用假 ctx 加载真正的 `lib/index.js` + 真适配器 + 零依赖 OneBot 模拟器，跑通完整链路（无需 DSH / QQ / 网络）。
 
@@ -136,7 +139,8 @@ dsh plugin --profile web add ./dsh-qq-bot-<版本号>.tgz
 连接方式、WS/HTTP 地址、access_token、群聊开关与 @ 要求、白名单、命令前缀、
 身份权限（QQ 号、preset 分流、工具闸）、群管理、会话（独立会话、固定命名、preset）、
 回复分片长度、慢回复提示、来源前缀、逐帧日志、
-图片视觉（开关 / provider / model / 最多张数 / 下载超时）、联网搜索（代理 / 端点 / key）。
+图片视觉（开关 / provider / model / 最多张数 / 下载超时）、联网搜索（代理 / 端点 / key）、
+生图（接口地址 / key / 模型 / 重试与轮询）、人格（开关 / 名字 / 设定 / 自定义 preset id）。
 设置页按功能分组排列：接入与范围 → 身份与权限 → 群管理 → 会话 → 回复 → 图片视觉 → 联网搜索。
 
 - 改完点「保存」；**连接方式那几项**（模式/地址/token）保存后会自动重启适配器，其它项下一条消息生效。
@@ -232,6 +236,24 @@ Agent 会话的工作目录**不需要任何配置**：插件读取 DSH 官方�
     history:                      # qq_history 聊天记录（AI 自取）
       scopeMessages: 5              # 识别窗口：触发消息往前最多多少条
       imageLimit: 3                 # 窗口内最多识别多少张图（最近的优先）
+    imageGen:                     # qq_draw 生图（自填接口，插件不带 key）
+      enabled: false              # 打开后 AI 才能画图
+      baseUrl: ''                 # OpenAI 兼容，例 https://api.example.com/v1（请求 地址/images/generations）
+      apiKey: ''                  # 只写字段；留空则读下面那个环境变量
+      apiKeyEnv: IMAGE_API_KEY
+      model: seedream-5.0-lite
+      size: 1024x1024
+      timeoutMs: 180000          # 单次请求超时
+      maxAttempts: 4             # 失败重试次数（含首次；429/5xx/网络/空结果）
+      retryIntervalMs: 5000
+      poll: true                 # 供应商返回 task_id 时继续轮询
+      pollIntervalMs: 5000
+      maxPolls: 30
+    persona:                      # 自定义人格：每个新会话第一轮附一次
+      enabled: false
+      name: ''
+      text: ''
+    agentPresetCustom: ''         # 自定义 preset id（如 qq）；非空时优先于 agentPreset
     imgSearch:                    # qq_imgsearch 图片反搜
       enabled: true               # 默认开；关闭后工具返回「已关闭」
       maxResults: 5               # 每次反搜最多返回结果数
@@ -401,6 +423,24 @@ Agent 会话的工作目录**不需要任何配置**：插件读取 DSH 官方�
 - **识别窗口锚定「最新提及」**：只对触发本条回复的那条消息（@ bot / 回复 bot / 命令前缀）**往前 `scopeMessages` 条**（默认 5）内的图片做识别，最多 `imageLimit` 张（默认 3，最近的优先）；更早的 @ 不锚定、其附近图片不因「也是被提及」而识别，避免重复拉取/重复识图。
 - 窗口内图片用插件的视觉链路识别（下载 + `askVision`），返回 URL + 描述；识别失败只给 URL 不阻塞。配置见 `history` 段（`scopeMessages` / `imageLimit`）。
 
+### qq_draw（生图，可直接发到 QQ）
+
+在 设置 → QQ 机器人 里填好接口后，AI 就能按描述画图：
+
+- `{prompt, model?, size?, reference?, caption?, send?}` —— `prompt` 越具体越好；`reference` 可给公网 URL 或 `qq-images` 下的本地图（保持同一形象做「自拍」）；
+  `send` 默认 true，直接把图画成 QQ 图片段发到当前会话，`caption` 是随图发的文字。
+- 失败策略：`429 / 5xx / 网络错 / 空结果` 按 `retryIntervalMs` 重试到 `maxAttempts`；`4xx`（参数错、额度不足）直接报错、不重试。
+- 异步供应商：响应里是 `task_id` 时按 `pollIntervalMs` 轮询（依次试 `.../images/generations/<id>`、`.../images/tasks/<id>`、`.../tasks/<id>`），最多 `maxPolls` 次；关掉 `poll` 就只尝试一次。
+- 图片落盘：`<QQ_msg>/qq-images/gen/`；`qq_draw` 不在访客默认白名单（会花钱），要放开就自己加到 `auth.guestToolAllow`。
+- 接口约定：OpenAI 兼容 `POST <baseUrl>/images/generations`，请求体 `{model, prompt, n:1, size?, image?}`，返回 `data[0].url` 或 `data[0].b64_json`（实测 `seedream-5.0-lite` 返回 url、约 40 秒）。
+
+### 人格（人设）也在设置里换
+
+两种做法，互不冲突：
+
+- **自定义人格**：设置页「自定义人格」开关 + 名字 + 设定，开一次管所有新会话（第一轮末尾附一次身份设定，零额外 token）；已建会话不变，想立刻生效就删掉旧会话重开。
+- **整档 preset**：`Agent preset` 下拉选内置 standard / ptc / minimal / cordis；自建 preset（例如 `qq`）填进「自定义 agent preset id」，非空时优先生效——这条路换的不只是人格，还有工具面。
+
 ### web_fetch（抓公网原文，仅拥有者）
 
 DSH 自带的 `web_fetch` 工具仍然注册，但**已从访客默认白名单移除**——访客要抓原文请用 `qq_webfetch`（走 `webSearch.proxy` 代理、同样带公网 IP 过滤，`moli.enabled` 时可改用 Moli 渲染）。`web_fetch` 本身只允许公网 IP，内网/回环地址由 DSH 直接拒绝；拥有者不受访客白名单限制，照常可用。
@@ -432,7 +472,7 @@ npm install
 装好之后裸克隆即可运行：需要 DSH 运行时才能成立的少数断言（动态工具注册、qqgroup 工具路径）
 会自动跳过，而不是判失败；想看全，把 `DSH_PROFILE_MODULES` 指向一个装了 DSH 运行时的 profile 的
 `node_modules`。
-整套 **204 项**（8 个套件）：
+整套 **220 项**（9 个套件）：
 
 ```sh
 npm test
@@ -451,8 +491,10 @@ node test/test-client.mjs     # 客户端设置页（32 项）
 node test/test-admin.mjs      # 权限·群管理·访客工具闸（32 项；dsh-tools 可解析时另含工具路径断言）
 node test/test-http.mjs       # HTTP / 代理隧道（17 项）
 node test/test-config.mjs     # 配置合并与还原（11 项）
+| `test/test-imagegen.mjs` | 生图引擎（16 项，不联网） |
 node test/test-websearch.mjs  # 多引擎搜索结果解析（5 项）
-node test/run-all.mjs         # 一键全量（8 套件）
+node test/test-imagegen.mjs   # 生图引擎：重试 / 轮询 / 响应解析（16 项）
+node test/run-all.mjs         # 一键全量（9 套件）
 ```
 
 也可以手动拿假 OneBot 试（端口正好是 NapCat 默认值）：

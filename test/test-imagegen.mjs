@@ -1,0 +1,86 @@
+/**
+ * 生图引擎自测（不联网）：URL 拼接 / 响应解析 / 失败重试 / 任务轮询。
+ * 用法：node test/test-imagegen.mjs
+ */
+import { generationsUrl, trimBaseUrl, parseImagePayload, generateImage } from '../lib/imagegen.js';
+
+let pass = 0;
+let fail = 0;
+function check(name, ok, detail) {
+  if (ok) { pass += 1; console.log('  [PASS] ' + name); }
+  else { fail += 1; console.log('  [FAIL] ' + name + (detail === undefined ? '' : '：' + detail)); }
+}
+
+// 1) URL 拼接
+check('trimBaseUrl 去掉尾斜杠', trimBaseUrl('https://api.x.top/v1///') === 'https://api.x.top/v1');
+check('generationsUrl 拼接端点', generationsUrl('https://api.x.top/v1/') === 'https://api.x.top/v1/images/generations');
+check('空地址返回空串', generationsUrl('') === '');
+
+// 2) 响应解析
+const pUrl = parseImagePayload({ data: [{ url: 'https://cdn/x.png' }] });
+check('解析 data[0].url', pUrl.kind === 'image' && pUrl.url === 'https://cdn/x.png');
+const pB64 = parseImagePayload({ data: [{ b64_json: 'AAAA' }] });
+check('解析 data[0].b64_json', pB64.kind === 'image' && pB64.b64 === 'AAAA');
+const pErr = parseImagePayload({ error: { message: 'quota exceeded' } });
+check('解析 error 对象', pErr.kind === 'error' && pErr.error.indexOf('quota') >= 0);
+const pTask = parseImagePayload({ task_id: 'abc', status: 'pending' });
+check('解析 task_id', pTask.kind === 'task' && pTask.taskId === 'abc' && pTask.status === 'pending');
+const pFailed = parseImagePayload({ task_id: 'abc', status: 'failed' });
+check('任务失败识别', pFailed.kind === 'task' && pFailed.status === 'failed');
+const pEmpty = parseImagePayload({ data: [] });
+check('空响应报错', pEmpty.kind === 'error');
+
+function fakeFetch(plan) {
+  const calls = [];
+  const impl = async (url, init) => {
+    calls.push({ url: String(url), method: (init && init.method) || 'GET' });
+    const step = plan.shift();
+    if (step === undefined) throw new Error('没有更多预设响应');
+    if (step.throwIt === true) throw new Error('network boom');
+    return { ok: step.status < 400, status: step.status, text: async () => JSON.stringify(step.body) };
+  };
+  impl.calls = calls;
+  return impl;
+}
+
+// 3) 失败重试后成功
+const f1 = fakeFetch([
+  { status: 500, body: { error: 'boom' } },
+  { status: 429, body: { error: 'slow down' } },
+  { status: 200, body: { data: [{ url: 'https://cdn/ok.png' }] } },
+]);
+const r1 = await generateImage({ baseUrl: 'https://api.x.top/v1', apiKey: 'k', model: 'm', prompt: 'p', maxAttempts: 3, retryIntervalMs: 0, fetchImpl: f1 });
+check('500/429 重试后成功', r1.ok === true && r1.url === 'https://cdn/ok.png' && r1.attempts === 3, JSON.stringify(r1));
+check('重试次数正确（3 次请求）', f1.calls.length === 3, String(f1.calls.length));
+
+// 4) 400 不重试
+const f2 = fakeFetch([{ status: 400, body: { error: 'bad prompt' } }]);
+const r2 = await generateImage({ baseUrl: 'https://api.x.top/v1', prompt: 'p', maxAttempts: 4, retryIntervalMs: 0, fetchImpl: f2 });
+check('4xx 直接失败不重试', r2.ok === false && f2.calls.length === 1, JSON.stringify(r2));
+
+// 5) 网络异常重试
+const f3 = fakeFetch([{ throwIt: true }, { status: 200, body: { data: [{ b64_json: 'ZZZ' }] } }]);
+const r3 = await generateImage({ baseUrl: 'https://api.x.top/v1', prompt: 'p', maxAttempts: 2, retryIntervalMs: 0, fetchImpl: f3 });
+check('网络异常后重试成功', r3.ok === true && r3.b64 === 'ZZZ', JSON.stringify(r3));
+
+// 6) task_id 轮询
+// 第 1 轮：三个候选地址都还在跑；第 2 轮：第一个候选就出图
+const f4 = fakeFetch([
+  { status: 200, body: { task_id: 't1', status: 'pending' } },
+  { status: 200, body: { status: 'running' } },
+  { status: 200, body: { status: 'running' } },
+  { status: 200, body: { status: 'running' } },
+  { status: 200, body: { data: [{ url: 'https://cdn/done.png' }] } },
+]);
+const r4 = await generateImage({ baseUrl: 'https://api.x.top/v1', prompt: 'p', maxAttempts: 1, retryIntervalMs: 0, poll: true, pollIntervalMs: 0, maxPolls: 3, fetchImpl: f4 });
+check('task_id 轮询到出图', r4.ok === true && r4.url === 'https://cdn/done.png' && r4.polls === 2, JSON.stringify(r4));
+check('轮询请求打到 generations/<id>', f4.calls.some((c) => c.url.indexOf('/images/generations/t1') >= 0));
+
+// 7) 关闭轮询时直接报错
+const f5 = fakeFetch([{ status: 200, body: { task_id: 't2', status: 'pending' } }]);
+const r5 = await generateImage({ baseUrl: 'https://api.x.top/v1', prompt: 'p', maxAttempts: 1, retryIntervalMs: 0, poll: false, fetchImpl: f5 });
+check('关闭轮询时提示 task id', r5.ok === false && String(r5.error).indexOf('t2') >= 0, JSON.stringify(r5));
+
+console.log('\n' + pass + '/' + (pass + fail) + ' 项通过');
+if (fail > 0) { console.log('生图自测失败'); process.exit(1); }
+console.log('生图自测通过');
