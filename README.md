@@ -62,7 +62,7 @@ DSH Agent（默认模型 + preset 人格 + 工具）
 | 组合能否加载 | `dsh --profile web --dump-config --patch <补丁>` | 通过（行被正确插入） |
 | 装到 profile 后的模块解析 | 解包到 profile 后 `import('@deepseek-ai/dsh-tools')` | 通过 |
 | 真机（DSH 0.2.1-rc.2 + NapCat） | 装 0.8.x 后启动 | 6 个工具全部注册、OneBot 已连接 |
-| 一键全量 | `node test/run-all.mjs` | **9/9 套件 · 220 项** |
+| 一键全量 | `node test/run-all.mjs` | **10/10 套件 · 225 项** |
 
 `test-plugin.mjs` 用假 ctx 加载真正的 `lib/index.js` + 真适配器 + 零依赖 OneBot 模拟器，跑通完整链路（无需 DSH / QQ / 网络）。
 
@@ -472,7 +472,7 @@ npm install
 装好之后裸克隆即可运行：需要 DSH 运行时才能成立的少数断言（动态工具注册、qqgroup 工具路径）
 会自动跳过，而不是判失败；想看全，把 `DSH_PROFILE_MODULES` 指向一个装了 DSH 运行时的 profile 的
 `node_modules`。
-整套 **220 项**（9 个套件）：
+整套 **225 项**（10 个套件）：
 
 ```sh
 npm test
@@ -494,7 +494,8 @@ node test/test-config.mjs     # 配置合并与还原（11 项）
 | `test/test-imagegen.mjs` | 生图引擎（16 项，不联网） |
 node test/test-websearch.mjs  # 多引擎搜索结果解析（5 项）
 node test/test-imagegen.mjs   # 生图引擎：重试 / 轮询 / 响应解析（16 项）
-node test/run-all.mjs         # 一键全量（9 套件）
+node test/test-session-id.mjs # 会话 id 回退（5 项）
+node test/run-all.mjs         # 一键全量（10 套件）
 ```
 
 也可以手动拿假 OneBot 试（端口正好是 NapCat 默认值）：
@@ -624,6 +625,38 @@ MIT，见 [LICENSE](LICENSE)。维护者与贡献者见顶部（维护 [@arrow10
 AI 生成内容声明见 [AI-DISCLOSURE.md](AI-DISCLOSURE.md)，**使用前请务必读一遍**（尤其"已知限制"一节）。
 
 **运行时依赖**：`@deepseek-ai/schemastery`（Config schema 用）；`@deepseek-ai/dsh-tools` 可选（仅用于注册动态工具，缺失时自动降级）。适配器只用 Node 22 内置的 `WebSocket` 与 `fetch`——**本插件本身保持零 npm 依赖**。**唯一的可选功能例外**：`qq_webfetch` 的 Moli 渲染模式（`moli.enabled`）需要另外安装 [dsh-moli](https://github.com/nd002723/dsh-moli) 插件 + moli 引擎（未装时开关无效、工具返回 `moliUnavailable` 并回退普通 http 抓取），不影响其它功能。
+
+## 跨对话检索（跨群 / 跨会话）
+
+两套互补的能力，都在设置里配、由 Agent 自己决定何时用：
+
+- **QQ 层：qq_history** 支持传任意 `group_id`。默认读当前群；给别的群号就是跨群翻记录（只读，不改任何东西）。
+- **会话层：session_search 系列**（DSH 的 `@deepseek-ai/dsh-tool-session-query`，5 个只读工具：
+  `session_search` / `session_event_search` / `session_trace` /
+  `session_event_trace` / `session_event_read`）。授权规则是「目标会话的 cwd 与调用方完全一致」——
+  QQ 的每个群/私聊会话都落在同一个 QQ_msg 工作区，所以它们之间可以互相检索。在 `qq` preset 里挂一行即可：
+
+```yaml
+- id: preset-qq
+  name: "@deepseek-ai/dsh-agent-preset"
+  config:
+    id: qq
+    plugins:
+      - id: tool-session-query
+        name: "@deepseek-ai/dsh-tool-session-query"
+        # 可选：maxSearchResults / searchTimeoutMs
+```
+
+  不挂这一行就没有这 5 个工具，但 qq_history 的跨群读取不受影响。
+
+## 向前兼容（旧会话不会被删）
+
+旧版本建的 QQ 会话可能绑在别的工作区（0.7 时代是 `/root`，0.8 起是 `<Documents>/deepseek-harness/QQ_msg`）。
+DSH 不允许跨工作区复用同一个会话 id，插件现在的处理是：
+
+1. 检测到 `belongs to "..."` 时**不动旧会话**（历史完整保留在原工作区）；
+2. 用工作区限定的 id（`qqbot-group-<群号>-ws<6位哈希>`）新建一条，重试一次即成功；
+3. 日志里写明「改用 xxx；旧会话保留」，方便排查。
 
 ## DSH 0.2 兼容
 

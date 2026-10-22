@@ -1,5 +1,16 @@
 # 变更记录
 
+## 0.9.2 —— 跨对话检索 + 旧会话向前兼容
+
+- **不再清理旧会话**：当持久化的会话绑在别的工作区（例如 0.7 时代 workspace=/root 建的会话，
+  升级后工作区变成 QQ_msg）时，DSH 会拒绝跨工作区复用同一 id。现在改为**保留旧会话**、
+  用一个「工作区限定」的新 id（如 qqbot-group-123-ws1a2b3c）重开，历史一条不删。
+- **跨对话信息调用**：配合 DSH 的 `@deepseek-ai/dsh-tool-session-query` 使用，Agent 可以
+  session_search / session_event_search / session_trace / session_event_read 检索同工作区下的其他会话
+  （QQ 的每个群/私聊都是一条会话，cwd 相同即互相可查）。
+- **qq_history 支持跨群**：传别的 group_id 就能读其它群的消息（只读）。
+- 新增 test/test-session-id.mjs（5 项）校验 id 回退稳定性；全套件 10/10。
+
 ## 0.9.1
 
 - 生图（`qq_draw`）与人格设置正式发布；接口地址 / key / 模型 / 重试与轮询、人格开关 / 名字 / 设定、
