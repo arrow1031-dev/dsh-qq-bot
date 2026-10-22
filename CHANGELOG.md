@@ -2,13 +2,14 @@
 
 ## 0.9.1
 
-- 生图（@@BT@@qq_draw@@BT@@）与人格设置正式发布；接口地址 / key / 模型 / 重试与轮询、人格开关 / 名字 / 设定、
+- 生图（`qq_draw`）与人格设置正式发布；接口地址 / key / 模型 / 重试与轮询、人格开关 / 名字 / 设定、
   自定义 preset id 全部在「设置 → QQ 机器人」里。
 - **撤回并重发 0.9.0**：0.9.0 的文档示例里带了维护者个人的中转站地址、设置占位带了个人人格名，
   已从历史中移除该版本并重发为 0.9.1（功能一致，无任何个人痕迹）。
 - 人格默认留空：默认不注入任何身份设定，只有自己填了才会生效（自己用的配置属于部署侧，不进仓库）。
-- 修合并遗留的 @@BT@@qqbot@@BT@@ send 分支未注入 @@BT@@writeToAdapter@@BT@@ 的问题。
-- 新增 @@BT@@lib/imagegen.js@@BT@@ 与 @@BT@@test/test-imagegen.mjs@@BT@@（16 项）；全套件 9/9、220 项。
+- 贡献者：[@arrow1031](https://github.com/arrow1031)（0.9.x 生图与人格）、[@nd002723](https://github.com/nd002723)（0.8.0 并入的模块化重构与 qq_history / qq_websearch / qq_webfetch / qq_imgsearch）。
+- 修合并遗留的 `qqbot` send 分支未注入 `writeToAdapter` 的问题。
+- 新增 `lib/imagegen.js` 与 `test/test-imagegen.mjs`（16 项）；全套件 9/9、220 项。
 
 ## 0.9.0 —— 生图（qq_draw）与人格都进设置
 
