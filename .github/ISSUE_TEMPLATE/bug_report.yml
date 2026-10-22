@@ -1,0 +1,44 @@
+name: Bug 报告
+description: 插件没有按预期工作
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        贴日志前请先删除 QQ 号、access_token、服务器地址等敏感信息。
+  - type: input
+    id: versions
+    attributes:
+      label: 版本
+      description: DSH 版本 / 插件版本 / NapCat 版本
+      placeholder: DSH 0.2.1-rc.2 + dsh-qq-bot 0.8.0 + NapCat 4.x
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: 连接方式
+      options:
+        - 正向 WebSocket（DSH 连 NapCat）
+        - 反向 WebSocket（NapCat 连 DSH）
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      placeholder: 1) ... 2) ... 3) ...
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: 期望结果 / 实际结果
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志
+      description: DSH 控制台里 dsh-qq-bot 相关行（敏感信息先脱敏）
+      render: text

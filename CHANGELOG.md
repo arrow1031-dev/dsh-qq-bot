@@ -1,28 +1,100 @@
+# 变更记录
+
+## 0.8.0 — 合并下游分支（模块化 + qq_history / qq_websearch / qq_webfetch / qq_img）
+
+首次把下游开发者分支（nd002723/dsh-qq-bot，0.6.3 → 0.6.11）并入主干，并把 0.7.0 的
+DSH 0.2 服务访问契约移植到模块化代码上。
+
+- 结构：单体 lib/index.js 拆分为 lib/{config,http,websearch,imgsearch,moli,admin,session,tools}.js
+- 工具：新增 qq_websearch（多引擎组合搜索）、qq_webfetch（独立抓取）、qq_img（图片搜索/上传）、qq_history（AI 自取聊天记录）
+- 工作区：QQ_msg 工作区自动创建，会话自动归入分组；群聊回复/引用机器人视同 @；被回复的图片识图
+- 健壮性：本轮运行失败不再重发上一轮回复；失败提示总是作为回复发出（只输出状态码）
+- 兼容：工具注册与访客工具闸改为 ctx.get('tools') / ctx.inject(['tools'])（DSH 0.2 契约），
+  并保留 0.1.x 属性形态兜底
+- 测试：node test/run-all.mjs（含 config/http/websearch/plugin 套件）
+- 社区化：完全解除封版（安装跟随 main，不再锁 tag）；启用 Discussions；
+  新增 CONTRIBUTING / CODE_OF_CONDUCT / SECURITY / issue 与 PR 模板 / CODEOWNERS；
+  邀请下游开发者 @nd002723 为协作者
+
 # 更新日志
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)。
 
-> **0.7.0 是适配 DSH 0.2 的一次性版本**，之后作者仍不承诺后续更新——详见 README 的「维护状态」一节。
+## 0.6.8
 
-## 0.7.0
+模块化重构 + qq_history：聊天上下文改为 AI 主动自取（不再硬塞），业务代码按模块拆分。
 
-**适配 DSH 0.2：服务访问契约收紧**。0.2.1-rc.2 实测：插件能正常加载、正/反向链路照常，
-但 `qqbot` / `qqgroup` 两个模型工具**不会注册**，访客工具闸也**静默失效**——两个都是静默降级，
-日志里只有一行 `跳过 qqbot 工具注册`，很容易被当成正常启动。
+- **模块化重构**：`lib/index.js`（原 3346 行单文件）拆成模块——保留 napcat 通信与子进程监管（`lib/onebot-adapter.mjs`），抽出网络查询通道（`lib/http.js` 通用 HTTP 传输 / `lib/websearch.js` 联网搜索 / `lib/imgsearch.js` 图片反搜）、dsh-moli 联动（`lib/moli.js`）、配置契约（`lib/config.js`：`DEFAULTS` + `Config` + `plainConfig`/`mergeConfig`）；业务再拆三块——`lib/admin.js`（权限三路鉴权 + 群管理指令 `handleAdminCommand`/`planAdminCommand`/`runGroupAction`）、`lib/session.js`（会话条目与路由 `getEntry`/`sessionRoute`/`entryForAgent` + 被回复图片收集）、`lib/tools.js`（6 工具动态注册）；`lib/index.js` 只留 napcat 通信 + 装配与生命周期（1906 → 845 行）。所有外部请求仍走 `webSearch.proxy` 管控（留空直连、非空走 CONNECT 隧道、非公网 IP 拒绝）。
+- **qq_history（新工具，AI 自取聊天记录）**：不再自动把群内「最近相关发言」硬塞进会话——`acceptMessage` 里的 `fetchReplyContext`/`replyTargetQQs` 已删除，需要历史上下文时由 Agent **主动调 `qq_history`** 拉取（prompt 有引导）。
+  - 返回结构化消息列表：`{ok, group_id, messages:[{time, user_id, nickname, text, images:[{url, description}]}]}`，参数 `group_id`（默认当前群）/ `user_id`（可选筛人）/ `count`（默认 20，上限 50）/ `with_images`（默认开）。
+  - **识别窗口锚定「最新提及」**：只对触发本条回复的那条消息（@ bot / 回复 bot / 命令前缀）**往前 `scopeMessages` 条**内的图片做识别（默认 5），最多 `imageLimit` 张（默认 3，最近的优先）；更早的 @ 不锚定、其附近图片不因「也是被提及」而识别，避免重复拉取/重复识图。
+  - 窗口内图片用现有视觉链路（下载 + `askVision`）识别，返回 URL + 描述；识别失败只给 URL 不阻塞。修复：工具 execute 不再闭包未定义的 `entry`（原会 ReferenceError），改由执行上下文 `exec.agent` 经 `entryForAgent` 反查当前会话。
+- **被回复消息的图片仍走视觉识别**：`collectReplyImageUrls` 保留「用 `get_msg` 拉被回复消息、收集图片并入识图」的能力（回复引用流程不受影响），但不再把被回复消息文本塞进上下文。
+- **访客白名单**：默认加入 `qq_history`。
+- **新配置段 `history`**：`scopeMessages`（识别窗口条数，默认 5）/ `imageLimit`（窗口内最多识图张数，默认 3），设置页可改。
+- **测试**：`npm test` 全绿（adapter 12 / plugin 88 / client 32 / admin 36）；新增 4f 段（工具注册 / 白名单 / 结构化拉取 / 窗口锚定 / 限张），旧「自动塞上下文」断言全部翻转为「不再自动携带」。
 
-- **根因**：Cordis 4.0.5 的 Guard 规定，属性访问 `ctx.tools` 前必须在插件 `inject` 里声明 `tools`，
-  否则直接抛 `cannot get property "tools" without inject`。0.1.7 时代没有这条限制，所以 0.6.x 的
-  `ctx.effect(() => ctx.tools.register(tool))` 写法在 0.2 上必然抛错，被外层 `catch` 吞掉。
-  同一处问题也影响 `entry.agent.ctx.tools.guard(...)`（访客工具闸）。
-- **修法（不把 tools 写进 inject）**：`tools` 对 QQ 桥接是可选服务，写进模块级 `inject` 会让插件在
-  服务缺席时永远 park（连消息都不收）。改为 `ctx.get('tools')` 取值；若服务尚未注册，退回
-  `ctx.inject(['tools'], child => ...)` 动态挂载，语义与原来一致，且 0.1.7 上同样可用。
-- **访客工具闸**：`entry.agent.ctx.tools.guard(...)` 改为先 `entry.agent.ctx.get('tools')`；
-  拿不到就抛错走既有的 fail-closed 分支（`guardUnavailable` → 拒绝驱动非拥有者），不再静默放行。
-- **验证**：`0.2.1-rc.2` 运行时 + 桌面 profile 的实测日志，修复前 `跳过 qqbot 工具注册：cannot get
-  property "tools" without inject`，修复后 `已注册 qqbot 工具` / `已注册 qqgroup 工具`。
-- **兼容性**：0.7.0 要求 DSH ≥ 0.2.0；DSH 0.1.x 请继续用 0.6.1。`defineTool` / `sessionController`
-  （`create` + `resolveAgent`）/ `subprocess` / `timer` / `Config` + `.volatile()` 在 0.2 上没有变化。
+## 0.6.7
+
+继续维护版：qq_websearch 的 url 抓取拆成独立工具 qq_webfetch，新增 dsh-moli 接管。
+
+- **qq_webfetch（新独立工具）**：从 qq_websearch 拆出 url 抓取，平级注册；受 `webSearch.proxy` 管控（留空直连、非空走 HTTP CONNECT 隧道 + TLS），抓取前校验目标为公网 IP（内网/回环/私有地址一律拒绝）。
+- **dsh-moli 接管（qq_webfetch）**：设置页新增 `moli` 段（默认关）——开启后 qq_webfetch 改用 Moli 无头浏览器渲染抓取（可抓 SPA/JS 渲染页）；HTTP 代理自动透传 `webSearch.proxy`（可被 `moli.proxy` 覆盖）；未检测到 moli 引擎时开关无效，工具返回 `moliUnavailable` 明确报错。
+- **访客白名单**：默认加入 `qq_webfetch`。
+
+## 0.6.6
+
+继续维护版：群聊「回复机器人」视同 @ 处理，bot 被点名时改用 QQ 引用回复，命令前缀视同点名；点名但无正文也处理。
+
+- **回复（引用）bot 消息视同 @ 处理**：群聊里没 @ 机器人、但回复（引用）了 bot 的消息，照常进入 Agent 旅程；开关 `reply.botReply`（设置页「回复」区，默认开启）。判定方式：调 NapCat `get_msg` 查被引用消息的发送者是否为 bot 自己。
+- **追加最近相关发言上下文**：回复 bot 触发时，调 NapCat `get_group_msg_history` 筛出**该对话者 + bot** 的最近最多 **5 条**发言，按时间正序并入 Agent 输入（`【HH:MM】对话者/bot：内容`）。
+- **「回复别人 + 正文 @bot」**：同样触发（引用回复 + 拉上下文）；上下文把**被回复者 / 被 @ 对象**的发言也并入，扩充到 **8 条**。
+- **「回复 bot + 正文 @别人」**：这条可能不是对 bot 说的——消息照常进模型，但**不强制引用回复**，交给 bot 自行判断是否继续回复。
+- **QQ 引用回复（回复消息流程）**：bot 被点名（@ bot / 回复 bot / 命令前缀 / 管理指令）时的响应，统一**引用触发消息**发送（CQ `reply` 段）；`requireAt` 关闭后的普通闲聊不引用，避免每条群消息都变引用回复。
+- **命令前缀视同点名**：设置了 `commandPrefix`（如 `/ai`）时，命中前缀的消息豁免 requireAt（不需要 @），并走引用回复——与群管理指令同理。
+- **点名但无正文也响应**：bot 被点名（@ bot / 回复 bot / 命令前缀）时，即使消息没有正文（纯回复、纯 @、回复别人 + @bot 但没打字），照常进入 Agent 旅程——给 Agent 占位正文「（本条消息无正文，仅点名了 bot）」，结合上下文主动回应；普通空消息（未点名）仍跳过。
+- **被回复消息始终并入上下文**：被回复（引用）的那条消息用 `get_msg` 按 id 单独拉取，不受最近历史窗口限制；上下文**最低保证 2 条**（被回复消息 + 发言人本条），不硬补其它群友。
+- **被回复消息的图片也走视觉识别**：`get_msg` 拉被回复消息时一并收集里面的图片 URL，与本条消息的图合并交给插件原有的识图功能（`describeImages`）识别，识别文本并入 Agent 输入。
+- **修复**：`requireAt` 关闭（群=全部）时，回复 bot 的消息此前不识别（不引用、不拉上下文）——现已修复，只要 `reply.botReply` 开启且消息带了被引用消息就查。
+- **多引擎组合搜索（qq_websearch）**：`webSearch.multiEngine`（默认开，设置页有开关）——Tavily（配 `TAVILY_API_KEY` 才启用）→ DuckDuckGo（html→lite）→ Yandex / Bing / Wikipedia 并发兜底，全部请求受 `webSearch.proxy` 管控（留空直连、非空走 CONNECT 隧道）；关闭则落回官方 DeepSeek web_search。完全独立实现，不依赖任何其它插件。
+- **测试**：`npm test` **161 项全绿**（test-plugin 81 项，新增无正文 / 窗口外被回复消息 / 最低 2 条兜底 / 被回复图片识别 / 多引擎搜索五组用例；admin 36 项）。
+
+## 0.6.5
+
+继续维护版：联网抓取走代理、固定会话名、访客白名单瘦身、设置页重排。
+
+- **`qq_websearch` 新增 url 抓取模式**：`{url}` 直接抓指定网页原文（http/https，仅公网），返回 `{ok, url, status, text}`；与搜索共用 `webSearch.proxy`——非空时经 HTTP CONNECT 隧道 + TLS（含境内/境外分流），留空直连。抓取前校验目标为公网 IP，内网/回环/私有地址一律拒绝（防经代理扫内网）。
+- **固定新建会话名**：`session.fixedName`（默认开启），新会话显示名钉死为 `群聊_<群号>` / `私聊_<QQ号>`，替代 LLM 自动起标题（用 DSH `sessionTitle.rename` 的 user 源标题，自动生成不会覆盖）；已建会话保持原名。
+- **访客默认白名单瘦身**：移除 `web_fetch`，访客联网统一走 `qq_websearch`（搜索 + url 抓取，都经代理）；DSH 自带的 `web_fetch` 仅拥有者可用。
+- **设置页重排**：字段按功能分 7 块（接入与范围 → 身份与权限 → 群管理 → 会话 → 回复 → 图片视觉 → 联网搜索），QQ 号类字段集中；`cordis.patch.yml` 键序同步排版（纯排版，值不变）。
+- **测试**：`npm test` **144 项全绿**（test-plugin 45 项）。
+
+## 0.6.4
+
+继续维护版：访客联网搜索，工具面设置更顺手。
+
+- **联网搜索工具 `qq_websearch`**：访客白名单搜索（DeepSeek web_search），`webSearch` 配置段可选代理 / 端点 / key 环境变量名 / 触发上限；key 自动走 DSH 凭据服务，`process.env` 兜底。
+- **访客默认白名单**：扩为 `qqbot, qqgroup, qq_websearch, web_fetch`（`web_fetch` 只抓公网，内网 IP 由 DSH 拒绝）。
+- **Agent preset 下拉**：设置页改为下拉选择（部署默认 / standard / ptc / minimal / cordis），只影响新会话；人格分离字段空位自动回落 `agentPreset`。
+- **修复**：`inject` 补 `'tools'`，解决生产环境工具注册失败（`cannot get property "tools" without inject`）。
+- **测试**：`npm test` **147 项全绿**。
+
+## 0.6.3
+
+继续维护版（fork 自 [arrow1031/dsh-qq-bot](https://github.com/arrow1031/dsh-qq-bot)）：工作区自动管理，会话自动归入分组。
+
+- **工作区自动管理**：移除 `workspace` 配置项；自动读取 DSH 官方默认 Workspace 位置（`<系统 Documents>/deepseek-harness`），在其同级目录创建 `QQ_msg` 并注册为 DSH workspace——Web UI 侧栏的「QQ 消息」分组，**新会话自动归入该分组**（通过 Cordis `ctx.reflect.get('workspaceRegistry')` 免注入读服务，缺失时自动回退）。
+- **图片缓存结算清理**：带图消息的原图缓存到 `QQ_msg/qq-images/<会话id>/`，会话结算后自动删除，会话与工作区保留。
+- **测试**：`npm test` **133 项全绿**（test-plugin 38 项，含分组断言）。
+
+## 0.6.2
+
+继续维护版：图片视觉增强、图片缓存导出。
+
+- **图片视觉**：`vision` 配置新增 provider / model 下拉选择（从 DSH 自定义 providers 选，协议 / baseURL / apiKey 沿用）；模型不支持图片时给可读报错并引导切换。
+- **图片缓存导出**：带图消息的原图缓存到 `<QQ_msg>/qq-images/<会话id>/`，会话结算后自动删除；消息附上识图结果与图片路径，并提示 Agent 结合用户发言作答、需确认身份时提炼关键词联网查证，勿凭空猜测。
+- **插件标准**：package.json 补 `engines.dsh` 版本范围与 `dsh.runtime: host`。
+- **测试**：`npm test` **133 项全绿**（test-plugin 38 项）。
 
 ## 0.6.1
 
