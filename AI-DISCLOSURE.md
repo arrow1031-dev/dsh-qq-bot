@@ -9,7 +9,9 @@
 
 ### 生成方式
 
-- 生成环境：[DeepSeek Harness](https://github.com/deepseek-ai)（DSH）上的 AI 编程代理，在移动端容器内运行。
+- 生成环境：[DeepSeek Harness](https://github.com/deepseek-ai)（DSH）上的 AI 编程代理。
+  0.8.0 起的合并、0.9.x 的生图 / 人设 / 跨对话能力，是在**真实部署的 DSH 0.2.1-rc.2** 上通过 SSH
+  远程操作完成的（环境见下方「当前部署环境」）。
 - 生成过程：人类用自然语言提出需求与约束 → AI 编写代码与测试 → AI 在真实运行环境中执行测试并修复
   → 人类审查、否决不合适的方案、追加约束 → 迭代。
 - 人类做出的关键决策（可由提交历史与文档佐证）：
@@ -19,37 +21,55 @@
   - 要求**动态授权不可跨群**、**只有拥有者能永久授权**；
   - 最终选定 `tools.guard`（一次注册 + 可变标志位）作为访客工具闸，理由是 0 额外 token 且不破坏对话一致性。
 
+### 当前部署环境（维护者真机）
+
+| 项目 | 值 |
+| --- | --- |
+| 操作系统 | Debian GNU/Linux 13 (trixie)，内核 6.12.113 |
+| Node.js | v22.23.4（CI 另跑 Node 24） |
+| DSH | 0.2.1-rc.2（web profile，独立进程运行；**公网入口默认关闭**，需要时临时开窗口） |
+| QQ 接入 | NapCat + OneBot 11 **正向 WebSocket**（插件反向连接，本机回环，不经公网） |
+| 机器人账号 | 真实 QQ 号（OneBot `get_login_info` 可查），非模拟器 |
+| LLM | 自定义 OpenAI 兼容中转（地址与 key **只存在于部署侧配置，不进仓库**） |
+| 生图 | 自填 OpenAI 兼容 `/images/generations`（实测 `seedream-5.0-lite`，约 40 秒出图、单张约 3.6 MB） |
+| 已验证工具 | `qqbot` / `qqgroup` / `qq_websearch` / `qq_webfetch` / `qq_imgsearch` / `qq_history` / `qq_draw`（7 个全部注册成功） |
+
 ### 验证情况
 
-- **自动化测试 133 项**，全部通过（`npm test`）：
-  - 正向 WebSocket 适配器 19 项
-  - 反向 WebSocket 适配器 12 项
-  - Host 插件 38 项（含 `Config` 契约与配置热更新：volatile 就地更新 → 重启适配器）
-  - 客户端设置页 32 项
-  - 权限 / 群管理 / 访客工具闸 32 项（`@deepseek-ai/dsh-tools` 可解析时另含 qqgroup 工具路径断言）
-- 测试用的 QQ 侧对端是项目自带的**零依赖 OneBot 11 模拟器**（`test/mock-onebot.mjs`，手写 RFC 6455 帧编解码），
-  因此**不需要真实 QQ 账号**即可回归。
-- 上面"Host 插件"测试用**假 ctx**（自行实现 `subprocess` / `sessionController` / `timer` / `effect` / `tools`）
-  加载**真正的 `lib/index.js`**，配真实适配器与真实模拟器，跑通完整链路。
-- 曾以「动态 Cordis Package」形态在**真实运行的 DSH** 中验证过端到端：真实模型回复、会话落盘、
-  适配器自动重启与重连、动态工具注册。
-- 组合与打包已单独校验：`dsh --profile web --dump-config --patch …` 接受插件行；
-  解包到 profile 位置后 `@deepseek-ai/dsh-tools` 可解析；客户端清单通过 `dsh.client` 校验规则。
-- 客户端设置页**已由作者在真机（浏览器）上人工确认**：选项卡可见、字段渲染正常、读写与保存行为符合预期。
+- **自动化测试 10 个套件、225 项，全部通过**（`npm test` = `node test/run-all.mjs`；CI 在 Node 22 / 24 双版本上跑）：
+  - 正向 WebSocket 适配器 19 项 ／ 反向 12 项
+  - Host 插件端到端 76 项（假 ctx + 真适配器 + Config 契约 + 配置热更新）
+  - 客户端设置页 32 项 ／ 权限·群管理·访客工具闸 32 项
+  - HTTP·代理隧道 17 项 ／ 配置合并 11 项 ／ 多引擎搜索解析 5 项
+  - 生图引擎 16 项（URL 拼接、响应解析、500/429 重试、4xx 不重试、网络异常重试、task_id 轮询、关闭轮询）
+  - 会话 id 作用域回退 5 项（旧工作区会话不删、改用 `-ws<哈希>` 新 id）
+- 测试对端是项目自带的**零依赖 OneBot 11 模拟器**（`test/mock-onebot.mjs`，手写 RFC 6455 帧编解码），
+  **不需要真实 QQ 账号**即可回归。
+- **真机验证**（上述部署环境，证据来自 DSH 端日志，可复现）：
+  - `已注册 qqbot / qqgroup / qq_websearch / qq_webfetch / qq_imgsearch / qq_history / qq_draw 工具` 七条齐全；
+  - `OneBot 已连接`（正向 WS 链路 + lifecycle connect）；
+  - 群聊/私聊会话创建、消息收发、群管理指令、访客工具闸按预期工作；
+  - 设置页字段（含列表字段逗号输入、生图与人设分组）在真实浏览器里读写正常；
+  - 生图端到端：一次失败重试后成功（`attempts=3, 38s`），图片落盘并作为 QQ 图片段发出；
+  - 配置热更新：改 `cordis.patch.yml` → 适配器重启 → 重连；
+  - 跨工作区旧会话冲突：真实复现过 `session "..." belongs to "/root", not ".../QQ_msg"`，
+    修复后改用 `-ws<哈希>` id 重建（见 CHANGELOG 0.9.2）。
+- 打包与组合校验：`dsh --profile web --dump-config` 接受插件行与 preset 行；
+  解包到 profile 后 `@deepseek-ai/dsh-tools` 可解析；客户端清单通过 `dsh.client` 校验。
 - 核对过的上游文档：[OneBot 11 鉴权规范](https://github.com/botuniverse/onebot-11)、
-  [NapCat-Docker README](https://github.com/NapNeko/NapCat-Docker)（端口 3000/3001/6099、支持 arm64）、
+  [NapCat-Docker README](https://github.com/NapNeko/NapCat-Docker)、
   [AstrBot aiocqhttp 文档](https://docs.astrbot.app/platform/aiocqhttp.html)。
 
 ### 已知限制与**尚未验证**的部分（请务必阅读）
 
-1. **没有用真实 QQ 账号测试过**。全部验证基于自带模拟器。真实 NapCat 的限流、风控、
-   字段细节与边界情况均未验证。
-2. **`lib/index.js` 作为已安装插件在真实 Cordis 宿主中的运行时行为，作者未直接观察到**。
-   等价逻辑以动态 Package 形态跑通过；打包、清单、模块解析、组合预检是分别验证的。
-   因此"装包 → 重启 → 实际可用"这一步请以你自己环境的实测为准。
-3. **Windows 兼容性已在 0.6.1 实测**（Windows 11 + Node 24，124 项全绿），0.6.3 在 Linux（Ubuntu）实测 133 项全绿。macOS 仍未测试。
-   0.6.0 及更早只在 Linux（含 Android proot 容器）下验证过；在 Windows 上，测试脚本里的
+1. **真实 QQ 只在维护者的单一账号 / 单机 Debian 13 上跑过**。其它 QQ 版本、其它 OneBot 实现
+   （OneDisc / Lagrange 等）的字段细节、限流与风控未逐一验证；报错请附 `[dsh-qq-bot]` 日志。
+2. **跨对话检索（session_search 系列）尚未在真实 QQ 会话里端到端跑过一遍**：它依赖 DSH 的
+   `session-query-sqlite` 索引与「cwd 完全一致」授权，本地组合校验通过，真实检索结果待实测。
+3. **平台覆盖**：Linux（Debian 13 / Node 22）是主要验证环境，CI 另覆盖 Node 24；Windows 在 0.6.1 时代
+   实测过（Windows 11 + Node 24），0.8/0.9 未复测；macOS 未测试。Windows 上测试脚本里的
    `import(path.join(...))` 会报 `ERR_UNSUPPORTED_ESM_URL_SCHEME`。
+
 4. **设置契约按 DSH 0.1.7 实现**：0.1.7 移除了 `settings.register()`，改为读插件自己导出的
    `Config` schema（可编辑字段必须标 `.volatile()`）。上游若再次改动设置契约，设置页会先失效，
    收发消息不受影响。
@@ -87,7 +107,7 @@
 说明：会话中途切换过多个模型；时间由文件系统时间戳推算，非精确计时。
 也就是说，这个项目的全部代码、测试与文档，**成本大概是一杯咖啡，以及一个无聊的下午**。
 
-### 维护状态：继续维护
+### 维护状态：社区化维护中（0.8.0 起不封版）
 
 本仓库是 fork 自上游的**继续维护版**：修复 bug、适配 DSH 变更。
 原作者的封版版本（0.6.x 及更早）请到上游 [arrow1031/dsh-qq-bot](https://github.com/arrow1031/dsh-qq-bot) 安装。
@@ -115,25 +135,48 @@
 A human directed the requirements, made the design decisions, reviewed the output, and accepted the result.
 No source code from third-party projects was copied into this repository.
 
-- **Generated with:** an AI coding agent running on DeepSeek Harness (DSH), inside a mobile container.
-- **Verification:** the browser-side settings page was **manually confirmed on a real device** (tab visible, fields render, read/write behaves).
-  133 automated checks pass (`npm test`), covering the forward/reverse WebSocket adapter,
-  the Host plugin (loaded with a fake `ctx` against a real adapter and a real mock OneBot peer),
-  the browser-side settings page, and the permission/group-management subsystem.
-  The QQ-side peer used throughout is a zero-dependency OneBot 11 simulator bundled in `test/`,
+- **Generated with:** an AI coding agent running on DeepSeek Harness (DSH). The 0.8.0 merge and the
+  0.9.x image-gen / persona / cross-conversation work were done against a **real DSH 0.2.1-rc.2 deployment**
+  over SSH (environment below).
+
+**Current deployment environment (maintainer's machine):**
+
+| Item | Value |
+| --- | --- |
+| OS | Debian GNU/Linux 13 (trixie), kernel 6.12.113 |
+| Node.js | v22.23.4 (CI also runs Node 24) |
+| DSH | 0.2.1-rc.2 (web profile, standalone process; the **public entry is closed by default** and opened only for a manual time window) |
+| QQ transport | NapCat + OneBot 11 **forward WebSocket** (the plugin connects outbound to a loopback address; nothing is exposed publicly) |
+| Bot account | a real QQ account (via OneBot `get_login_info`), not a simulator |
+| LLM / image APIs | self-hosted OpenAI-compatible relays; **endpoints and keys live only in deployment config and are never committed** |
+| Tools verified | `qqbot` / `qqgroup` / `qq_websearch` / `qq_webfetch` / `qq_imgsearch` / `qq_history` / `qq_draw` — all seven registered |
+
+- **Verification:** the browser settings page was **manually confirmed on a real device**.
+  **10 suites / 225 automated checks pass** (`npm test` = `node test/run-all.mjs`; CI runs on Node 22 and 24),
+  covering the forward/reverse WebSocket adapter, the Host plugin (fake `ctx` + real adapter + Config contract
+  + config hot reload), the settings page, the permission/group-management subsystem, HTTP/proxy, multi-engine
+  search parsing, the image-gen engine (retry / poll / response parsing) and the session-id workspace fallback.
+  The QQ-side peer used in CI is a zero-dependency OneBot 11 simulator bundled in `test/`,
   so **no real QQ account is required** to reproduce the suite.
+- **Observed on the real deployment** (evidence in DSH logs, reproducible): all seven tool registrations;
+  `OneBot connected` over the forward WS link; group/private session creation and messaging; group-admin
+  commands and the guest tool gate; settings read/write in a real browser; image generation end-to-end
+  (one retry then success, `attempts=3, 38s`); config hot reload (adapter restart + reconnect);
+  and the cross-workspace session conflict (`belongs to "/root", not ".../QQ_msg"`), fixed by re-creating
+  the session under a workspace-scoped id while keeping the old session intact.
 - **Upstream documentation consulted:** the OneBot 11 specification, the NapCat-Docker README,
   and the AstrBot aiocqhttp docs (links in the Chinese section above).
 
 **Not verified — read before relying on this:**
 
-1. Never tested against a **real QQ account**; all validation used the bundled simulator.
-2. The packaged `lib/index.js` was **not observed running inside a real Cordis host by the author**.
-   Equivalent logic was exercised as a dynamic Cordis package; packaging, manifest, module resolution
-   and composition preflight were verified separately. Please validate install → restart → run in your
-   own environment.
-3. **Windows support was measured in 0.6.1** (Windows 11 + Node 24; 124 checks pass); 0.6.3 was measured on Linux (Ubuntu) with 133 checks green. macOS remains untested.
-   0.6.0 and earlier were verified on Linux only (including an Android proot container).
+1. Real QQ testing so far covers **one account on one Debian 13 host**. Other QQ builds and other OneBot
+   implementations (OneDisc, Lagrange, …) were not exercised field-by-field; include `[dsh-qq-bot]` logs in reports.
+2. **Cross-conversation retrieval (`session_search` and friends) has not yet been run end-to-end inside real QQ
+   sessions.** It depends on the DSH `session-query-sqlite` index and its "identical cwd" authorization; the
+   composition was validated locally, but real search results are still to be measured.
+3. **Platform coverage:** Linux (Debian 13 / Node 22) is the primary environment and CI adds Node 24;
+   Windows was measured in 0.6.1 (Windows 11 + Node 24) but **not re-tested in 0.8/0.9**; macOS is untested.
+
 4. **The settings contract follows DSH 0.1.7**: `settings.register()` was removed, so the plugin exports a
    `Config` schema whose editable fields are marked `.volatile()`. If upstream reshapes that contract again,
    the settings page breaks first; messaging keeps working.
