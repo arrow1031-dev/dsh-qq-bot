@@ -1,6 +1,6 @@
 {
   "name": "dsh-qq-bot",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "description": "把 QQ 接到 DSH Agent 的插件（社区化维护）：经 NapCat / OneBot 11 收发消息，每个 QQ 会话一个 DSH Agent。",
   "type": "module",
   "main": "lib/index.js",
@@ -68,12 +68,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/arrow1031/dsh-qq-bot.git"
+    "url": "git+https://github.com/arrow1031-dev/dsh-qq-bot.git"
   },
   "bugs": {
-    "url": "https://github.com/arrow1031/dsh-qq-bot/issues"
+    "url": "https://github.com/arrow1031-dev/dsh-qq-bot/issues"
   },
-  "homepage": "https://github.com/arrow1031/dsh-qq-bot#readme",
+  "homepage": "https://github.com/arrow1031-dev/dsh-qq-bot#readme",
   "author": {
     "name": "arrow1031",
     "url": "https://github.com/arrow1031"

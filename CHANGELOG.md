@@ -1,5 +1,15 @@
 # 变更记录
 
+## 0.8.2
+
+文档纠正到当前状态（无代码改动）：
+
+- README 头部改为「本仓库即维护主干、已解除封版、0.8.x 要求 DSH >= 0.1.7」
+- 架构图与文件清单更新为 0.8 的模块化结构（config / session / tools / admin / http / websearch / imgsearch / moli）
+- 已验证表格与自测章节换成实测条数：8 个套件、204 项（adapter 19 / reverse 12 / plugin 76 / client 32 / admin 32 / http 17 / config 11 / websearch 5）
+- 「维护状态」由「fork 自上游的继续维护版 / 原版已封版」改为「社区化维护中、不封版、跟随 main」
+- 修复 CONTRIBUTING / SECURITY / PR 模板里的占位符残留，社区段补上 Discussions / 行为准则链接
+
 ## 0.8.1
 
 - 修复：设置页「列表类字段」（群号白名单、私聊白名单、拥有者、可管理的群等）输入框吞掉逗号，

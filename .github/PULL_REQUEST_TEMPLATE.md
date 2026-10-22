@@ -8,7 +8,7 @@
 
 ## 验证
 
-- [ ] BTnode test/run-all.mjsBT 全绿
+- [ ] `node test/run-all.mjs` 全绿
 - [ ] 在真实 DSH + NapCat 上跑过（版本：____）
 
 ## 其他

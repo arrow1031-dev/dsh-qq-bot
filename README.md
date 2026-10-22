@@ -1,11 +1,13 @@
 # dsh-qq-bot —— 把 QQ 接到 DSH Agent
 
-> **兼容性**：本版要求 **DSH ≥ 0.1.7**。需要兼容 DSH 0.1.6 及更早的旧版本（0.6.0 / 0.6.1），
-> 请到**上游原仓库** [arrow1031/dsh-qq-bot](https://github.com/arrow1031/dsh-qq-bot) 安装（原版已封版）。
+> **当前版本 0.8.x**：要求 **DSH ≥ 0.1.7**，DSH 0.2 已适配（工具走 `ctx.get('tools')` 注入契约）。
+> 本仓库就是维护主干 [arrow1031/dsh-qq-bot](https://github.com/arrow1031-dev/dsh-qq-bot)，**已解除封版**：
+> 安装跟随 `main`、功能与修复走 PR。需要兼容 DSH 0.1.6 及更早的旧版本（0.6.x）请自行选择早期 tag 下载；
+> 早期版本同时想用新功能，请自行处理。
 
 **维护者** [@arrow1031](https://github.com/arrow1031) · **核心贡献者** [@nd002723](https://github.com/nd002723) · **许可** [MIT](LICENSE) · **AI 生成声明** [AI-DISCLOSURE.md](AI-DISCLOSURE.md) · **更新日志** [CHANGELOG.md](CHANGELOG.md)
 
-> **⚠️ 0.6.8 行为变更：bot 不再自动附带聊天上下文**
+> **⚠️ 行为约定（0.6.8 起沿用，0.8.x 不变）：bot 不自动附带聊天上下文**
 >
 > 被 @ / 回复 bot 时，不再自动把群内「最近相关发言」硬塞进会话上下文（省 token、上下文更精简）。
 > 需要结合群内近期消息/图片作答时，Agent 会**主动调 `qq_history` 工具**拉取（见 [qq_history 小节](#qq_history聊天记录ai-自取)）。
@@ -25,7 +27,15 @@ NapCat（或 OneDisc / Lagrange 等 OneBot 11 实现）   ← 登录、收发、
 lib/onebot-adapter.mjs（本插件自带，零 npm 依赖）    ← 协议翻译层
    │ stdin/stdout 换行分隔 JSON
    ▼
-lib/index.js（Cordis 插件）                          ← 每个 QQ 会话一个 DSH Agent
+lib/index.js（Cordis 插件入口，0.8 起模块化拆分）
+   ├ lib/config.js       Config schema / 默认值 / 深合并
+   ├ lib/session.js      建会话、固定命名、访客工具闸
+   ├ lib/tools.js        qqbot / qqgroup / qq_websearch / qq_webfetch / qq_imgsearch / qq_history
+   ├ lib/admin.js        指令解析与三路权限
+   ├ lib/http.js         fetch + 代理隧道
+   ├ lib/websearch.js    多引擎搜索
+   ├ lib/imgsearch.js    图床 + 反搜引擎
+   └ lib/moli.js         dsh-moli 渲染抓取（可选）
    ▲ 设置面板读写（lib/client.js）                        ← 「设置 → QQ 机器人」选项卡
    │ sessionController → agent.followup → whenIdle
    ▼
@@ -40,11 +50,16 @@ DSH Agent（默认模型 + preset 人格 + 工具）
 | --- | --- | --- |
 | 正向 WS 适配器回归 | `node test/test-adapter.mjs` | **19/19** |
 | 反向 WS 适配器回归 | `node test/test-adapter-reverse.mjs` | **12/12** |
-| 打包后插件端到端（Host） | `node test/test-plugin.mjs` | **86/86** |
+| 打包后插件端到端（Host） | `node test/test-plugin.mjs` | **76/76** |
 | 客户端设置页（含真实渲染冒烟） | `node test/test-client.mjs` | **32/32** |
-| 权限·群管理·访客工具闸 | `node test/test-admin.mjs` | **36/36** |
+| 权限·群管理·访客工具闸 | `node test/test-admin.mjs` | **32/32** |
+| HTTP / 代理层 | `node test/test-http.mjs` | **17/17** |
+| 配置合并与还原 | `node test/test-config.mjs` | **11/11** |
+| 多引擎搜索结果解析 | `node test/test-websearch.mjs` | **5/5** |
 | 组合能否加载 | `dsh --profile web --dump-config --patch <补丁>` | 通过（行被正确插入） |
 | 装到 profile 后的模块解析 | 解包到 profile 后 `import('@deepseek-ai/dsh-tools')` | 通过 |
+| 真机（DSH 0.2.1-rc.2 + NapCat） | 装 0.8.x 后启动 | 6 个工具全部注册、OneBot 已连接 |
+| 一键全量 | `node test/run-all.mjs` | **8/8 套件 · 204 项** |
 
 `test-plugin.mjs` 用假 ctx 加载真正的 `lib/index.js` + 真适配器 + 零依赖 OneBot 模拟器，跑通完整链路（无需 DSH / QQ / 网络）。
 
@@ -71,11 +86,12 @@ docker run -d --name napcat --restart=always \
 
 ### 2. 安装插件
 
-本插件**不在 npm 上**，从本仓库或 Release 附件装（维护仓库：<https://github.com/arrow1031/dsh-qq-bot>）：
+本插件**不在 npm 上**，从本仓库或 Release 附件装（维护仓库：<https://github.com/arrow1031-dev/dsh-qq-bot>）：
 
 ```sh
-# 跟随 main（0.8.0 起不封版：升级即最新，不再锁 tag）
-dsh plugin --profile web add github:arrow1031/dsh-qq-bot
+# 跟随 main（已解除封版：升级即最新，不锁 tag）
+# 升级已有安装：dsh plugin --profile web update
+dsh plugin --profile web add github:arrow1031-dev/dsh-qq-bot
 
 # 本地 tarball（自己改了代码之后）
 npm pack
@@ -86,7 +102,7 @@ dsh plugin --profile web add ./dsh-qq-bot-<版本号>.tgz
 
 `dsh plugin` 本质是 pnpm 的前置封装：装完包后，它会**自动把声明了 `dsh.bundle.patch` 的依赖加入 profile 的层栈**（本包的 package.json 已声明），并连同唯一的运行时依赖 `@deepseek-ai/schemastery` 一起装上。装完**重启 DSH（桌面版重启应用 / CLI 重启 `dsh web`）**生效。
 
-> **版本要求**：0.8.0 要求 DSH ≥ 0.1.7；DSH 0.2.x 已适配（见下文「DSH 0.2 兼容」）。
+> **版本要求**：0.8.x 要求 DSH ≥ 0.1.7；DSH 0.2.x 已适配（见下文「DSH 0.2 兼容」）。
 
 > **升级注意**：`dsh plugin add` 走 pnpm，按 tarball **完整性哈希**缓存——改了代码要打成**新版本号文件名**再装（0.8.0 → 0.8.1），沿用旧名会被判「已最新」跳过。
 > `lib/client.js` 是浏览器侧代码，装完重启后还要**刷新浏览器页面**才加载新 bundle。
@@ -416,7 +432,7 @@ npm install
 装好之后裸克隆即可运行：需要 DSH 运行时才能成立的少数断言（动态工具注册、qqgroup 工具路径）
 会自动跳过，而不是判失败；想看全，把 `DSH_PROFILE_MODULES` 指向一个装了 DSH 运行时的 profile 的
 `node_modules`。
-整套 **144 项**：
+整套 **204 项**（8 个套件）：
 
 ```sh
 npm test
@@ -430,9 +446,13 @@ node test/test-adapter.mjs
 node test/test-adapter-reverse.mjs
 
 # 打包后插件的端到端（假 ctx + 真适配器 + 假 OneBot）
-node test/test-plugin.mjs     # Host 半边（45 项，含 Config 契约与热更新）
+node test/test-plugin.mjs     # Host 半边（76 项，含 Config 契约与热更新）
 node test/test-client.mjs     # 客户端设置页（32 项）
 node test/test-admin.mjs      # 权限·群管理·访客工具闸（32 项；dsh-tools 可解析时另含工具路径断言）
+node test/test-http.mjs       # HTTP / 代理隧道（17 项）
+node test/test-config.mjs     # 配置合并与还原（11 项）
+node test/test-websearch.mjs  # 多引擎搜索结果解析（5 项）
+node test/run-all.mjs         # 一键全量（8 套件）
 ```
 
 也可以手动拿假 OneBot 试（端口正好是 NapCat 默认值）：
@@ -462,20 +482,34 @@ AstrBot 是 OneBot 的**消费方**（内置 aiocqhttp 反向 WS 服务端），
 
 | 文件 | 作用 |
 | --- | --- |
-| `lib/index.js` | Cordis 插件本体（Host 侧）。导出 `name` / `inject` / `Config` / `apply`；`Config` 是 schemastery schema，可编辑字段标 `.volatile()` |
+| `lib/index.js` | Cordis 插件入口（Host 侧）。导出 `name` / `inject` / `Config` / `apply`；组合导入下面各模块 |
+| `lib/config.js` | `Config` schema、`DEFAULTS`、深合并 `mergeConfig`、volatile 还原 `plainConfig` |
+| `lib/session.js` | 会话创建/复用、固定命名、访客工具闸（`ctx.get('tools')`） |
+| `lib/tools.js` | 六个模型工具；注册统一走 `registerTool(ctx, make)`（DSH 0.2 契约） |
+| `lib/admin.js` | 群管理指令、三路权限、动态授权 |
+| `lib/http.js` | fetch + HTTP CONNECT 代理隧道 + 公网地址校验 |
+| `lib/websearch.js` | Tavily / DuckDuckGo / Yandex / Bing / Wikipedia 组合搜索 |
+| `lib/imgsearch.js` | 图床（zixiaoyun / scdn / uguu）+ TraceMoe / IQDB / SauceNAO / Soutubot 等反搜 |
+| `lib/moli.js` | dsh-moli 渲染抓取探测（可选） |
 | `lib/client.js` | 客户端半边（手写 bundle）：在「设置」里加「QQ 机器人」选项卡（命名空间 = 条目 id `dsh-qq-bot`） |
 | `lib/onebot-adapter.mjs` | OneBot 11 传输适配器。零依赖（Node 22 内置 `WebSocket`/`fetch`），正向/反向 WS + HTTP，自动重连、发送限速 |
 | `cordis.patch.yml` | bundle 补丁：把插件插入 profile 组合树 |
 | `test/mock-onebot.mjs` | 零依赖 OneBot 11 模拟器（手写 RFC 6455 帧编解码） |
 | `test/test-adapter.mjs` | 正向 WS 适配器回归（19 项） |
 | `test/test-adapter-reverse.mjs` | 反向 WS 适配器回归（12 项） |
-| `test/test-plugin.mjs` | Host 插件端到端（45 项，假 ctx + 真适配器 + Config 契约 + 配置热更新） |
+| `test/test-plugin.mjs` | Host 插件端到端（76 项，假 ctx + 真适配器 + Config 契约 + 配置热更新） |
 | `test/test-client.mjs` | 客户端设置页（32 项，模拟模块加载器 + 最小 React 渲染 + 只写密钥护栏 + 命名空间回退） |
 | `test/test-admin.mjs` | 权限·群管理·访客工具闸专项（32 项；dsh-tools 可解析时另含工具路径断言） |
+| `test/test-http.mjs` | HTTP / 代理隧道（17 项） |
+| `test/test-config.mjs` | 配置合并与 volatile 还原（11 项） |
+| `test/test-websearch.mjs` | 多引擎搜索结果解析（5 项） |
+| `test/run-all.mjs` | 一键全量（8 套件） |
+| `CONTRIBUTING.md` / `CODE_OF_CONDUCT.md` / `SECURITY.md` | 贡献流程、行为准则、安全报告 |
+| `.github/` | issue / PR 模板、CODEOWNERS |
 | `examples/dynamic-package-host.js` | 同一个桥接的「动态 Cordis Package」版本：不想装包、只想在当前 DSH 进程里临时跑时用 |
 | `ARCHITECTURE.md` | **改动指南**（给要 fork 的人）：文件职责、数据流、设计决策原因、分步改动指南、调试手册、术语表 |
 | `AI-DISCLOSURE.md` | AI 生成内容声明、验证情况、**尚未验证清单**、第三方归属、安全免责 |
-| `CHANGELOG.md` | 版本演进（0.1.0 → 0.6.5） |
+| `CHANGELOG.md` | 版本演进（0.1.0 → 0.8.2，含 0.8.0 合并下游分支与 0.8.1 输入框修复） |
 | `LICENSE` | MIT |
 
 ## 十二、设计说明（踩过的坑）
@@ -513,10 +547,20 @@ MIT，见 [LICENSE](LICENSE)。维护者与贡献者见顶部（维护 [@arrow10
 
 时间由文件系统时间戳推算，含人工真机确认与等待；会话中途切换过多个模型。
 
-### 维护状态：继续维护
+### 维护状态：社区化维护中（不封版）
 
-本仓库是 fork 自上游的**继续维护版**：修复 bug、适配 DSH 变更。
-原作者的封版版本（0.6.x 及更早，兼容 DSH ≤ 0.1.6）请到上游 [arrow1031/dsh-qq-bot](https://github.com/arrow1031/dsh-qq-bot) 安装。
+本仓库就是主干：0.8.0 把下游开发者 [@nd002723](https://github.com/nd002723) 的分支
+（模块化重构 + `qq_websearch` / `qq_webfetch` / `qq_imgsearch` / `qq_history`）并入
+`main`，同时保留 0.7.0 的 DSH 0.2 兼容改造；0.8.1 修掉设置页列表输入框吞逗号的问题。
+
+- 安装跟随 `main`，不再锁 tag；每次合并后在 `main` 打 tag 发 Release
+- 提 issue / PR / Discussions 都欢迎，活跃贡献者会被邀请为协作者（当前协作者：@arrow1031、@nd002723）
+- 0.6.x 及更早（兼容 DSH ≤ 0.1.6）保留为历史 tag，需要旧版请显式指定 tag
+
+### 联系
+
+- 仓库：[arrow1031/dsh-qq-bot](https://github.com/arrow1031-dev/dsh-qq-bot)（issue / PR / Discussions）
+- 维护者：[@arrow1031](https://github.com/arrow1031) · 核心贡献者：[@nd002723](https://github.com/nd002723)
 
 为了让你改得快，这些文档是为你写的：
 
@@ -524,7 +568,7 @@ MIT，见 [LICENSE](LICENSE)。维护者与贡献者见顶部（维护 [@arrow10
 | --- | --- |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | **改动指南**：文件职责地图、一条消息的完整旅程、关键数据结构、每个设计决策的原因、`加一条指令 / 加一个工具 / 加一个设置项`的分步写法、调试手册、术语表、8 条"不要做的事" |
 | [AI-DISCLOSURE.md](AI-DISCLOSURE.md) | AI 生成方式、人类决策点、验证到什么程度、**尚未验证的清单**、第三方归属、安全免责 |
-| [CHANGELOG.md](CHANGELOG.md) | 0.1.0 → 0.6.5 的完整演进，含每个修复的原因 |
+| [CHANGELOG.md](CHANGELOG.md) | 0.1.0 → 0.8.2 的完整演进，含 0.8.0 合并下游分支与 0.8.1 修复 |
 
 ### 致谢
 
@@ -532,10 +576,6 @@ MIT，见 [LICENSE](LICENSE)。维护者与贡献者见顶部（维护 [@arrow10
   没有它把 NTQQ 的能力按 OneBot 规范暴露出来，这个项目根本无从起步。
 - [**梁圣**](https://www.deepseek.com/) —— 忠！橙！
 
-### 联系
-
-- 维护仓库：[arrow1031/dsh-qq-bot](https://github.com/arrow1031/dsh-qq-bot)（问题与 PR 都欢迎）
-- 原作者：[@arrow1031](https://github.com/arrow1031)
 
 AI 生成内容声明见 [AI-DISCLOSURE.md](AI-DISCLOSURE.md)，**使用前请务必读一遍**（尤其"已知限制"一节）。
 
@@ -553,12 +593,12 @@ tools 仍是可选服务：没有它时插件照常收发消息，只是少几�
 
 ## 社区与贡献
 
-0.8.0 起本项目转入社区化维护，不再封版：安装跟随 BTmainBT，功能与修复走 PR。
+0.8.0 起本项目转入社区化维护，**完全解除封版**：安装跟随 `main`，功能与修复走 PR。
 
-- 贡献流程与代码约定见 CONTRIBUTING.md
-- 提问与用法交流去 Discussions
-- 安全问题按 SECURITY.md 私下联系
-- 行为准则见 CODE_OF_CONDUCT.md
+- 贡献流程与代码约定：[CONTRIBUTING.md](CONTRIBUTING.md)
+- 提问与用法交流：[Discussions](https://github.com/arrow1031-dev/dsh-qq-bot/discussions)
+- 安全问题：[SECURITY.md](SECURITY.md)（走私信，别开公开 issue 贴细节）
+- 行为准则：[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
 
-致谢：0.8.0 的模块化重构与 qq_history / qq_websearch / qq_webfetch / qq_img，
-来自下游开发者 @nd002723 的分支，已并入主干。
+致谢：0.8.0 的模块化重构与 `qq_history` / `qq_websearch` / `qq_webfetch` / `qq_imgsearch`
+来自下游开发者 [@nd002723](https://github.com/nd002723) 的分支，已并入主干。
