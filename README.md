@@ -61,10 +61,11 @@ DSH Agent（默认模型 + preset 人格 + 工具）
 | 生图引擎（重试 / 轮询 / 解析） | `node test/test-imagegen.mjs` | **16/16** |
 | 运行时兼容自检 | `node test/test-compat.mjs` | **14/14** |
 | 历史消息鉴权与定向 | `node test/test-history.mjs` | **23/23** |
+| 主动发言（时间窗/校验/频率闸） | `node test/test-proactive.mjs` | **28/28** |
 | 组合能否加载 | `dsh --profile web --dump-config --patch <补丁>` | 通过（行被正确插入） |
 | 装到 profile 后的模块解析 | 解包到 profile 后 `import('@deepseek-ai/dsh-tools')` | 通过 |
 | 真机（DSH 0.2.1-rc.2 / rc.3 + NapCat） | 装 0.9.x 后启动 | 7 个工具全部注册、OneBot 已连接 |
-| 一键全量 | `node test/run-all.mjs` | **12/12 套件 · 262 项** |
+| 一键全量 | `node test/run-all.mjs` | **13/13 套件 · 290 项** |
 
 `test-plugin.mjs` 用假 ctx 加载真正的 `lib/index.js` + 真适配器 + 零依赖 OneBot 模拟器，跑通完整链路（无需 DSH / QQ / 网络）。
 
@@ -238,6 +239,22 @@ Agent 会话的工作目录**不需要任何配置**：插件读取 DSH 官方�
     history:                      # qq_history 聊天记录（AI 自取）
       scopeMessages: 5              # 识别窗口：触发消息往前最多多少条
       imageLimit: 3                 # 窗口内最多识别多少张图（最近的优先）
+    proactive:                    # 主动发言（可选，默认关）
+      enabled: false              # 打开且下面列了群号才生效
+      groups: []                  # 生效群号；留空 = 不启用
+      intervalMinutes: 60         # 检查间隔（最小 5）
+      minNewMessages: 6           # 至少多少条新消息才考虑接话
+      quietHours: ['23:00-08:00'] # 免打扰时段，可多段
+      maxPerHour: 2               # 每小时上限
+      maxPerDay: 8                # 每天上限
+      minGapMinutes: 15           # 两次发言最小间隔
+      baseUrl: ''                 # OpenAI 兼容；留空 = 用生图接口
+      apiKey: ''                  # 留空 = 用生图 key / IMAGE_API_KEY
+      model: ''                   # 例如 doubao-seed-2.0-lite
+      maxChars: 120               # 单条最大字数
+      interests: ''               # 话题偏好（可空；接什么仍由模型决定）
+      dryRun: false               # 演练：只记日志不发送
+      verbose: false              # 日志打印每次判断
     imageGen:                     # qq_draw 生图（自填接口，插件不带 key）
       enabled: false              # 打开后 AI 才能画图
       baseUrl: ''                 # OpenAI 兼容，例 https://api.example.com/v1（请求 地址/images/generations）
@@ -474,7 +491,7 @@ npm install
 装好之后裸克隆即可运行：需要 DSH 运行时才能成立的少数断言（动态工具注册、qqgroup 工具路径）
 会自动跳过，而不是判失败；想看全，把 `DSH_PROFILE_MODULES` 指向一个装了 DSH 运行时的 profile 的
 `node_modules`。
-整套 **262 项**（12 个套件）：
+整套 **290 项**（13 个套件）：
 
 ```sh
 npm test
@@ -497,7 +514,7 @@ node test/test-config.mjs     # 配置合并与还原（11 项）
 node test/test-websearch.mjs  # 多引擎搜索结果解析（5 项）
 node test/test-imagegen.mjs   # 生图引擎：重试 / 轮询 / 响应解析（16 项）
 node test/test-session-id.mjs # 会话 id 回退（5 项）
-node test/run-all.mjs         # 一键全量（12 套件）
+node test/run-all.mjs         # 一键全量（13 套件）
 ```
 
 也可以手动拿假 OneBot 试（端口正好是 NapCat 默认值）：
@@ -654,6 +671,16 @@ AI 生成内容声明见 [AI-DISCLOSURE.md](AI-DISCLOSURE.md)，**使用前请�
 ```
 
   不挂这一行就没有这 5 个工具，但 qq_history 的跨群读取不受影响。
+
+## 主动发言（可选）
+
+默认关闭。打开后按 `proactive.intervalMinutes` 看一次群里最近的消息，由模型自己判断**要不要接、接什么话题**；判断标准写在提示词里（宁可不说话；不接刷屏 / 吵架 / 敏感话题 / 广告 / 看不懂的梗 / 只针对某人的没头没尾对话），发言前还会过一遍长度、链接、``、重复校验。频率、时段、群范围全部由配置控制。
+
+- 只有 `enabled: true` **且** `groups` 显式列了群号才生效；留空 = 完全不跑。
+- 免打扰时段 `quietHours`、每小时 / 每天上限、两次发言最小间隔会先拦一道；不足 `minNewMessages` 条新消息则不进入判断。
+- 模型返回 `speak=false` 就安静待着；不会 `` 人、不发链接；`dryRun: true` 只记日志，方便先观察。
+- 判断走 OpenAI 兼容接口（`baseUrl` / `model` / `apiKey`，留空复用生图的配置），不依赖 DSH 会话模型。
+- 关闭：设置页把「启用主动发言」关掉，或配置里 `enabled: false`。
 
 ## 向前兼容（旧会话不会被删）
 

@@ -36,7 +36,7 @@
 
 ### 验证情况
 
-- **自动化测试 12 个套件、262 项，全部通过**（`npm test` = `node test/run-all.mjs`；CI 在 Node 22 / 24 双版本上跑）：
+- **自动化测试 13 个套件、290 项，全部通过**（`npm test` = `node test/run-all.mjs`；CI 在 Node 22 / 24 双版本上跑）：
   - 正向 WebSocket 适配器 19 项 ／ 反向 12 项
   - Host 插件端到端 76 项（假 ctx + 真适配器 + Config 契约 + 配置热更新）
   - 客户端设置页 32 项 ／ 权限·群管理·访客工具闸 32 项
@@ -155,7 +155,7 @@ No source code from third-party projects was copied into this repository.
 | Tools verified | `qqbot` / `qqgroup` / `qq_websearch` / `qq_webfetch` / `qq_imgsearch` / `qq_history` / `qq_draw` — all seven registered |
 
 - **Verification:** the browser settings page was **manually confirmed on a real device**.
-  **12 suites / 262 automated checks pass** (`npm test` = `node test/run-all.mjs`; CI runs on Node 22 and 24),
+  **13 suites / 290 automated checks pass** (`npm test` = `node test/run-all.mjs`; CI runs on Node 22 and 24),
   covering the forward/reverse WebSocket adapter, the Host plugin (fake `ctx` + real adapter + Config contract
   + config hot reload), the settings page, the permission/group-management subsystem, HTTP/proxy, multi-engine
   search parsing, the image-gen engine (retry / poll / response parsing) and the session-id workspace fallback.
