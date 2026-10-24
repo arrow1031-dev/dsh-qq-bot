@@ -235,6 +235,11 @@ export async function startMockOneBot(options = {}) {
       // NapCat 惯例：最新在前
       return { messages: [...history].reverse().slice(0, count) };
     },
+    get_friend_msg_history(params) {
+      const count = Math.max(1, Number(params.count ?? 20));
+      const list = [...history].slice(-count);
+      return { messages: params.reverseOrder === true ? list : list.reverse() };
+    },
     get_group_list() { return [{ group_id: 33333, group_name: '测试群', member_count: memberRoles.size, max_member_count: 200 }]; },
     get_group_info(params) { return { group_id: Number(params.group_id), group_name: '测试群', member_count: memberRoles.size, max_member_count: 200 }; },
     set_group_ban() { return {}; },

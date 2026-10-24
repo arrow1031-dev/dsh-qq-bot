@@ -1,5 +1,14 @@
 # 变更记录
 
+## 0.9.4 —— qq_history：私聊历史 + 分页 + 按权限跨会话
+
+- **私聊也能取历史**：之前 qq_history 只支持群聊（私聊直接报错）。现在当前私聊会用触发消息当锚点调 `get_friend_msg_history`，私聊里也能主动翻记录；`peer_id` 可指定别的私聊（需权限）。
+- **分页**：新增 `before_seq`（上一页最旧的 message_id），返回里带 `next_before` 作为下一页游标；群聊用 `message_seq + reverseOrder`，私聊同样按锚点往前翻。
+- **跨会话按权限取**（`lib/history-auth.js`）：当前会话随意读；拥有者 / 高级管理员可读任意群和私聊；群管理员只能读「自己是管理员（或已授权）且群在可管理范围」的群；别人的私聊只有拥有者/高级管理员可读。越权返回明确原因，不静默给空。
+- 消息统一归一化成「新→旧」并按 message_id 去重；返回增加 `target` / `access` 字段说明读的是谁、凭什么权限。
+- 新增 `test/test-history.mjs`（23 项：会话定向 / 越权判定 / 请求构造 / 归一化），全套件 12/12、262 项。
+- 已在真实 NapCat 4.18.19 上验证：`get_group_msg_history`（带 message_seq 翻页）与 `get_friend_msg_history`（锚点）均 retcode 0。
+
 ## 0.9.3 —— 运行时兼容自检（不写死 DSH 版本）
 
 - 新增 `lib/compat.js`：读取当前实际加载的 DSH 版本（`DSH_VERSION` 环境变量 → 从 `process.argv[1]` 向上找

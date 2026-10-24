@@ -59,10 +59,12 @@ DSH Agent（默认模型 + preset 人格 + 工具）
 | 配置合并与还原 | `node test/test-config.mjs` | **11/11** |
 | 多引擎搜索结果解析 | `node test/test-websearch.mjs` | **5/5** |
 | 生图引擎（重试 / 轮询 / 解析） | `node test/test-imagegen.mjs` | **16/16** |
+| 运行时兼容自检 | `node test/test-compat.mjs` | **14/14** |
+| 历史消息鉴权与定向 | `node test/test-history.mjs` | **23/23** |
 | 组合能否加载 | `dsh --profile web --dump-config --patch <补丁>` | 通过（行被正确插入） |
 | 装到 profile 后的模块解析 | 解包到 profile 后 `import('@deepseek-ai/dsh-tools')` | 通过 |
 | 真机（DSH 0.2.1-rc.2 / rc.3 + NapCat） | 装 0.9.x 后启动 | 7 个工具全部注册、OneBot 已连接 |
-| 一键全量 | `node test/run-all.mjs` | **10/10 套件 · 225 项** |
+| 一键全量 | `node test/run-all.mjs` | **12/12 套件 · 262 项** |
 
 `test-plugin.mjs` 用假 ctx 加载真正的 `lib/index.js` + 真适配器 + 零依赖 OneBot 模拟器，跑通完整链路（无需 DSH / QQ / 网络）。
 
@@ -472,7 +474,7 @@ npm install
 装好之后裸克隆即可运行：需要 DSH 运行时才能成立的少数断言（动态工具注册、qqgroup 工具路径）
 会自动跳过，而不是判失败；想看全，把 `DSH_PROFILE_MODULES` 指向一个装了 DSH 运行时的 profile 的
 `node_modules`。
-整套 **225 项**（10 个套件）：
+整套 **262 项**（12 个套件）：
 
 ```sh
 npm test
@@ -495,7 +497,7 @@ node test/test-config.mjs     # 配置合并与还原（11 项）
 node test/test-websearch.mjs  # 多引擎搜索结果解析（5 项）
 node test/test-imagegen.mjs   # 生图引擎：重试 / 轮询 / 响应解析（16 项）
 node test/test-session-id.mjs # 会话 id 回退（5 项）
-node test/run-all.mjs         # 一键全量（10 套件）
+node test/run-all.mjs         # 一键全量（12 套件）
 ```
 
 也可以手动拿假 OneBot 试（端口正好是 NapCat 默认值）：
@@ -630,7 +632,11 @@ AI 生成内容声明见 [AI-DISCLOSURE.md](AI-DISCLOSURE.md)，**使用前请�
 
 两套互补的能力，都在设置里配、由 Agent 自己决定何时用：
 
-- **QQ 层：qq_history** 支持传任意 `group_id`。默认读当前群；给别的群号就是跨群翻记录（只读，不改任何东西）。
+- **QQ 层：qq_history**（只读，不改任何东西）
+  - 默认读当前会话（群聊 / 私聊都行）；`before_seq` 翻更早的页，返回的 `next_before` 就是下一页游标。
+  - 跨会话要权限：**拥有者 / 高级管理员**可读任意群和私聊；**群管理员**只能读「自己是该群管理员（或已授权）且该群在可管理范围」的群；别人的私聊只有拥有者/高级管理员能读。当前会话不受限，AI 回答群内问题照常读。
+  - 私聊历史用 `peer_id` 指定对象；读别人的私聊要带 `before_seq`（NapCat 需要一条该会话里的消息当锚点）。
+  - 拉不到时给明确原因（无权限 / 需要锚点），不会静默返回空。
 - **会话层：session_search 系列**（DSH 的 `@deepseek-ai/dsh-tool-session-query`，5 个只读工具：
   `session_search` / `session_event_search` / `session_trace` /
   `session_event_trace` / `session_event_read`）。授权规则是「目标会话的 cwd 与调用方完全一致」——
