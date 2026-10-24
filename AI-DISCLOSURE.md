@@ -54,6 +54,9 @@
   - 配置热更新：改 `cordis.patch.yml` → 适配器重启 → 重连；
   - 跨工作区旧会话冲突：真实复现过 `session "..." belongs to "/root", not ".../QQ_msg"`，
     修复后改用 `-ws<哈希>` id 重建（见 CHANGELOG 0.9.2）。
+- **0.2.1-rc.3 兼容复核**：在隔离 `DSH_HOME`（独立 profile，未连 NapCat）装 rc.3 + 本插件，
+  启动日志七条工具注册齐全、适配器 ready、无报错；插件启动会自检并打印实际 DSH 版本与判定，
+  判定范围来自 `lib/compat.js` 的两个常量，不逐版本硬编码。
 - 打包与组合校验：`dsh --profile web --dump-config` 接受插件行与 preset 行；
   解包到 profile 后 `@deepseek-ai/dsh-tools` 可解析；客户端清单通过 `dsh.client` 校验。
 - 核对过的上游文档：[OneBot 11 鉴权规范](https://github.com/botuniverse/onebot-11)、

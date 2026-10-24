@@ -1,5 +1,17 @@
 # 变更记录
 
+## 0.9.3 —— 运行时兼容自检（不写死 DSH 版本）
+
+- 新增 `lib/compat.js`：读取当前实际加载的 DSH 版本（`DSH_VERSION` 环境变量 → 从 `process.argv[1]` 向上找
+  `@deepseek-ai/dsh/package.json` → 模块解析兜底），与声明支持范围比较后给出结论。
+- 启动日志多一行：`运行于 DSH x.y.z（在声明支持范围内 / 超出支持范围 / 未能识别）`；
+  `qqbot` 工具 `action="status"` 的 `runtime` 字段返回 `{dsh, supportingRange, compatible, note}`。
+- 支持范围只维护两个常量（`SUPPORT_FLOOR = 0.1.7-0`、`SUPPORT_CEILING = 0.3.0-0`），
+  不再逐版本维护兼容表；识别失败或超范围只提示，不影响收发消息。
+- 已在 DSH 0.2.1-rc.2（线上）与 0.2.1-rc.3（隔离 profile）实测：七条工具注册齐全、启动无报错；
+  新增 `test/test-compat.mjs`（14 项），全套件 11/11。
+- 消息链路零改动：升级只多一行日志与一个状态字段。
+
 ## 0.9.2 —— 跨对话检索 + 旧会话向前兼容
 
 - **不再清理旧会话**：当持久化的会话绑在别的工作区（例如 0.7 时代 workspace=/root 建的会话，

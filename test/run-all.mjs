@@ -1,5 +1,5 @@
 /**
- * 汇总 runner：依次跑完 10 个测试套件，单个失败不中断，末尾汇总。
+ * 汇总 runner：依次跑完 11 个测试套件，单个失败不中断，末尾汇总。
  * 用法：node test/run-all.mjs（package.json 的 test 脚本指向这里）
  */
 import { spawn } from 'node:child_process';
@@ -9,7 +9,7 @@ import { dirname, join } from 'node:path';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const suites = [
   'test-adapter.mjs', 'test-adapter-reverse.mjs', 'test-plugin.mjs', 'test-client.mjs',
-  'test-admin.mjs', 'test-http.mjs', 'test-config.mjs', 'test-websearch.mjs', 'test-imagegen.mjs', 'test-session-id.mjs',
+  'test-admin.mjs', 'test-http.mjs', 'test-config.mjs', 'test-websearch.mjs', 'test-imagegen.mjs', 'test-session-id.mjs', 'test-compat.mjs',
 ];
 
 function runSuite(file) {

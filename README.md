@@ -1,6 +1,6 @@
 # dsh-qq-bot —— 把 QQ 接到 DSH Agent
 
-> **当前版本 0.8.x**：要求 **DSH ≥ 0.1.7**，DSH 0.2 已适配（工具走 `ctx.get('tools')` 注入契约）。
+> **当前版本 0.9.x**：要求 **DSH ≥ 0.1.7**；DSH 0.2.1 系列（rc.2 / rc.3）已实测适配（工具走 `ctx.get('tools')` 注入契约）。
 > 本仓库就是维护主干 [arrow1031/dsh-qq-bot](https://github.com/arrow1031-dev/dsh-qq-bot)，**已解除封版**：
 > 安装跟随 `main`、功能与修复走 PR。需要兼容 DSH 0.1.6 及更早的旧版本（0.6.x）请自行选择早期 tag 下载；
 > 早期版本同时想用新功能，请自行处理。
@@ -61,7 +61,7 @@ DSH Agent（默认模型 + preset 人格 + 工具）
 | 生图引擎（重试 / 轮询 / 解析） | `node test/test-imagegen.mjs` | **16/16** |
 | 组合能否加载 | `dsh --profile web --dump-config --patch <补丁>` | 通过（行被正确插入） |
 | 装到 profile 后的模块解析 | 解包到 profile 后 `import('@deepseek-ai/dsh-tools')` | 通过 |
-| 真机（DSH 0.2.1-rc.2 + NapCat） | 装 0.8.x 后启动 | 6 个工具全部注册、OneBot 已连接 |
+| 真机（DSH 0.2.1-rc.2 / rc.3 + NapCat） | 装 0.9.x 后启动 | 7 个工具全部注册、OneBot 已连接 |
 | 一键全量 | `node test/run-all.mjs` | **10/10 套件 · 225 项** |
 
 `test-plugin.mjs` 用假 ctx 加载真正的 `lib/index.js` + 真适配器 + 零依赖 OneBot 模拟器，跑通完整链路（无需 DSH / QQ / 网络）。
@@ -105,7 +105,7 @@ dsh plugin --profile web add ./dsh-qq-bot-<版本号>.tgz
 
 `dsh plugin` 本质是 pnpm 的前置封装：装完包后，它会**自动把声明了 `dsh.bundle.patch` 的依赖加入 profile 的层栈**（本包的 package.json 已声明），并连同唯一的运行时依赖 `@deepseek-ai/schemastery` 一起装上。装完**重启 DSH（桌面版重启应用 / CLI 重启 `dsh web`）**生效。
 
-> **版本要求**：0.8.x 要求 DSH ≥ 0.1.7；DSH 0.2.x 已适配（见下文「DSH 0.2 兼容」）。
+> **版本要求**：0.9.x 要求 DSH ≥ 0.1.7；DSH 0.2.1-rc.3 已实测（见下文「DSH 0.2 兼容」）。
 
 > **升级注意**：`dsh plugin add` 走 pnpm，按 tarball **完整性哈希**缓存——改了代码要打成**新版本号文件名**再装（0.8.0 → 0.8.1），沿用旧名会被判「已最新」跳过。
 > `lib/client.js` 是浏览器侧代码，装完重启后还要**刷新浏览器页面**才加载新 bundle。
@@ -666,7 +666,13 @@ DSH 不允许跨工作区复用同一个会话 id，插件现在的处理是：
 - 闸门：agent.ctx.get('tools').guard(...)，取不到才回退 agent.ctx.tools（0.1.x 形态）。
 
 tools 仍是可选服务：没有它时插件照常收发消息，只是少几个模型工具。
-要求 DSH >= 0.1.7；在 0.2.x 上实测「已注册 qqbot 工具 / qqgroup 工具」正常。
+要求 DSH >= 0.1.7；0.2.1-rc.2 与 0.2.1-rc.3 上都实测七条工具注册齐全（qqbot / qqgroup / qq_websearch / qq_webfetch / qq_imgsearch / qq_draw / qq_history）。
+
+**版本支持不写死**：插件启动时读取当前实际加载的 DSH 版本并判定，日志形如
+`[dsh-qq-bot] 运行于 DSH 0.2.1-rc.3（在声明支持范围 0.1.7-0 <= v < 0.3.0-0 内）`；
+`qqbot` 工具 `action="status"` 返回的 `runtime` 字段给出同一结论。支持范围只维护
+`lib/compat.js` 里的 `SUPPORT_FLOOR` / `SUPPORT_CEILING` 两个常量，DSH 出新版本不用改代码、也不用补版本表；
+版本识别失败或超出范围只提示，不影响收发消息。
 
 ## 社区与贡献
 
