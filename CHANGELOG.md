@@ -1,4 +1,41 @@
-# 变更记录
+## 0.10.0 —— 多协议适配器（OneBot 11/12、Satori、Milky、QQ 官方）+ 拥有者设置通道
+
+一句话：插件不再绑死 OneBot 11。同一套插件逻辑，换 `protocol` 就能接 OneBot 12、Satori（Koishi 生态）、
+Milky 和 QQ 官方机器人开放平台；外加拥有者可以在 QQ 私聊里改自己的设置。
+
+### 协议适配器（新）
+
+- 适配器统一迁到 `lib/adapters/`，共享 `lib/bridge/`（手写 WebSocket、stdio 契约、消息段归一），
+  仍然**零 npm 依赖**；`lib/onebot-adapter.mjs` 保留为兼容入口。
+- 内部统一「中间表示」：一套消息段 + 一套 message 帧（见 `lib/bridge/CONTRACT.md`），
+  各协议只做翻译，插件上层（会话、权限、历史、主动发言）完全协议无关。
+- `protocol` 取值与传输：
+
+  | 协议 | 适配器 | 传输 | 鉴权 |
+  | --- | --- | --- | --- |
+  | `onebot11`（默认） | adapters/onebot11.mjs | 正向/反向 WS + HTTP | access_token（Bearer / query） |
+  | `onebot12` | adapters/onebot12.mjs | 正向/反向 WS + HTTP | access_token，反向 WS 需 Sec-WebSocket-Protocol |
+  | `satori` | adapters/satori.mjs | WS /v1/events + HTTP RPC | Bearer + Satori-Platform / Satori-User-ID |
+  | `milky` | adapters/milky.mjs | /event WS（或 SSE）+ /api | Bearer |
+  | `qq-official` | adapters/qq-official.mjs | Webhook 或 WS 网关 | AppID/AppSecret → QQBot token，Webhook Ed25519 校验 |
+
+- 新增 4 个适配器测试套件（onebot12 / milky / satori / qq-official），全部用本地假协议端，不连真实 QQ。
+
+### 拥有者设置通道（qqconfig）
+
+- 拥有者可以在 QQ 私聊里让机器人改自己的设置（不必手改 `cordis.patch.yml`）。
+  防护分层：身份只取自当前会话发言人（必须命中 `auth.owners`）、只允许私聊、字段白名单
+  （`auth.*` / `onebot.*` / 密钥 / 模型名硬拒绝）、值类型与范围校验、`propose`→`apply` 两步确认
+  （token 300s、一次性、绑定拥有者+路径+值+配置修订号）、只走 DSH settings 服务落盘（不手改 YAML）、
+  限流（每小时 6 / 每天 30）与审计日志 `QQ_msg/qqbot-config-audit.jsonl`。总开关 `auth.ownerSettings`。
+
+### 其它
+
+- `qqbot` 的 `send` 支持可选 `image`（本地图片绝对路径，只允许 `<QQ_msg>/qq-images` 内）。
+- 修 `qq_imgsearch` 的本地文件白名单 bug：0.9.5 的 `meIsAllowedImageFile` 调用了未导入的
+  `qqMsgRootSync`，ReferenceError 被吞掉后永远返回 false。工作区根解析抽到 `lib/workspace.js`。
+- 新增 `lib/owner-settings.js`、`lib/workspace.js`、`lib/bridge/*`、`lib/adapters/*`；
+  测试套件 14 → 18。
 
 ## 0.9.5 —— 主动发言（可选，默认关）
 

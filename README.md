@@ -30,7 +30,9 @@ lib/onebot-adapter.mjs（本插件自带，零 npm 依赖）    ← 协议翻译
 lib/index.js（Cordis 插件入口，0.8 起模块化拆分）
    ├ lib/config.js       Config schema / 默认值 / 深合并
    ├ lib/session.js      建会话、固定命名、访客工具闸
-   ├ lib/tools.js        qqbot / qqgroup / qq_websearch / qq_webfetch / qq_imgsearch / qq_history
+   ├ lib/tools.js        qqbot / qqconfig / qqgroup / qq_websearch / qq_webfetch / qq_imgsearch / qq_history
+   ├ lib/owner-settings.js 拥有者设置通道（白名单 + 两步确认 + 限流 + 审计）
+   ├ lib/workspace.js    QQ_msg 工作区根解析（index / imgsearch 共用）
    ├ lib/admin.js        指令解析与三路权限
    ├ lib/http.js         fetch + 代理隧道
    ├ lib/websearch.js    多引擎搜索
@@ -399,7 +401,7 @@ Agent 会话的工作目录**不需要任何配置**：插件读取 DSH 官方�
 插件注册了一个动态工具 `qqbot`：
 
 - `{action:'status'}` —— 连接状态、模式、适配器 pid/端口、各 QQ 会话的回合数、统计计数
-- `{action:'send', message_type:'group'|'private', target_id:'123', text:'...'}` —— 主动发一条 QQ 消息
+- `{action:'send', message_type:'group'|'private', target_id:'123', text:'...', image?}` —— 主动发一条 QQ 消息；`image` 传本地图片绝对路径（**只允许 `<QQ_msg>/qq-images` 目录内**），插件转 base64 后与文本一起发出，用于「发自拍 / 自画像 / 刚生成的图」这类场景。
 - `{action:'interrupt', conversation:'group-123'|'all'}` —— 中断正在跑的回合
 
 ### qq_websearch（联网搜索）
@@ -468,6 +470,30 @@ DSH 自带的 `web_fetch` 工具仍然注册，但**已从访客默认白名单�
 
 见「五、群管理」一节。工具路径的授权依据是「当前会话最近一条消息是否来自管理员白名单」。
 
+### qqconfig（拥有者专用：在 QQ 里改设置）
+
+发布于 0.9.6。让**拥有者本人在私聊里**直接改一部分插件设置，不用去翻 profile 的 `cordis.patch.yml`：
+
+- `{action:'show'}` —— 列出可改项、当前值和配置修订号
+- `{action:'propose', path:'group.allow', value:'[\"488136808\"]'}` —— **只校验不写盘**，返回改动预览与一次性 `token`
+- `{action:'apply', token:'...'}` —— 凭 token 真正落盘
+- `{action:'cancel', token:'...'}` —— 撤销预约
+
+防护是分层的，缺一层都不会写盘：
+
+1. **身份只取自当前会话**（`entry.speaker`），不接受工具参数里的 QQ 号；必须命中 `auth.owners`。
+2. **只允许私聊**：在群里调用一律拒绝（避免旁人起哄 / 被诱导）。
+3. **白名单字段**：群 / 私聊开关与白名单、主动发言参数、图片识别、人设等；`auth.*`、`onebot.*`、
+   `imageGen.*`、`proactive.apiKey|baseUrl|model`、`mode` 等**硬拒绝**——改不了拥有者名单、密钥和连接。
+4. **值按类型 / 范围校验**（QQ 号格式、时段格式、整数上下界、文本长度）。
+5. **两步确认**：`propose` 的 token 300 秒有效、一次性、绑定「拥有者 + 路径 + 值 + 配置修订号」；
+   期间配置被设置页等别处改过 → 作废，必须重新提议。
+6. **落盘只走 DSH settings 服务**：schema 校验 + 原子写 + 热重载；服务不可用时直接拒绝，**绝不手改 YAML**。
+7. **限流 + 审计**：默认每小时 6 次、每天 30 次；每次成功 / 失败 / 被限流都追加一行到
+   `<QQ_msg>/qqbot-config-audit.jsonl`（时间、拥有者 QQ、路径、旧值、新值、结果）。
+
+总开关在设置里：`auth.ownerSettings`（默认开）。关掉后 `qqconfig` 全部动作拒绝。
+
 ## 七、排错
 
 | 现象 | 检查 |
@@ -526,6 +552,29 @@ node -e "fetch('http://127.0.0.1:3000/__inject',{method:'POST',headers:{'content
 # 看机器人回了什么
 node -e "fetch('http://127.0.0.1:3000/__sent').then(r=>r.json()).then(j=>console.log(JSON.stringify(j.messages,null,2)))"
 ```
+
+
+## 十、多协议适配器（0.10 新增）
+
+插件不再绑死 OneBot 11。设置里选「协议」（或改 `protocol`），适配器会自动切换并重启：
+
+| protocol | 需要的协议端 | 传输 | 备注 |
+| --- | --- | --- | --- |
+| `onebot11`（默认） | NapCat / go-cqhttp / Lagrange | 正向/反向 WS + HTTP | 与 0.9 的配置完全兼容 |
+| `onebot12` | OneBot 12 实现端 | 正向/反向 WS + HTTP | 事件是 {id,time,type,detail_type,self}；@ 叫 mention，回复叫 reply |
+| `satori` | Koishi（Satori 服务端） | WS /v1/events + HTTP RPC | 消息体是类 XHTML 元素字符串，适配器内置 parser |
+| `milky` | NapCat / Yogurt / Lagrange.Milky | /event WS + /api HTTP | 无 echo；消息 id 是 message_seq |
+| `qq-official` | QQ 开放平台机器人 | Webhook 或 WS 网关 | AppID/AppSecret 鉴权；群/单聊用 openid；群管理动作大多不支持 |
+
+内部统一「中间表示」（一套消息段 + 一套 message 帧），协议差异全收在 `lib/adapters/`。
+想加新协议：读 `lib/bridge/CONTRACT.md`，写一个 stdin/stdout 适配器脚本即可，插件侧只需在
+`ADAPTER_FILES` 里登记一行。
+
+已知限制：
+
+- QQ 官方 API 没有踢人/禁言/改名片这类群管理动作，`qqgroup` 在 `qq-official` 下会明确回「不支持」；
+- OneBot 12 的图片段只有 file_id，要 URL 得再调 get_file，需要视觉识别的场景建议先用 OneBot 11；
+- Satori / Milky 都不定义频率限制，主动发言的节流仍由插件按 `proactive` 配置执行。
 
 ## 九、关于 AstrBot
 
