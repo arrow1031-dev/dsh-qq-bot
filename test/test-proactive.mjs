@@ -2,7 +2,7 @@
 import {
   parseClock, nowMinutes, parseQuietRanges, isQuiet, summarizeSegments,
   normalizeMessages, newerThan, buildDigest, buildPrompt, parseDecision,
-  validateMessage, allowSend,
+  validateMessage, allowSend, analyzeEvent, topicKey, topicRepeated,
 } from '../lib/proactive.js';
 
 let pass = 0;
@@ -60,6 +60,43 @@ check('allowSend 正常放行', allowSend({ now, sentTimes: [], lastSentAt: 0, m
 check('allowSend 间隔不足', allowSend({ now, sentTimes: [now - 60000], lastSentAt: now - 60000, maxPerHour: 2, maxPerDay: 4, minGapMinutes: 10 }).ok === false);
 check('allowSend 每小时上限', allowSend({ now, sentTimes: [now - 120000, now - 180000], lastSentAt: 0, maxPerHour: 2, maxPerDay: 10, minGapMinutes: 0 }).ok === false);
 check('allowSend 每天上限', allowSend({ now, sentTimes: [now - 7200000, now - 7300000, now - 7400000], lastSentAt: 0, maxPerHour: 10, maxPerDay: 3, minGapMinutes: 0 }).ok === false);
+// ---- 事件闸：过气的/只是应答的/自己刚说过的，都不接 ----
+const nowSec = Math.floor(Date.now() / 1000);
+const ev = (over) => analyzeEvent(over, { nowSec, staleMinutes: 15 });
+check('事件闸：空列表不接', ev([]).ok === false);
+check('事件闸：最新是我自己', ev([{ time: nowSec - 30, userId: '1', text: '我自己说的', isSelf: true }]).ok === false);
+check('事件闸：事件已过气（30 分钟）', ev([{ time: nowSec - 1800, userId: '1', text: '老人进急诊住院了', isSelf: false }]).ok === false);
+check('事件闸：短应答不插话', ev([{ time: nowSec - 30, userId: '1', text: '行', isSelf: false }]).ok === false);
+check('事件闸：短提问可以接', ev([{ time: nowSec - 30, userId: '1', text: '严重吗？', isSelf: false }]).ok === true);
+check('事件闸：正常新事件可接', ev([{ time: nowSec - 30, userId: '1', text: '今天开黑有人来吗', isSelf: false }]).ok === true);
+const seg = ev([
+  { time: nowSec - 200, userId: '1', text: '我老人进急诊住院了', isSelf: false },
+  { time: nowSec - 120, userId: '1', text: '给陪护', isSelf: false },
+]);
+check('事件闸：同一人连续发言算同一事件（取第一条时间）', seg.ok === true && Math.abs((nowSec - 200) - seg.eventTime) <= 1);
+
+// ---- 话题去重：同一件事换个说法也别再说一遍 ----
+check('topicKey 归一化', topicKey('老人家急诊住院。') === topicKey('老人家 急诊住院'));
+check('topicRepeated 命中冷却内', topicRepeated('住院', [{ at: Date.now() - 60000, key: '老人家住院' }], { now: Date.now(), cooldownMinutes: 120 }) === true);
+check('topicRepeated 超过冷却不命中', topicRepeated('住院', [{ at: Date.now() - 3 * 3600 * 1000, key: '老人家住院' }], { now: Date.now(), cooldownMinutes: 120 }) === false);
+check('topicRepeated 不同话题不命中', topicRepeated('今天开黑', [{ at: Date.now(), key: '老人家住院' }], { now: Date.now(), cooldownMinutes: 120 }) === false);
+check('topicRepeated 空 key 不误判', topicRepeated('', [{ at: Date.now(), key: '住院' }], { now: Date.now(), cooldownMinutes: 120 }) === false);
+
+// ---- 场合：两个人来回聊，不硬插 ----
+const twoWay = ev([
+  { time: nowSec - 50, userId: '1', text: '你上线了吗', isSelf: false },
+  { time: nowSec - 40, userId: '2', text: '马上，等我两分钟', isSelf: false },
+  { time: nowSec - 30, userId: '1', text: '好，我先开个房', isSelf: false },
+  { time: nowSec - 20, userId: '2', text: '来了来了这就进房间', isSelf: false },
+]);
+check('事件闸：两人对话不插话', twoWay.ok === false && /只有 2 个人/.test(twoWay.reason));
+const manyWay = ev([
+  { time: nowSec - 50, userId: '1', text: '有人开黑吗', isSelf: false },
+  { time: nowSec - 40, userId: '2', text: '我在', isSelf: false },
+  { time: nowSec - 30, userId: '3', text: '我也来', isSelf: false },
+  { time: nowSec - 20, userId: '4', text: '带我一个我来打辅助', isSelf: false },
+]);
+check('事件闸：多人场合可以接', manyWay.ok === true, JSON.stringify(manyWay));
 
 console.log('\n' + pass + ' 通过 / ' + fail + ' 失败');
 process.exit(fail === 0 ? 0 : 1);
