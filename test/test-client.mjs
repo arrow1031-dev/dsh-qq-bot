@@ -8,7 +8,7 @@
  *   1. 模拟 DSH 的客户端模块加载器 window.__ModuleLoader__.load；
  *   2. 用最小 React stub 提供 createElement / useState / useCallback / useEffect；
  *   3. 真的 import 那个 bundle，拿到插件对象；
- *   4. 用假 ctx 跑 apply，断言它在 settings.section 注册了「QQ 机器人」；
+ *   4. 用假 ctx 跑 apply，断言它在 plugins.bundle.config 注册了本插件的配置面板；
  *   5. 调注入的 faces，断言设置读写走到正确的 Remote 方法；
  *   6. 真渲染一次组件（走完异步加载），断言表单字段都出来了。
  */
@@ -127,11 +127,10 @@ try {
   slotsCtx.get = (name) => (name === 'remote.settings' ? fakeSettingsApi : undefined);
 
   plugin.apply(slotsCtx);
-  check('注入到 settings.section', injectName === 'settings.section', String(injectName));
-  check('注册项 name=settings.section', registered && registered.options.name === 'settings.section');
-  check("注册项 id='dsh-qq-bot'（与 profile 条目 id 一致）", registered && registered.options.id === 'dsh-qq-bot', String(registered && registered.options.id));
-  check('注册项 label=「QQ 机器人」', registered && registered.options.label === 'QQ 机器人', String(registered && registered.options.label));
-  check('注册项有 order', registered && typeof registered.options.order === 'number', String(registered && registered.options.order));
+  check('注入到 plugins.bundle.config（插件详情页配置区）', injectName === 'plugins.bundle.config', String(injectName));
+  check('注册项 name=plugins.bundle.config', registered && registered.options.name === 'plugins.bundle.config');
+  check("注册项 key='dsh-qq-bot'（与包名一致，插件页按它派发）", registered && registered.options.key === 'dsh-qq-bot', String(registered && registered.options.key));
+  check('不再注册旧的 settings.section 入口', injectName !== 'settings.section', String(injectName));
   check('提供了组件', registered && typeof registered.component === 'function');
 
   const faces = registered.options.inject();
@@ -185,10 +184,210 @@ try {
   };
   collect(tree);
   const joined = texts.join(' | ');
-  const expectLabels = ['连接方式', '正向 WS 地址', 'HTTP API 地址', 'access_token', '群里必须 @ 机器人才回复', '群号白名单', '单条最大字数', '拥有者 QQ 号', '后台设定的高级管理员', '允许非拥有者使用 DSH 内部工具', '访客仍可用的工具白名单', '可管理的群号', '演练模式（只回复将执行什么）', '保存'];
-  check('表单含关键字段', expectLabels.every((label) => joined.includes(label)),
+  // 默认打开的是第一个标签「连接」
+  const expectLabels = ['协议', '连接方式', '正向 WS 地址', 'HTTP API 地址', 'access_token', '保存', '重新读取'];
+  check('默认标签页含连接类关键字段', expectLabels.every((label) => joined.includes(label)),
     expectLabels.filter((label) => !joined.includes(label)).join(','));
+  check('默认标签页不显示群聊/权限等基本组字段',
+    !joined.includes('群号白名单') && !joined.includes('拥有者 QQ 号'), joined.slice(0, 160));
   check('反向模式时才出现监听地址（forward 下不出现）', !joined.includes('反向 WS 监听地址'), joined.slice(0, 120));
+
+  const findByTextEarly = (node, text) => {
+    if (node === null || node === undefined || typeof node !== 'object') return null;
+    if (Array.isArray(node)) { for (const item of node) { const hit = findByTextEarly(item, text); if (hit) return hit; } return null; }
+    if (Array.isArray(node.children)) {
+      for (const child of node.children) {
+        if (typeof child === 'string' && child === text) return node;
+        const hit = findByTextEarly(child, text);
+        if (hit) return hit;
+      }
+    }
+    const pc = node.props && node.props.children;
+    const pcList = Array.isArray(pc) ? pc : (pc === undefined || pc === null ? [] : [pc]);
+    for (const child of pcList) {
+      if (typeof child === 'string' && child === text) return node;
+      const hit = findByTextEarly(child, text);
+      if (hit) return hit;
+    }
+    return null;
+  };
+  console.log('\n4b. 顶端标签四档分类（连接 / 基本 / 能力 / 高级）');
+  const collectButtons = (node, out) => {
+    if (node === null || node === undefined || typeof node !== 'object') return out;
+    if (Array.isArray(node)) { for (const item of node) collectButtons(item, out); return out; }
+    if (node.type === 'button') out.push(node);
+    for (const child of node.children || []) collectButtons(child, out);
+    return out;
+  };
+  // mock createElement 把子节点放 .children（真实 React 放 props.children），两者都读。
+  const childText = (node) => {
+    if (Array.isArray(node.children) && node.children.length > 0) return node.children[0];
+    const pc = node.props && node.props.children;
+    if (Array.isArray(pc)) return pc[0];
+    return pc;
+  };
+  const tabLabels = collectButtons(tree, []).filter((b) => b.props.role === 'tab' && b.props['data-tab'] !== undefined).map(childText);
+  check('顶端渲染出四个标签', tabLabels.length === 4, JSON.stringify(tabLabels));
+  check('标签为 连接 / 基本 / 能力 / 高级（连接排最前）', tabLabels.join(',') === '连接,基本,能力,高级', JSON.stringify(tabLabels));
+  check('默认选中的是第一个「连接」标签',
+    collectButtons(tree, []).some((b) => b.props.role === 'tab' && b.props['aria-selected'] === 'true' && childText(b) === '连接'),
+    JSON.stringify(tabLabels));
+
+  const clickTab = (label) => {
+    const btn = collectButtons(tree, []).find((b) => b.props.role === 'tab' && childText(b) === label);
+    if (!btn) return null;
+    btn.props.onClick();
+    reactRuntime.__beginRender();
+    return registered.component(props);
+  };
+
+  // 通用取文本
+  const textsOf = (node) => {
+    const out = [];
+    const walk = (n) => {
+      if (n === null || n === undefined) return;
+      if (typeof n === 'string' || typeof n === 'number') { out.push(String(n)); return; }
+      if (Array.isArray(n)) { for (const item of n) walk(item); return; }
+      if (typeof n === 'object') { for (const child of n.children || []) walk(child); }
+    };
+    walk(node);
+    return out.join(' | ');
+  };
+
+  // 切到「基本」：默认二级标签「准入与名单」
+  const basicTree = clickTab('基本');
+  const basicJoined = textsOf(basicTree);
+  const accessLabels = ['群里必须 @ 机器人才回复', '群号白名单', '拥有者 QQ 号', '后台设定的高级管理员', '允许非拥有者使用 DSH 内部工具', '访客仍可用的工具白名单'];
+  check('基本页默认「准入与名单」含群聊私聊与权限字段', accessLabels.every((label) => basicJoined.includes(label)),
+    accessLabels.filter((label) => !basicJoined.includes(label)).join(','));
+  check('准入名单页不含发言类字段（单条最大字数/演练模式）',
+    !basicJoined.includes('单条最大字数') && !basicJoined.includes('演练模式（只回复将执行什么）'), basicJoined.slice(0, 160));
+  check('基本页不再显示连接类字段（协议/连接方式）',
+    !basicJoined.includes('正向 WS 地址') && !basicJoined.includes('access_token'), basicJoined.slice(0, 160));
+  check('基本页底部保存/重新读取仍在', findByTextEarly(basicTree, '保存') !== null);
+
+  // 基本页的二级标签：准入与名单 / 发言与管理
+  const basicSubLabels = collectButtons(basicTree, [])
+    .filter((b) => b.props.role === 'tab' && b.props['data-subtab'] !== undefined).map(childText);
+  check('基本页渲染出两个二级标签', basicSubLabels.length === 2, JSON.stringify(basicSubLabels));
+  check('二级标签为 准入与名单 / 发言与管理',
+    basicSubLabels.join(',') === '准入与名单,发言与管理', JSON.stringify(basicSubLabels));
+
+  const clickBasicSub = (label) => {
+    const btn = collectButtons(basicTree, [])
+      .find((b) => b.props.role === 'tab' && b.props['data-subtab'] !== undefined && childText(b) === label);
+    if (!btn) return null;
+    btn.props.onClick();
+    reactRuntime.__beginRender();
+    return registered.component(props);
+  };
+
+  const basicGovernJoined = textsOf(clickBasicSub('发言与管理'));
+  check('发言与管理页含命令前缀/回复策略/群管理字段',
+    basicGovernJoined.includes('命令前缀') && basicGovernJoined.includes('单条最大字数')
+    && basicGovernJoined.includes('可管理的群号') && basicGovernJoined.includes('演练模式（只回复将执行什么）'),
+    basicGovernJoined.slice(0, 200));
+  // 注意：管理组的说明文字里会合法地提到「群号白名单」（回退关系），
+  // 所以这里只断言准入组独有的字段标签不出现。
+  check('发言与管理页不含准入名单字段（拥有者/私聊开关/必须 @）',
+    !basicGovernJoined.includes('拥有者 QQ 号') && !basicGovernJoined.includes('启用私聊')
+    && !basicGovernJoined.includes('群里必须 @ 机器人才回复'), basicGovernJoined.slice(0, 160));
+  check('切到发言与管理后底部保存仍在', findByTextEarly(clickBasicSub('发言与管理'), '保存') !== null);
+  // 回到「准入与名单」，保持后续断言（basicJoined）语义
+  clickBasicSub('准入与名单');
+
+  // 切到「能力」：默认显示第一个二级标签「识图与绘图」
+  const capTree = clickTab('能力');
+  const capJoined = textsOf(capTree);
+  check('能力页默认二级标签为「识图与绘图」（含视觉与生图）',
+    capJoined.includes('图片视觉') && capJoined.includes('生图（qq_draw）'), capJoined.slice(0, 160));
+  check('识图与绘图页不含检索类字段（联网搜索代理）',
+    !capJoined.includes('联网搜索 HTTP 代理'), capJoined.slice(0, 160));
+  check('能力页不显示基本组字段（群号白名单）', !capJoined.includes('群号白名单'), capJoined.slice(0, 120));
+  check('切到能力页后底部保存/重新读取仍常驻',
+    findByTextEarly(capTree, '保存') !== null && findByTextEarly(capTree, '重新读取') !== null);
+
+  // 二级标签：三个都在，且能切换
+  const subLabels = collectButtons(capTree, [])
+    .filter((b) => b.props.role === 'tab' && b.props['data-subtab'] !== undefined).map(childText);
+  check('能力页渲染出三个二级标签', subLabels.length === 3, JSON.stringify(subLabels));
+  check('二级标签为 识图与绘图 / 搜索与抓取 / 对话与人格',
+    subLabels.join(',') === '识图与绘图,搜索与抓取,对话与人格', JSON.stringify(subLabels));
+
+  const clickSubTab = (label) => {
+    const btn = collectButtons(capTree, [])
+      .find((b) => b.props.role === 'tab' && b.props['data-subtab'] !== undefined && childText(b) === label);
+    if (!btn) return null;
+    btn.props.onClick();
+    reactRuntime.__beginRender();
+    return registered.component(props);
+  };
+
+  const capRetrievalJoined = textsOf(clickSubTab('搜索与抓取'));
+  check('搜索与抓取页含联网搜索与图片反搜',
+    capRetrievalJoined.includes('联网搜索 HTTP 代理') && capRetrievalJoined.includes('图片反搜'), capRetrievalJoined.slice(0, 200));
+  check('搜索与抓取页含 moli 网页抓取字段',
+    capRetrievalJoined.includes('dsh-moli 接管网页抓取'), capRetrievalJoined.slice(0, 200));
+  check('搜索与抓取页不显示生图与视觉字段',
+    !capRetrievalJoined.includes('生图（qq_draw）') && !capRetrievalJoined.includes('图片视觉'), capRetrievalJoined.slice(0, 160));
+
+  const capDialogueJoined = textsOf(clickSubTab('对话与人格'));
+  check('对话与人格页含人格/主动发言/聊天记录',
+    capDialogueJoined.includes('自定义人格') && capDialogueJoined.includes('启用主动发言')
+    && capDialogueJoined.includes('图片识别窗口'), capDialogueJoined.slice(0, 200));
+  check('对话与人格页含主动发言的事件去重三项（上游 0.10.1 字段）',
+    capDialogueJoined.includes('事件去重（防重复回复）') && capDialogueJoined.includes('事件过气阈值')
+    && capDialogueJoined.includes('话题冷却'), capDialogueJoined.slice(0, 240));
+  check('对话与人格页不显示视觉与检索字段',
+    !capDialogueJoined.includes('图片视觉') && !capDialogueJoined.includes('联网搜索 HTTP 代理'), capDialogueJoined.slice(0, 160));
+  check('切二级标签后底部保存/重新读取仍常驻',
+    findByTextEarly(clickSubTab('搜索与抓取'), '保存') !== null);
+
+  // 切到「高级」：会话与排错项
+  const advTree = clickTab('高级');
+  const advTexts = [];
+  const collectAdv = (node) => {
+    if (node === null || node === undefined) return;
+    if (typeof node === 'string' || typeof node === 'number') { advTexts.push(String(node)); return; }
+    if (Array.isArray(node)) { for (const item of node) collectAdv(item); return; }
+    if (typeof node === 'object') { for (const child of node.children || []) collectAdv(child); }
+  };
+  collectAdv(advTree);
+  const advJoined = advTexts.join(' | ');
+  check('高级页含会话命名与排错项',
+    advJoined.includes('固定新建会话名') && advJoined.includes('日志打印每一帧'), advJoined.slice(0, 120));
+  check('高级页不显示能力组字段（生图）', !advJoined.includes('生图（qq_draw）'), advJoined.slice(0, 120));
+  check('高级页没有二级标签（该组不再细分）',
+    collectButtons(advTree, []).filter((b) => b.props.role === 'tab' && b.props['data-subtab'] !== undefined).length === 0);
+  check('连接页没有二级标签',
+    collectButtons(tree, []).filter((b) => b.props.role === 'tab' && b.props['data-subtab'] !== undefined).length === 0);
+
+  console.log('\n4c. 重叠项处理（preset 优先级 / 人格兜底 / key 回退链 / 视觉风险提示）');
+  // 第 4 项：四个 preset 字段集中在「高级」，且带优先级编号
+  check('高级页含 preset 优先级分组（①②③ 都在）',
+    advJoined.includes('① 自定义 agent preset id') && advJoined.includes('② 拥有者会话的 preset')
+    && advJoined.includes('② 非拥有者会话的 preset') && advJoined.includes('③ Agent preset'),
+    advJoined.slice(0, 160));
+  check('高级页写明 preset 生效优先级', advJoined.includes('① 自定义 id > ② 拥有者/访客分流 > ③ 本项'), advJoined.slice(0, 200));
+  check('基本页不再出现 agent preset 字段（已集中到高级）',
+    !basicJoined.includes('拥有者会话的 agent preset') && !basicJoined.includes('非拥有者会话的 agent preset'), basicJoined.slice(0, 160));
+  check('能力页不再出现自定义 preset id（已移到高级）', !capJoined.includes('自定义 agent preset id'));
+
+  // 第 5 项：人格兜底关系写清
+  check('主动发言人设标注「复用全局人格」', capDialogueJoined.includes('主动发言人设（留空 = 复用全局人格）'), capDialogueJoined.slice(0, 160));
+  check('全局人格说明提到主动发言会复用', capDialogueJoined.includes('主动发言未单独设人设时也会复用这里'), capDialogueJoined.slice(0, 200));
+
+  // 第 6 项：三处 key 的回退链与独立性
+  check('主动发言 key 写明完整回退链', capDialogueJoined.includes('留空回退链：生图「API key」→ 生图「API key 环境变量」'), capDialogueJoined.slice(0, 200));
+  check('生图 key 说明会被主动发言复用', capJoined.includes('主动发言的判断 key 留空时也复用这里'));
+  check('搜索 key 声明与生图/主动发言互不影响', capRetrievalJoined.includes('与生图 / 主动发言的 key 互不影响'), capRetrievalJoined.slice(0, 200));
+
+  // 第 8 项：视觉留空 = 会话模型的风险提示
+  check('视觉 provider 标注会话模型不一定支持图片', capJoined.includes('会话模型不一定支持图片'), capJoined.slice(0, 200));
+  check('视觉 model 说明留空时会探测并回报可读错误', capJoined.includes('它会先探测是否支持图片'), capJoined.slice(0, 200));
+
+  // 切回「基本」继续后面的保存测试
+  clickTab('基本');
 
   console.log('\n5. 密钥字段是只写的（不会把 access_token 清空）');
   check('loadConfig 带回了 secrets 位置', loaded.secrets && loaded.secrets.length === 1 && loaded.secrets[0].path.join('.') === 'onebot.accessToken',
@@ -230,7 +429,8 @@ try {
 
   // 真的输入新 token 后保存：应提交它
   mutateCalls.length = 0;
-  const pwInput = collectInputs(tree2, []).find((el) => el.props.type === 'password');
+  // access_token 在「连接」标签：用默认（连接）那次渲染的树取输入框
+  const pwInput = collectInputs(tree, []).find((el) => el.props.type === 'password');
   check('能找到 access_token 密码框', Boolean(pwInput));
   pwInput.props.onChange({ target: { value: 'new-token-abc' } });
   reactRuntime.__beginRender();

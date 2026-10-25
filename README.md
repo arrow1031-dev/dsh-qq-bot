@@ -1,6 +1,6 @@
 # dsh-qq-bot —— 把 QQ 接到 DSH Agent
 
-> **当前版本 0.10.x**：要求 **DSH ≥ 0.1.7**；DSH 0.2.1 系列（rc.2 / rc.3）已实测适配（工具走 `ctx.get('tools')` 注入契约）。
+> **当前版本 0.10.x**：要求 **DSH ≥ 0.2.0-rc.2**（工具走 `ctx.get('tools')` 注入契约；DSH 0.2.1 系列 rc.2 / rc.3 已实测适配）。
 > 0.10 起**一套插件接五种协议**：OneBot 11（默认）/ OneBot 12 / Satori / Milky / QQ 官方机器人，见「三、协议与连接方式」。
 > 本仓库就是维护主干 [arrow1031/dsh-qq-bot](https://github.com/arrow1031-dev/dsh-qq-bot)，**已解除封版**：
 > 安装跟随 `main`、功能与修复走 PR。需要兼容 DSH 0.1.6 及更早的旧版本（0.6.x）请自行选择早期 tag 下载；
@@ -58,7 +58,7 @@ DSH Agent（默认模型 + preset 人格 + 工具）
 | Milky 适配器 | `node test/test-adapter-milky.mjs` | 79/79 |
 | QQ 官方适配器 | `node test/test-adapter-qq-official.mjs` | 87/87 |
 | 打包后插件端到端（Host） | `node test/test-plugin.mjs` | 76/76 |
-| 客户端设置页 | `node test/test-client.mjs` | 32/32 |
+| 客户端设置页 | `node test/test-client.mjs` | 72/72 |
 | 权限 · 群管理 · 访客工具闸 | `node test/test-admin.mjs` | 32/32 |
 | HTTP / 代理层 | `node test/test-http.mjs` | 17/17 |
 | 配置合并与还原 | `node test/test-config.mjs` | 11/11 |
@@ -69,7 +69,7 @@ DSH Agent（默认模型 + preset 人格 + 工具）
 | 历史消息鉴权与定向 | `node test/test-history.mjs` | 23/23 |
 | 主动发言 | `node test/test-proactive.mjs` | 42/42 |
 | 拥有者设置通道 | `node test/test-owner-settings.mjs` | 58/58 |
-| 一键全量 | `node test/run-all.mjs` | **18/18 套件 · 628 项** |
+| 一键全量 | `node test/run-all.mjs` | **18/18 套件 · 668 项** |
 `test-plugin.mjs` 用假 ctx 加载真正的 `lib/index.js` + 真适配器 + 零依赖 OneBot 模拟器，跑通完整链路（无需 DSH / QQ / 网络）。
 
 ## 二、快速开始
@@ -111,7 +111,7 @@ dsh plugin --profile web add ./dsh-qq-bot-<版本号>.tgz
 
 `dsh plugin` 本质是 pnpm 的前置封装：装完包后，它会**自动把声明了 `dsh.bundle.patch` 的依赖加入 profile 的层栈**（本包的 package.json 已声明），并连同唯一的运行时依赖 `@deepseek-ai/schemastery` 一起装上。装完**重启 DSH（桌面版重启应用 / CLI 重启 `dsh web`）**生效。
 
-> **版本要求**：0.9.x 要求 DSH ≥ 0.1.7；DSH 0.2.1-rc.3 已实测（见下文「DSH 0.2 兼容」）。
+> **版本要求**：0.10.x 要求 DSH ≥ 0.2.0-rc.2；DSH 0.2.1-rc.3 已实测（见下文「DSH 0.2 兼容」）。
 
 > **升级注意**：`dsh plugin add` 走 pnpm，按 tarball **完整性哈希**缓存——改了代码要打成**新版本号文件名**再装（0.8.0 → 0.8.1），沿用旧名会被判「已最新」跳过。
 > `lib/client.js` 是浏览器侧代码，装完重启后还要**刷新浏览器页面**才加载新 bundle。
@@ -564,7 +564,7 @@ node test/test-adapter-qq-official.mjs  # QQ 官方（87 项）
 
 # 插件本体（假 ctx + 真适配器 + 假协议端）
 node test/test-plugin.mjs     # Host 半边（76 项，含 Config 契约与热更新）
-node test/test-client.mjs     # 客户端设置页（32 项）
+node test/test-client.mjs     # 客户端设置页（72 项）
 node test/test-admin.mjs      # 权限·群管理·访客工具闸（32 项）
 node test/test-http.mjs       # HTTP / 代理隧道（17 项）
 node test/test-config.mjs     # 配置合并与还原（11 项）
@@ -625,7 +625,7 @@ AstrBot 是 OneBot 的**消费方**（内置 aiocqhttp 反向 WS 服务端），
 | `test/test-adapter.mjs` | 正向 WS 适配器回归（19 项） |
 | `test/test-adapter-reverse.mjs` | 反向 WS 适配器回归（12 项） |
 | `test/test-plugin.mjs` | Host 插件端到端（76 项，假 ctx + 真适配器 + Config 契约 + 配置热更新） |
-| `test/test-client.mjs` | 客户端设置页（32 项，模拟模块加载器 + 最小 React 渲染 + 只写密钥护栏 + 命名空间回退） |
+| `test/test-client.mjs` | 客户端设置页（72 项，模拟模块加载器 + 最小 React 渲染 + 四档标签/二级分类 + 只写密钥护栏 + 命名空间回退） |
 | `test/test-admin.mjs` | 权限·群管理·访客工具闸专项（32 项；dsh-tools 可解析时另含工具路径断言） |
 | `test/test-http.mjs` | HTTP / 代理隧道（17 项） |
 | `test/test-config.mjs` | 配置合并与 volatile 还原（11 项） |

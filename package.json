@@ -48,6 +48,9 @@
       "inject": [
         "@deepseek-ai/dsh-client-ui-settings"
       ]
+    },
+    "compatibility": {
+      "dsh": ">=0.2.0-rc.2 <0.3.0"
     }
   },
   "scripts": {
