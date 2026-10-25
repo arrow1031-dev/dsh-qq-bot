@@ -58,7 +58,7 @@ DSH Agent（默认模型 + preset 人格 + 工具）
 | Milky 适配器 | `node test/test-adapter-milky.mjs` | 79/79 |
 | QQ 官方适配器 | `node test/test-adapter-qq-official.mjs` | 87/87 |
 | 打包后插件端到端（Host） | `node test/test-plugin.mjs` | 76/76 |
-| 客户端设置页 | `node test/test-client.mjs` | 79/79 |
+| 客户端设置页 | `node test/test-client.mjs` | 80/80 |
 | 权限 · 群管理 · 访客工具闸 | `node test/test-admin.mjs` | 32/32 |
 | HTTP / 代理层 | `node test/test-http.mjs` | 17/17 |
 | 配置合并与还原 | `node test/test-config.mjs` | 11/11 |
@@ -69,7 +69,7 @@ DSH Agent（默认模型 + preset 人格 + 工具）
 | 历史消息鉴权与定向 | `node test/test-history.mjs` | 23/23 |
 | 主动发言 | `node test/test-proactive.mjs` | 49/49 |
 | 拥有者设置通道 | `node test/test-owner-settings.mjs` | 58/58 |
-| 一键全量 | `node test/run-all.mjs` | **18/18 套件 · 682 项** |
+| 一键全量 | `node test/run-all.mjs` | **18/18 套件 · 683 项** |
 `test-plugin.mjs` 用假 ctx 加载真正的 `lib/index.js` + 真适配器 + 零依赖 OneBot 模拟器，跑通完整链路（无需 DSH / QQ / 网络）。
 
 ## 二、快速开始
@@ -563,7 +563,7 @@ node test/test-adapter-qq-official.mjs  # QQ 官方（87 项）
 
 # 插件本体（假 ctx + 真适配器 + 假协议端）
 node test/test-plugin.mjs     # Host 半边（76 项，含 Config 契约与热更新）
-node test/test-client.mjs     # 客户端设置页（79 项）
+node test/test-client.mjs     # 客户端设置页（80 项）
 node test/test-admin.mjs      # 权限·群管理·访客工具闸（32 项）
 node test/test-http.mjs       # HTTP / 代理隧道（17 项）
 node test/test-config.mjs     # 配置合并与还原（11 项）
@@ -624,7 +624,7 @@ AstrBot 是 OneBot 的**消费方**（内置 aiocqhttp 反向 WS 服务端），
 | `test/test-adapter.mjs` | 正向 WS 适配器回归（19 项） |
 | `test/test-adapter-reverse.mjs` | 反向 WS 适配器回归（12 项） |
 | `test/test-plugin.mjs` | Host 插件端到端（76 项，假 ctx + 真适配器 + Config 契约 + 配置热更新） |
-| `test/test-client.mjs` | 客户端设置页（79 项，模拟模块加载器 + 最小 React 渲染 + 四档标签/二级分类 + 只写密钥护栏 + 命名空间回退） |
+| `test/test-client.mjs` | 客户端设置页（80 项，模拟模块加载器 + 最小 React 渲染 + 四档标签/二级分类 + 只写密钥护栏 + 命名空间回退） |
 | `test/test-admin.mjs` | 权限·群管理·访客工具闸专项（32 项；dsh-tools 可解析时另含工具路径断言） |
 | `test/test-http.mjs` | HTTP / 代理隧道（17 项） |
 | `test/test-config.mjs` | 配置合并与 volatile 还原（11 项） |
@@ -736,7 +736,7 @@ AI 生成内容声明见 [AI-DISCLOSURE.md](AI-DISCLOSURE.md)，**使用前请�
 
 - 只有 `enabled: true` **且** `groups` 显式列了群号才生效；留空 = 完全不跑。
 - 免打扰时段 `quietHours`、每小时 / 每天上限、两次发言最小间隔会先拦一道；不足 `minNewMessages` 条新消息则不进入判断。
-- 模型返回 `speak=false` 就安静待着；不会 `` 人、不发链接；`dryRun: true` 只记日志，方便先观察。
+- 模型返回 `speak=false` 就安静待着；不会 `@` 人、不发链接；`dryRun: true` 只记日志，方便先观察。
 - **判断用哪个模型**：和识图完全一条路——都走 `ctx.llm.stream()`。`provider` / `model` 留空就**跟随该群会话的模型**，
   零密钥、不需要另配端点；设置页里两项都是**下拉**（provider 列出 DSH 的 provider，model 跟随 provider 列模型），
   想用便宜模型就显式选一个。群里还没有会话时按全局 agent preset 建同一条会话再取，不会因为「还没人说话」直接失败。

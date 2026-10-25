@@ -380,7 +380,7 @@ try {
   // 第 6 项：三处 key 的回退链与独立性
   check('主动发言 provider 是模型目录下拉（留空=会话模型）', capDialogueJoined.includes('（留空 = 会话模型）'), capDialogueJoined.slice(0, 240));
   check('生图 key 说明不再给主动发言兜底', capJoined.includes('不再给主动发言兜底'), capJoined.slice(0, 240));
-  check('搜索 key 声明与生图/主动发言互不影响', capRetrievalJoined.includes('与生图 / 主动发言的 key 互不影响'), capRetrievalJoined.slice(0, 200));
+  check('搜索 key 声明与生图/主动发言互不影响', capRetrievalJoined.includes('与生图的 key 互不影响'), capRetrievalJoined.slice(0, 200));
 
   // 第 8 项：视觉留空 = 会话模型的风险提示
   check('视觉 provider 标注会话模型不一定支持图片', capJoined.includes('会话模型不一定支持图片'), capJoined.slice(0, 200));
