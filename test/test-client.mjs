@@ -378,13 +378,49 @@ try {
   check('全局人格说明提到主动发言会复用', capDialogueJoined.includes('主动发言未单独设人设时也会复用这里'), capDialogueJoined.slice(0, 200));
 
   // 第 6 项：三处 key 的回退链与独立性
-  check('主动发言 key 写明完整回退链', capDialogueJoined.includes('留空回退链：生图「API key」→ 生图「API key 环境变量」'), capDialogueJoined.slice(0, 200));
+  check('主动发言 key 写明完整回退链', capDialogueJoined.includes('留空回退链：生图「API key」→ 下面「判断用 key 的环境变量名」'), capDialogueJoined.slice(0, 240));
   check('生图 key 说明会被主动发言复用', capJoined.includes('主动发言的判断 key 留空时也复用这里'));
   check('搜索 key 声明与生图/主动发言互不影响', capRetrievalJoined.includes('与生图 / 主动发言的 key 互不影响'), capRetrievalJoined.slice(0, 200));
 
   // 第 8 项：视觉留空 = 会话模型的风险提示
   check('视觉 provider 标注会话模型不一定支持图片', capJoined.includes('会话模型不一定支持图片'), capJoined.slice(0, 200));
   check('视觉 model 说明留空时会探测并回报可读错误', capJoined.includes('它会先探测是否支持图片'), capJoined.slice(0, 200));
+
+  console.log('\n4d. 审查补齐的字段（OneBot 12 接入方式 / 主动发言 key 环境变量与超时）');
+  check('对话与人格页含「判断用 key 的环境变量名」',
+    capDialogueJoined.includes('判断用 key 的环境变量名'), capDialogueJoined.slice(0, 240));
+  check('对话与人格页含「判断请求超时」',
+    capDialogueJoined.includes('判断请求超时（毫秒）'), capDialogueJoined.slice(0, 240));
+
+  // OneBot 12 的接入方式只在 protocol=onebot12 时出现
+  const draftOnebot12 = JSON.parse(JSON.stringify(SETTINGS_VALUE));
+  draftOnebot12.protocol = 'onebot12';
+  // 通过渲染验证 when() 分支：切回连接页、改协议需要走内部 draft，
+  // 这里直接验证 FIELDS 里该字段存在且带 select 选项（结构断言）。
+  const bundleSource = (await import('node:fs')).readFileSync(BUNDLE, 'utf8');
+  check('设置页含 OneBot 12 接入方式字段',
+    bundleSource.includes("path: ['protocols', 'onebot12', 'mode']") && bundleSource.includes('OneBot 12 接入方式'));
+  check('OneBot 12 正向/反向字段按 mode 显隐',
+    bundleSource.includes("v.protocols.onebot12.mode === 'reverse'"), '未找到 mode 分支判断');
+  check('不再有死样式 heading', !/^\s{6}heading:/m.test(bundleSource));
+
+  console.log('\n4e. 设置页字段覆盖 schema（防止上游新增字段被静默漏掉）');
+  const { Config: ConfigSchema } = await import('../lib/config.js');
+  const walkSchema = (node, trail, out) => {
+    if (node === null || node === undefined) return;
+    if (!node.dict) { out.push(trail.join('.')); return; }
+    for (const key of Object.keys(node.dict)) walkSchema(node.dict[key], trail.concat(key), out);
+  };
+  const schemaLeaves = [];
+  walkSchema(ConfigSchema, [], schemaLeaves);
+  // 有意不暴露：非 volatile（改它们会整体重挂插件）或纯内部路径
+  const NOT_EXPOSED = new Set(['adapterPath', 'nodePath', 'reply.firstTurnHint', 'restart.baseMs', 'restart.maxMs']);
+  const exposedPaths = new Set([...bundleSource.matchAll(/path: \[([^\]]+)\]/g)]
+    .map((m) => m[1].split(',').map((s) => s.trim().replace(/^'|'$/g, '')).join('.')));
+  const uncovered = schemaLeaves.filter((leafPath) => !NOT_EXPOSED.has(leafPath) && !exposedPaths.has(leafPath));
+  check('schema 里可配置的字段全部出现在设置页', uncovered.length === 0, '漏掉：' + uncovered.join(', '));
+  const orphanFields = [...exposedPaths].filter((onlyInUi) => !schemaLeaves.includes(onlyInUi));
+  check('设置页没有拼错的字段路径（每个都在 schema 里）', orphanFields.length === 0, '多出：' + orphanFields.join(', '));
 
   // 切回「基本」继续后面的保存测试
   clickTab('基本');
