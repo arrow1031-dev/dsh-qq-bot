@@ -1,6 +1,7 @@
 # dsh-qq-bot —— 把 QQ 接到 DSH Agent
 
-> **当前版本 0.9.x**：要求 **DSH ≥ 0.1.7**；DSH 0.2.1 系列（rc.2 / rc.3）已实测适配（工具走 `ctx.get('tools')` 注入契约）。
+> **当前版本 0.10.x**：要求 **DSH ≥ 0.1.7**；DSH 0.2.1 系列（rc.2 / rc.3）已实测适配（工具走 `ctx.get('tools')` 注入契约）。
+> 0.10 起**一套插件接五种协议**：OneBot 11（默认）/ OneBot 12 / Satori / Milky / QQ 官方机器人，见「三、协议与连接方式」。
 > 本仓库就是维护主干 [arrow1031/dsh-qq-bot](https://github.com/arrow1031-dev/dsh-qq-bot)，**已解除封版**：
 > 安装跟随 `main`、功能与修复走 PR。需要兼容 DSH 0.1.6 及更早的旧版本（0.6.x）请自行选择早期 tag 下载；
 > 早期版本同时想用新功能，请自行处理。
@@ -18,29 +19,27 @@
 复用现成生态，不自造协议：
 
 ```
-QQ 客户端
-   │ QQ NT 协议
+QQ 客户端 / Koishi / QQ 开放平台
+   │ 各家协议（OneBot 11/12、Satori、Milky、官方 API v2）
    ▼
-NapCat（或 OneDisc / Lagrange 等 OneBot 11 实现）   ← 登录、收发、风控
-   │ OneBot 11：正向 WS / 反向 WS + HTTP API
+lib/adapters/*.mjs（协议翻译层，零 npm 依赖，独立进程）
+   │ stdin/stdout 换行分隔 JSON（契约见 lib/bridge/CONTRACT.md）
    ▼
-lib/onebot-adapter.mjs（本插件自带，零 npm 依赖）    ← 协议翻译层
-   │ stdin/stdout 换行分隔 JSON
+lib/bridge/（中间表示：一套消息段 + 一套 message 帧）
    ▼
-lib/index.js（Cordis 插件入口，0.8 起模块化拆分）
-   ├ lib/config.js       Config schema / 默认值 / 深合并
-   ├ lib/session.js      建会话、固定命名、访客工具闸
-   ├ lib/tools.js        qqbot / qqconfig / qqgroup / qq_websearch / qq_webfetch / qq_imgsearch / qq_history
+lib/index.js（Cordis 插件入口）
+   ├ lib/config.js         Config schema / 默认值 / 深合并
+   ├ lib/session.js        建会话、固定命名、访客工具闸
+   ├ lib/tools.js          qqbot / qqconfig / qqgroup / qq_websearch / qq_webfetch / qq_imgsearch / qq_draw / qq_history
+   ├ lib/admin.js          指令解析与三路权限
    ├ lib/owner-settings.js 拥有者设置通道（白名单 + 两步确认 + 限流 + 审计）
-   ├ lib/workspace.js    QQ_msg 工作区根解析（index / imgsearch 共用）
-   ├ lib/admin.js        指令解析与三路权限
-   ├ lib/http.js         fetch + 代理隧道
-   ├ lib/websearch.js    多引擎搜索
-   ├ lib/imgsearch.js    图床 + 反搜引擎
-   ├ lib/imagegen.js    生图（qq_draw：自填接口 + 失败重试 + 任务轮询）
-   └ lib/moli.js         dsh-moli 渲染抓取（可选）
-| `lib/imagegen.js` | 生图引擎：OpenAI 兼容 `/images/generations`、失败重试、task_id 轮询、收图存盘 |
-   ▲ 设置面板读写（lib/client.js）                        ← 「设置 → QQ 机器人」选项卡
+   ├ lib/workspace.js      QQ_msg 工作区根解析
+   ├ lib/http.js           fetch + 代理隧道 + 公网地址校验
+   ├ lib/websearch.js      多引擎搜索
+   ├ lib/imgsearch.js      图床 + 反搜引擎
+   ├ lib/imagegen.js       生图（qq_draw）
+   └ lib/moli.js           dsh-moli 渲染抓取（可选）
+   ▲ 设置面板读写（lib/client.js）  ← 「设置 → QQ 机器人」选项卡
    │ sessionController → agent.followup → whenIdle
    ▼
 DSH Agent（默认模型 + preset 人格 + 工具）
@@ -52,23 +51,25 @@ DSH Agent（默认模型 + preset 人格 + 工具）
 
 | 测试 | 命令 | 结果 |
 | --- | --- | --- |
-| 正向 WS 适配器回归 | `node test/test-adapter.mjs` | **19/19** |
-| 反向 WS 适配器回归 | `node test/test-adapter-reverse.mjs` | **12/12** |
-| 打包后插件端到端（Host） | `node test/test-plugin.mjs` | **76/76** |
-| 客户端设置页（含真实渲染冒烟） | `node test/test-client.mjs` | **32/32** |
-| 权限·群管理·访客工具闸 | `node test/test-admin.mjs` | **32/32** |
-| HTTP / 代理层 | `node test/test-http.mjs` | **17/17** |
-| 配置合并与还原 | `node test/test-config.mjs` | **11/11** |
-| 多引擎搜索结果解析 | `node test/test-websearch.mjs` | **5/5** |
-| 生图引擎（重试 / 轮询 / 解析） | `node test/test-imagegen.mjs` | **16/16** |
-| 运行时兼容自检 | `node test/test-compat.mjs` | **14/14** |
-| 历史消息鉴权与定向 | `node test/test-history.mjs` | **23/23** |
-| 主动发言（时间窗/校验/频率闸） | `node test/test-proactive.mjs` | **28/28** |
-| 组合能否加载 | `dsh --profile web --dump-config --patch <补丁>` | 通过（行被正确插入） |
-| 装到 profile 后的模块解析 | 解包到 profile 后 `import('@deepseek-ai/dsh-tools')` | 通过 |
-| 真机（DSH 0.2.1-rc.2 / rc.3 + NapCat） | 装 0.9.x 后启动 | 7 个工具全部注册、OneBot 已连接 |
-| 一键全量 | `node test/run-all.mjs` | **13/13 套件 · 290 项** |
-
+| OneBot 11 正向适配器 | `node test/test-adapter.mjs` | 19/19 |
+| OneBot 11 反向适配器 | `node test/test-adapter-reverse.mjs` | 12/12 |
+| OneBot 12 适配器 | `node test/test-adapter-onebot12.mjs` | 30/30 |
+| Satori 适配器 | `node test/test-adapter-satori.mjs` | 70/70 |
+| Milky 适配器 | `node test/test-adapter-milky.mjs` | 79/79 |
+| QQ 官方适配器 | `node test/test-adapter-qq-official.mjs` | 87/87 |
+| 打包后插件端到端（Host） | `node test/test-plugin.mjs` | 76/76 |
+| 客户端设置页 | `node test/test-client.mjs` | 32/32 |
+| 权限 · 群管理 · 访客工具闸 | `node test/test-admin.mjs` | 32/32 |
+| HTTP / 代理层 | `node test/test-http.mjs` | 17/17 |
+| 配置合并与还原 | `node test/test-config.mjs` | 11/11 |
+| 多引擎搜索结果解析 | `node test/test-websearch.mjs` | 5/5 |
+| 生图引擎 | `node test/test-imagegen.mjs` | 16/16 |
+| 会话 id 回退 | `node test/test-session-id.mjs` | 5/5 |
+| 运行时兼容自检 | `node test/test-compat.mjs` | 14/14 |
+| 历史消息鉴权与定向 | `node test/test-history.mjs` | 23/23 |
+| 主动发言 | `node test/test-proactive.mjs` | 28/28 |
+| 拥有者设置通道 | `node test/test-owner-settings.mjs` | 58/58 |
+| 一键全量 | `node test/run-all.mjs` | **18/18 套件 · 614 项** |
 `test-plugin.mjs` 用假 ctx 加载真正的 `lib/index.js` + 真适配器 + 零依赖 OneBot 模拟器，跑通完整链路（无需 DSH / QQ / 网络）。
 
 ## 二、快速开始
@@ -127,15 +128,44 @@ dsh plugin --profile web add ./dsh-qq-bot-<版本号>.tgz
 - 每个群/每个人是独立的 DSH 会话（id 形如 `qqbot-group-33333`），会落盘并出现在 Web UI 会话列表里，可以像普通会话一样打开继续聊。
 - 新会话的**显示名固定为 `群聊_<群号>` / `私聊_<QQ号>`**（`session.fixedName`，默认开启），不再让 LLM 自动起标题；已建会话保持原名。
 
-## 三、两种连接模式，怎么选
+## 三、协议与连接方式
+
+插件内核不感知协议。设置里选「协议」，适配器会自动切换并重启：
+
+| protocol | 需要的协议端 | 传输 | 备注 |
+| --- | --- | --- | --- |
+| `onebot11`（默认） | NapCat / go-cqhttp / Lagrange | 正向/反向 WS + HTTP | 与 0.9 的配置完全兼容 |
+| `onebot12` | OneBot 12 实现端 | 正向/反向 WS + HTTP | @ 是 `mention`、回复是 `reply`、图片只有 `file_id` |
+| `satori` | Koishi（Satori 服务端） | WS `/v1/events` + HTTP RPC | 消息体是类 XHTML 元素字符串，适配器内置 parser |
+| `milky` | NapCat / Yogurt / Lagrange.Milky | `/event` WS + `/api` HTTP | 无 echo；消息 id 是 `message_seq` |
+| `qq-official` | QQ 开放平台机器人 | Webhook 或 WS 网关 | AppID/AppSecret 鉴权；群/单聊用 openid |
+
+想加新协议：读 [lib/bridge/CONTRACT.md](lib/bridge/CONTRACT.md)，写一个 stdin/stdout 适配器脚本，
+再到 `lib/index.js` 的 `ADAPTER_FILES` 里登记一行。
+
+### OneBot 11/12 的两种连接模式
 
 | 场景 | 用哪个 | 配置 |
 | --- | --- | --- |
-| NapCat 和 DSH 在同一台机器/同一容器 | **正向 WS**（默认） | `mode: forward`，我们连 `ws://127.0.0.1:3001` |
-| NapCat 在别的容器/主机，或网络方向只允许 NapCat 连出来 | **反向 WS** | `mode: reverse`，我们在 `0.0.0.0:6199` 监听，NapCat 里填 `ws://<DSH主机IP>:6199/` |
+| 协议端和 DSH 在同一台机器/同一容器 | **正向 WS**（默认） | `mode: forward`，我们连 `ws://127.0.0.1:3001` |
+| 协议端在别的容器/主机，或网络方向只允许它连出来 | **反向 WS** | `mode: reverse`，我们在 `0.0.0.0:6199` 监听，协议端填 `ws://<DSH主机IP>:6199/` |
 
-反向 WS 的鉴权：请求头 `Authorization: Bearer <token>` 或 URL 上的 `?access_token=<token>` 都接受（后者是因为浏览器/Node 的标准 WebSocket 客户端无法自定义请求头）。
+反向 WS 的鉴权：请求头 `Authorization: Bearer <token>` 或 URL 上的 `?access_token=<token>` 都接受（后者是因为标准 WebSocket 客户端无法自定义请求头）。
 
+### 其它协议的连接参数（设置页同名）
+
+| 协议 | 参数 |
+| --- | --- |
+| `onebot12` | `protocols.onebot12.{mode,wsUrl,listen,httpUrl,accessToken}` |
+| `satori` | `protocols.satori.{wsUrl,httpUrl,token,platform,selfId}` |
+| `milky` | `protocols.milky.{wsUrl,httpUrl,accessToken}` |
+| `qq-official` | `protocols.qqOfficial.{mode,appId,appSecret,botSecret,listen,path}`；`mode=webhook` 时端口只能 80/443/8080/8443 |
+
+### 各协议的能力边界
+
+- `qq-official`：官方 API **没有**踢人/禁言/改名片这些群管理动作，`qqgroup` 会明确回「不支持」；主动消息受平台配额与被动回复窗口约束。
+- `onebot12`：图片段只有 `file_id`，要 URL 得再调 `get_file`；需要视觉识别的场景建议用 OneBot 11。
+- `satori` / `milky`：协议层不定义限流，主动发言的节流仍由插件的 `proactive` 配置执行。
 ## 四、配置
 
 ### 方式一：在 DSH 设置里改（推荐）
@@ -178,7 +208,8 @@ Agent 会话的工作目录**不需要任何配置**：插件读取 DSH 官方�
 ```yaml
 - id: dsh-qq-bot
   config:
-    mode: forward                 # forward | reverse（工作区自动管理，见上文）
+    protocol: onebot11            # onebot11 | onebot12 | satori | milky | qq-official（见「三、协议与连接方式」）
+    mode: forward                 # forward | reverse（仅 onebot11/12）
     onebot:
       wsUrl: 'ws://127.0.0.1:3001'      # mode=forward 用
       listen: '0.0.0.0:6199'            # mode=reverse 用
@@ -398,7 +429,7 @@ Agent 会话的工作目录**不需要任何配置**：插件读取 DSH 官方�
 
 ## 六、Agent 能用的工具
 
-插件注册了一个动态工具 `qqbot`：
+插件向 DSH 注册 8 个工具（访客只能看到 `auth.guestToolAllow` 里的那几个）。先看通用的 `qqbot`：
 
 - `{action:'status'}` —— 连接状态、模式、适配器 pid/端口、各 QQ 会话的回合数、统计计数
 - `{action:'send', message_type:'group'|'private', target_id:'123', text:'...', image?}` —— 主动发一条 QQ 消息；`image` 传本地图片绝对路径（**只允许 `<QQ_msg>/qq-images` 目录内**），插件转 base64 后与文本一起发出，用于「发自拍 / 自画像 / 刚生成的图」这类场景。
@@ -468,31 +499,25 @@ DSH 自带的 `web_fetch` 工具仍然注册，但**已从访客默认白名单�
 
 ### qqgroup（群管理）
 
-见「五、群管理」一节。工具路径的授权依据是「当前会话最近一条消息是否来自管理员白名单」。
+见「五、权限与群管理」一节。工具路径的授权依据是「当前会话最近一条消息是否来自管理员白名单」。
 
 ### qqconfig（拥有者专用：在 QQ 里改设置）
 
-发布于 0.9.6。让**拥有者本人在私聊里**直接改一部分插件设置，不用去翻 profile 的 `cordis.patch.yml`：
+0.10 起。让**拥有者本人在私聊里**直接改一部分插件设置，不用去翻 profile 的 `cordis.patch.yml`：
 
 - `{action:'show'}` —— 列出可改项、当前值和配置修订号
 - `{action:'propose', path:'group.allow', value:'[\"488136808\"]'}` —— **只校验不写盘**，返回改动预览与一次性 `token`
 - `{action:'apply', token:'...'}` —— 凭 token 真正落盘
 - `{action:'cancel', token:'...'}` —— 撤销预约
 
-防护是分层的，缺一层都不会写盘：
+可改的是一组白名单字段：群/私聊开关与白名单、命令前缀、群管理开关、主动发言参数、图片识别、人设。
+密钥、`onebot.*`、`auth.*`（拥有者名单）、模型名这类**改不了**——机器人无法借这条通道给自己扩权。
 
-1. **身份只取自当前会话**（`entry.speaker`），不接受工具参数里的 QQ 号；必须命中 `auth.owners`。
-2. **只允许私聊**：在群里调用一律拒绝（避免旁人起哄 / 被诱导）。
-3. **白名单字段**：群 / 私聊开关与白名单、主动发言参数、图片识别、人设等；`auth.*`、`onebot.*`、
-   `imageGen.*`、`proactive.apiKey|baseUrl|model`、`mode` 等**硬拒绝**——改不了拥有者名单、密钥和连接。
-4. **值按类型 / 范围校验**（QQ 号格式、时段格式、整数上下界、文本长度）。
-5. **两步确认**：`propose` 的 token 300 秒有效、一次性、绑定「拥有者 + 路径 + 值 + 配置修订号」；
-   期间配置被设置页等别处改过 → 作废，必须重新提议。
-6. **落盘只走 DSH settings 服务**：schema 校验 + 原子写 + 热重载；服务不可用时直接拒绝，**绝不手改 YAML**。
-7. **限流 + 审计**：默认每小时 6 次、每天 30 次；每次成功 / 失败 / 被限流都追加一行到
-   `<QQ_msg>/qqbot-config-audit.jsonl`（时间、拥有者 QQ、路径、旧值、新值、结果）。
+写盘要过三道：**只能是拥有者本人在私聊里**（身份取自当前会话发言人，不接受参数）→ `propose` 只生成 300 秒有效的一次性确认码 →
+`apply` 时若配置已被别处改过就作废。落盘只走 DSH settings 服务（schema 校验 + 原子写 + 热重载），不手改 YAML；
+另有每小时 6 次 / 每天 30 次的限流与 `QQ_msg/qqbot-config-audit.jsonl` 审计。完整威胁模型见 [SECURITY.md](SECURITY.md)。
 
-总开关在设置里：`auth.ownerSettings`（默认开）。关掉后 `qqconfig` 全部动作拒绝。
+总开关 `auth.ownerSettings`（默认开），关掉后全部动作拒绝。
 
 ## 七、排错
 
@@ -517,7 +542,7 @@ npm install
 装好之后裸克隆即可运行：需要 DSH 运行时才能成立的少数断言（动态工具注册、qqgroup 工具路径）
 会自动跳过，而不是判失败；想看全，把 `DSH_PROFILE_MODULES` 指向一个装了 DSH 运行时的 profile 的
 `node_modules`。
-整套 **290 项**（13 个套件）：
+整套 **614 项**（18 个套件）：
 
 ```sh
 npm test
@@ -526,21 +551,27 @@ npm test
 或分开跑：
 
 ```sh
-# 适配器回归（正向 19 项 + 反向 12 项）
-node test/test-adapter.mjs
-node test/test-adapter-reverse.mjs
+# 协议适配器回归（每家一个套件，全部用本地假协议端）
+node test/test-adapter.mjs              # OneBot 11 正向（19 项）
+node test/test-adapter-reverse.mjs      # OneBot 11 反向（12 项）
+node test/test-adapter-onebot12.mjs     # OneBot 12（30 项）
+node test/test-adapter-satori.mjs       # Satori（70 项）
+node test/test-adapter-milky.mjs        # Milky（79 项）
+node test/test-adapter-qq-official.mjs  # QQ 官方（87 项）
 
-# 打包后插件的端到端（假 ctx + 真适配器 + 假 OneBot）
+# 插件本体（假 ctx + 真适配器 + 假协议端）
 node test/test-plugin.mjs     # Host 半边（76 项，含 Config 契约与热更新）
 node test/test-client.mjs     # 客户端设置页（32 项）
-node test/test-admin.mjs      # 权限·群管理·访客工具闸（32 项；dsh-tools 可解析时另含工具路径断言）
+node test/test-admin.mjs      # 权限·群管理·访客工具闸（32 项）
 node test/test-http.mjs       # HTTP / 代理隧道（17 项）
 node test/test-config.mjs     # 配置合并与还原（11 项）
-| `test/test-imagegen.mjs` | 生图引擎（16 项，不联网） |
 node test/test-websearch.mjs  # 多引擎搜索结果解析（5 项）
 node test/test-imagegen.mjs   # 生图引擎：重试 / 轮询 / 响应解析（16 项）
 node test/test-session-id.mjs # 会话 id 回退（5 项）
-node test/run-all.mjs         # 一键全量（13 套件）
+node test/test-compat.mjs     # 运行时兼容自检（14 项）
+node test/test-history.mjs    # 历史消息鉴权与定向（23 项）
+node test/test-proactive.mjs  # 主动发言（28 项）
+node test/run-all.mjs         # 一键全量（18 套件）
 ```
 
 也可以手动拿假 OneBot 试（端口正好是 NapCat 默认值）：
@@ -553,28 +584,6 @@ node -e "fetch('http://127.0.0.1:3000/__inject',{method:'POST',headers:{'content
 node -e "fetch('http://127.0.0.1:3000/__sent').then(r=>r.json()).then(j=>console.log(JSON.stringify(j.messages,null,2)))"
 ```
 
-
-## 十、多协议适配器（0.10 新增）
-
-插件不再绑死 OneBot 11。设置里选「协议」（或改 `protocol`），适配器会自动切换并重启：
-
-| protocol | 需要的协议端 | 传输 | 备注 |
-| --- | --- | --- | --- |
-| `onebot11`（默认） | NapCat / go-cqhttp / Lagrange | 正向/反向 WS + HTTP | 与 0.9 的配置完全兼容 |
-| `onebot12` | OneBot 12 实现端 | 正向/反向 WS + HTTP | 事件是 {id,time,type,detail_type,self}；@ 叫 mention，回复叫 reply |
-| `satori` | Koishi（Satori 服务端） | WS /v1/events + HTTP RPC | 消息体是类 XHTML 元素字符串，适配器内置 parser |
-| `milky` | NapCat / Yogurt / Lagrange.Milky | /event WS + /api HTTP | 无 echo；消息 id 是 message_seq |
-| `qq-official` | QQ 开放平台机器人 | Webhook 或 WS 网关 | AppID/AppSecret 鉴权；群/单聊用 openid；群管理动作大多不支持 |
-
-内部统一「中间表示」（一套消息段 + 一套 message 帧），协议差异全收在 `lib/adapters/`。
-想加新协议：读 `lib/bridge/CONTRACT.md`，写一个 stdin/stdout 适配器脚本即可，插件侧只需在
-`ADAPTER_FILES` 里登记一行。
-
-已知限制：
-
-- QQ 官方 API 没有踢人/禁言/改名片这类群管理动作，`qqgroup` 在 `qq-official` 下会明确回「不支持」；
-- OneBot 12 的图片段只有 file_id，要 URL 得再调 get_file，需要视觉识别的场景建议先用 OneBot 11；
-- Satori / Milky 都不定义频率限制，主动发言的节流仍由插件按 `proactive` 配置执行。
 
 ## 九、关于 AstrBot
 
@@ -596,7 +605,11 @@ AstrBot 是 OneBot 的**消费方**（内置 aiocqhttp 反向 WS 服务端），
 | `lib/index.js` | Cordis 插件入口（Host 侧）。导出 `name` / `inject` / `Config` / `apply`；组合导入下面各模块 |
 | `lib/config.js` | `Config` schema、`DEFAULTS`、深合并 `mergeConfig`、volatile 还原 `plainConfig` |
 | `lib/session.js` | 会话创建/复用、固定命名、访客工具闸（`ctx.get('tools')`） |
-| `lib/tools.js` | 六个模型工具；注册统一走 `registerTool(ctx, make)`（DSH 0.2 契约） |
+| `lib/bridge/` | 适配器共享层：手写 WebSocket、stdio 契约、消息段归一（`CONTRACT.md` 是写新适配器的入口） |
+| `lib/adapters/` | 协议适配器：`onebot11` / `onebot12` / `satori` / `milky` / `qq-official`，各自可独立执行 |
+| `lib/owner-settings.js` | 拥有者设置通道：白名单校验、`propose/apply` 两步确认、限流、审计 |
+| `lib/workspace.js` | `QQ_msg` 工作区根解析（index 与 imgsearch 共用，避免 0.9.5 的 ReferenceError） |
+| `lib/tools.js` | 8 个模型工具（qqbot/qqconfig/qqgroup/qq_websearch/qq_webfetch/qq_imgsearch/qq_draw/qq_history）；注册统一走 `registerTool(ctx, make)`（DSH 0.2 契约） |
 | `lib/admin.js` | 群管理指令、三路权限、动态授权 |
 | `lib/http.js` | fetch + HTTP CONNECT 代理隧道 + 公网地址校验 |
 | `lib/websearch.js` | Tavily / DuckDuckGo / Yandex / Bing / Wikipedia 组合搜索 |
@@ -662,7 +675,8 @@ MIT，见 [LICENSE](LICENSE)。维护者与贡献者见顶部（维护 [@arrow10
 
 本仓库就是主干：0.8.0 把下游开发者 [@nd002723](https://github.com/nd002723) 的分支
 （模块化重构 + `qq_websearch` / `qq_webfetch` / `qq_imgsearch` / `qq_history`）并入
-`main`，同时保留 0.7.0 的 DSH 0.2 兼容改造；0.8.1 修掉设置页列表输入框吞逗号的问题。
+`main`，同时保留 0.7.0 的 DSH 0.2 兼容改造；0.8.1 修掉设置页列表输入框吞逗号的问题；
+0.10.0 把协议层拆成 `lib/bridge/` + `lib/adapters/`，一套插件接 OneBot 11/12、Satori、Milky、QQ 官方机器人。
 
 - 安装跟随 `main`，不再锁 tag；每次合并后在 `main` 打 tag 发 Release
 - 提 issue / PR / Discussions 都欢迎，活跃贡献者会被邀请为协作者（当前协作者：@arrow1031、@nd002723）
@@ -673,15 +687,18 @@ MIT，见 [LICENSE](LICENSE)。维护者与贡献者见顶部（维护 [@arrow10
 - 仓库：[arrow1031-dev/dsh-qq-bot](https://github.com/arrow1031-dev/dsh-qq-bot)（issue / PR / Discussions 都在这里）
 - QQ 群：**[1091766276](https://qun.qq.com/universal-share/share?ac=1&authKey=z%2FlfWodgOvkDnUTzUZ3%2BNoYGInkfTKCyMfmxO8uyGa%2Bx%2BKmF4ILvUvzqSb6mEJoE&busi_data=eyJncm91cENvZGUiOiIxMDkxNzY2Mjc2IiwidG9rZW4iOiJuY0Z3eEkzeUJWUkROYUNwWnNhblY3VlQrWWh1NURVbDZlUDRZNHZKSFlGWEJnOFRhazB6VUVaV0ZoMzVZVjg2IiwidWluIjoiMzE5NTQzODg2In0%3D&data=qPi85PPH3R-8HaJ9_U2u0zi7KCjzwplsRb-xisY3XAiBsWzopanij924BvV0sfj_cspqyTWemKx0YnNIHTjjGQ&svctype=4&tempid=h5_group_info)**（加群自动审批；报错请带上 [dsh-qq-bot] 开头的日志和复现步骤）
 - 个人网站：<https://sputnikzaychik.icu>
+- 贡献流程与代码约定：[CONTRIBUTING.md](CONTRIBUTING.md)；行为准则：[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+- 提问与用法交流：[Discussions](https://github.com/arrow1031-dev/dsh-qq-bot/discussions)
+- 安全问题：[SECURITY.md](SECURITY.md)（走私信，别在公开 issue 里贴细节）
 - 维护者：[@arrow1031](https://github.com/arrow1031) · 核心贡献者：[@nd002723](https://github.com/nd002723)
 
 为了让你改得快，这些文档是为你写的：
 
 | 文档 | 内容 |
 | --- | --- |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | **改动指南**：文件职责地图、一条消息的完整旅程、关键数据结构、每个设计决策的原因、`加一条指令 / 加一个工具 / 加一个设置项`的分步写法、调试手册、术语表、8 条"不要做的事" |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | **改动指南**：分层图、模块职责、关键数据流、设计取舍、已知边界 |
 | [AI-DISCLOSURE.md](AI-DISCLOSURE.md) | AI 生成方式、人类决策点、验证到什么程度、**尚未验证的清单**、第三方归属、安全免责 |
-| [CHANGELOG.md](CHANGELOG.md) | 0.1.0 → 0.8.2 的完整演进，含 0.8.0 合并下游分支与 0.8.1 修复 |
+| [CHANGELOG.md](CHANGELOG.md) | 0.1.0 → 0.10.0 的完整演进 |
 
 ### 致谢
 
@@ -694,7 +711,9 @@ AI 生成内容声明见 [AI-DISCLOSURE.md](AI-DISCLOSURE.md)，**使用前请�
 
 **运行时依赖**：`@deepseek-ai/schemastery`（Config schema 用）；`@deepseek-ai/dsh-tools` 可选（仅用于注册动态工具，缺失时自动降级）。适配器只用 Node 22 内置的 `WebSocket` 与 `fetch`——**本插件本身保持零 npm 依赖**。**唯一的可选功能例外**：`qq_webfetch` 的 Moli 渲染模式（`moli.enabled`）需要另外安装 [dsh-moli](https://github.com/nd002723/dsh-moli) 插件 + moli 引擎（未装时开关无效、工具返回 `moliUnavailable` 并回退普通 http 抓取），不影响其它功能。
 
-## 跨对话检索（跨群 / 跨会话）
+## 十五、附录
+
+### 跨对话检索（跨群 / 跨会话）
 
 两套互补的能力，都在设置里配、由 Agent 自己决定何时用：
 
@@ -721,7 +740,7 @@ AI 生成内容声明见 [AI-DISCLOSURE.md](AI-DISCLOSURE.md)，**使用前请�
 
   不挂这一行就没有这 5 个工具，但 qq_history 的跨群读取不受影响。
 
-## 主动发言（可选）
+### 主动发言（可选）
 
 默认关闭。打开后按 `proactive.intervalMinutes` 看一次群里最近的消息，由模型自己判断**要不要接、接什么话题**；判断标准写在提示词里（宁可不说话；不接刷屏 / 吵架 / 敏感话题 / 广告 / 看不懂的梗 / 只针对某人的没头没尾对话），发言前还会过一遍长度、链接、``、重复校验。频率、时段、群范围全部由配置控制。
 
@@ -731,7 +750,7 @@ AI 生成内容声明见 [AI-DISCLOSURE.md](AI-DISCLOSURE.md)，**使用前请�
 - 判断走 OpenAI 兼容接口（`baseUrl` / `model` / `apiKey`，留空复用生图的配置），不依赖 DSH 会话模型。
 - 关闭：设置页把「启用主动发言」关掉，或配置里 `enabled: false`。
 
-## 向前兼容（旧会话不会被删）
+### 向前兼容（旧会话不会被删）
 
 旧版本建的 QQ 会话可能绑在别的工作区（0.7 时代是 `/root`，0.8 起是 `<Documents>/deepseek-harness/QQ_msg`）。
 DSH 不允许跨工作区复用同一个会话 id，插件现在的处理是：
@@ -740,7 +759,7 @@ DSH 不允许跨工作区复用同一个会话 id，插件现在的处理是：
 2. 用工作区限定的 id（`qqbot-group-<群号>-ws<6位哈希>`）新建一条，重试一次即成功；
 3. 日志里写明「改用 xxx；旧会话保留」，方便排查。
 
-## DSH 0.2 兼容
+### DSH 0.2 兼容
 
 0.8.0 起，工具注册与访客工具闸统一走 Cordis 的注入契约：
 
@@ -748,23 +767,10 @@ DSH 不允许跨工作区复用同一个会话 id，插件现在的处理是：
 - 闸门：agent.ctx.get('tools').guard(...)，取不到才回退 agent.ctx.tools（0.1.x 形态）。
 
 tools 仍是可选服务：没有它时插件照常收发消息，只是少几个模型工具。
-要求 DSH >= 0.1.7；0.2.1-rc.2 与 0.2.1-rc.3 上都实测七条工具注册齐全（qqbot / qqgroup / qq_websearch / qq_webfetch / qq_imgsearch / qq_draw / qq_history）。
+要求 DSH >= 0.1.7；0.2.1-rc.2 与 0.2.1-rc.3 上都实测 8 个工具注册齐全（qqbot / qqconfig / qqgroup / qq_websearch / qq_webfetch / qq_imgsearch / qq_draw / qq_history）。
 
 **版本支持不写死**：插件启动时读取当前实际加载的 DSH 版本并判定，日志形如
 `[dsh-qq-bot] 运行于 DSH 0.2.1-rc.3（在声明支持范围 0.1.7-0 <= v < 0.3.0-0 内）`；
 `qqbot` 工具 `action="status"` 返回的 `runtime` 字段给出同一结论。支持范围只维护
 `lib/compat.js` 里的 `SUPPORT_FLOOR` / `SUPPORT_CEILING` 两个常量，DSH 出新版本不用改代码、也不用补版本表；
 版本识别失败或超出范围只提示，不影响收发消息。
-
-## 社区与贡献
-
-0.8.0 起本项目转入社区化维护，**完全解除封版**：安装跟随 `main`，功能与修复走 PR。
-
-- 贡献流程与代码约定：[CONTRIBUTING.md](CONTRIBUTING.md)
-- 提问与用法交流：[Discussions](https://github.com/arrow1031-dev/dsh-qq-bot/discussions) 或 QQ 群 **1091766276**
-- 作者的其他东西：<https://sputnikzaychik.icu>
-- 安全问题：[SECURITY.md](SECURITY.md)（走私信，别开公开 issue 贴细节）
-- 行为准则：[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
-
-致谢：0.8.0 的模块化重构与 `qq_history` / `qq_websearch` / `qq_webfetch` / `qq_imgsearch`
-来自下游开发者 [@nd002723](https://github.com/nd002723) 的分支，已并入主干。

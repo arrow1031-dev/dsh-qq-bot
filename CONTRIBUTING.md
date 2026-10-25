@@ -7,7 +7,7 @@
 
 - Node >= 22.6
 - DSH >= 0.1.7；0.2.x 已适配（见 README「DSH 0.2 兼容」）
-- NapCat 或任意 OneBot 11 实现（正向 / 反向 WebSocket 均可）
+- 协议端：NapCat / Lagrange（OneBot 11）、OneBot 12 实现端、Koishi（Satori）、Milky 协议端，或 QQ 开放平台机器人（见 README「三、协议与连接方式」）
 
 ## 本地开发
 
@@ -18,7 +18,7 @@ npm install
 node test/run-all.mjs
 ```
 
-单元测试用假的 OneBot 服务端（test/mock-onebot.mjs），不需要真 QQ。
+所有测试都用本地假协议端，不需要真 QQ：OneBot 11 用 `test/mock-onebot.mjs`，其余协议各自的 `test/test-adapter-*.mjs` 自带假服务端。
 
 ## 分支与 PR
 
@@ -39,11 +39,13 @@ node test/run-all.mjs
 2. **配置**：新字段加到 `lib/config.js` 的 `DEFAULTS` 与 `Config`，可热改的标 `.volatile()`；
    设置页字段在 `lib/client.js` 的 `FIELDS` 里加。
 3. **测试**：新增行为在 `test/` 补用例，并挂到 `test/run-all.mjs`。
-4. **文档**：面向用户的行为变化写进 `CHANGELOG.md`；结构变化同步 `ARCHITECTURE.md`。
+4. **新协议**：读 `lib/bridge/CONTRACT.md`，在 `lib/adapters/` 下加一个 stdin/stdout 适配器，再到 `lib/index.js` 的 `ADAPTER_FILES` 与 `lib/config.js` 的 `protocols` 登记；适配器必须零 npm 依赖，并自带上限为一条的协议端假服务端测试。
+5. **文档**：面向用户的行为变化写进 `CHANGELOG.md`；结构变化同步 `ARCHITECTURE.md`；新协议写进 README 的协议表。
 
 ## 版本与发布
 
 维护者合并后在 `main` 打 tag（`vX.Y.Z`）并发 Release。安装方式跟随 `main`，不再锁死某个 tag。
+自动化：`.github/workflows/release.yml` 在 push 到 `main` 且改动包含 `package.json` 时跑全量测试并发布，Release 正文取「首次引入该版本号的提交信息」；`ci.yml` 对每次 push / PR 跑 `npm test`。
 
 ## 成为协作者
 

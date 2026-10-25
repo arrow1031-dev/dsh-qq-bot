@@ -10,8 +10,8 @@
 ### 生成方式
 
 - 生成环境：[DeepSeek Harness](https://github.com/deepseek-ai)（DSH）上的 AI 编程代理。
-  0.8.0 起的合并、0.9.x 的生图 / 人设 / 跨对话能力，是在**真实部署的 DSH 0.2.1-rc.2** 上通过 SSH
-  远程操作完成的（环境见下方「当前部署环境」）。
+  0.8.0 起的合并、0.9.x 的生图 / 人设 / 跨对话能力、0.10.0 的多协议适配层，是在**真实部署的 DSH 0.2.1-rc.2**
+  上通过 SSH 远程操作完成的（环境见下方「当前部署环境」）。
 - 生成过程：人类用自然语言提出需求与约束 → AI 编写代码与测试 → AI 在真实运行环境中执行测试并修复
   → 人类审查、否决不合适的方案、追加约束 → 迭代。
 - 人类做出的关键决策（可由提交历史与文档佐证）：
@@ -32,21 +32,22 @@
 | 机器人账号 | 真实 QQ 号（OneBot `get_login_info` 可查），非模拟器 |
 | LLM | 自定义 OpenAI 兼容中转（地址与 key **只存在于部署侧配置，不进仓库**） |
 | 生图 | 自填 OpenAI 兼容 `/images/generations`（实测 `seedream-5.0-lite`，约 40 秒出图、单张约 3.6 MB） |
-| 已验证工具 | `qqbot` / `qqgroup` / `qq_websearch` / `qq_webfetch` / `qq_imgsearch` / `qq_history` / `qq_draw`（7 个全部注册成功） |
+| 已验证工具 | `qqbot` / `qqconfig` / `qqgroup` / `qq_websearch` / `qq_webfetch` / `qq_imgsearch` / `qq_history` / `qq_draw`（8 个全部注册成功） |
 
 ### 验证情况
 
-- **自动化测试 13 个套件、290 项，全部通过**（`npm test` = `node test/run-all.mjs`；CI 在 Node 22 / 24 双版本上跑）：
-  - 正向 WebSocket 适配器 19 项 ／ 反向 12 项
+- **自动化测试 18 个套件、614 项，全部通过**（`npm test` = `node test/run-all.mjs`；CI 在 Node 22 / 24 双版本上跑）：
+  - 正向 WebSocket 适配器 19 项 ／ 反向 12 项 ／ OneBot 12 30 项 ／ Satori 70 项 ／ Milky 79 项 ／ QQ 官方 87 项
   - Host 插件端到端 76 项（假 ctx + 真适配器 + Config 契约 + 配置热更新）
   - 客户端设置页 32 项 ／ 权限·群管理·访客工具闸 32 项
   - HTTP·代理隧道 17 项 ／ 配置合并 11 项 ／ 多引擎搜索解析 5 项
   - 生图引擎 16 项（URL 拼接、响应解析、500/429 重试、4xx 不重试、网络异常重试、task_id 轮询、关闭轮询）
   - 会话 id 作用域回退 5 项（旧工作区会话不删、改用 `-ws<哈希>` 新 id）
+  - 历史消息鉴权 23 项 ／ 主动发言 28 项 ／ 拥有者设置通道 58 项
 - 测试对端是项目自带的**零依赖 OneBot 11 模拟器**（`test/mock-onebot.mjs`，手写 RFC 6455 帧编解码），
   **不需要真实 QQ 账号**即可回归。
 - **真机验证**（上述部署环境，证据来自 DSH 端日志，可复现）：
-  - `已注册 qqbot / qqgroup / qq_websearch / qq_webfetch / qq_imgsearch / qq_history / qq_draw 工具` 七条齐全；
+  - `已注册 qqbot / qqconfig / qqgroup / qq_websearch / qq_webfetch / qq_imgsearch / qq_history / qq_draw 工具` 8 个齐全；
   - `OneBot 已连接`（正向 WS 链路 + lifecycle connect）；
   - 群聊/私聊会话创建、消息收发、群管理指令、访客工具闸按预期工作；
   - 设置页字段（含列表字段逗号输入、生图与人设分组）在真实浏览器里读写正常；
@@ -55,7 +56,7 @@
   - 跨工作区旧会话冲突：真实复现过 `session "..." belongs to "/root", not ".../QQ_msg"`，
     修复后改用 `-ws<哈希>` id 重建（见 CHANGELOG 0.9.2）。
 - **0.2.1-rc.3 兼容复核**：在隔离 `DSH_HOME`（独立 profile，未连 NapCat）装 rc.3 + 本插件，
-  启动日志七条工具注册齐全、适配器 ready、无报错；插件启动会自检并打印实际 DSH 版本与判定，
+  启动日志 8 个工具注册齐全、适配器 ready、无报错；插件启动会自检并打印实际 DSH 版本与判定，
   判定范围来自 `lib/compat.js` 的两个常量，不逐版本硬编码。
 - 打包与组合校验：`dsh --profile web --dump-config` 接受插件行与 preset 行；
   解包到 profile 后 `@deepseek-ai/dsh-tools` 可解析；客户端清单通过 `dsh.client` 校验。
@@ -65,20 +66,21 @@
 
 ### 已知限制与**尚未验证**的部分（请务必阅读）
 
-1. **真实 QQ 只在维护者的单一账号 / 单机 Debian 13 上跑过**。其它 QQ 版本、其它 OneBot 实现
+1. **多协议适配器只对「本地假协议端」验证过**：OneBot 12 / Satori / Milky / QQ 官方四个适配器各有独立测试套件，但尚未接真实实现端（OneBot 12 生态、Koishi、Milky 协议端、QQ 开放平台机器人）跑过端到端；上真实协议端时请先看 README「三、协议与连接方式」的能力边界。
+2. **真实 QQ 只在维护者的单一账号 / 单机 Debian 13 上跑过**。其它 QQ 版本、其它 OneBot 实现
    （OneDisc / Lagrange 等）的字段细节、限流与风控未逐一验证；报错请附 `[dsh-qq-bot]` 日志。
-2. **跨对话检索（session_search 系列）尚未在真实 QQ 会话里端到端跑过一遍**：它依赖 DSH 的
+3. **跨对话检索（session_search 系列）尚未在真实 QQ 会话里端到端跑过一遍**：它依赖 DSH 的
    `session-query-sqlite` 索引与「cwd 完全一致」授权，本地组合校验通过，真实检索结果待实测。
-3. **平台覆盖**：Linux（Debian 13 / Node 22）是主要验证环境，CI 另覆盖 Node 24；Windows 在 0.6.1 时代
+4. **平台覆盖**：Linux（Debian 13 / Node 22）是主要验证环境，CI 另覆盖 Node 24；Windows 在 0.6.1 时代
    实测过（Windows 11 + Node 24），0.8/0.9 未复测；macOS 未测试。Windows 上测试脚本里的
    `import(path.join(...))` 会报 `ERR_UNSUPPORTED_ESM_URL_SCHEME`。
 
-4. **设置契约按 DSH 0.1.7 实现**：0.1.7 移除了 `settings.register()`，改为读插件自己导出的
+5. **设置契约按 DSH 0.1.7 实现**：0.1.7 移除了 `settings.register()`，改为读插件自己导出的
    `Config` schema（可编辑字段必须标 `.volatile()`）。上游若再次改动设置契约，设置页会先失效，
    收发消息不受影响。
-5. **未实现自动治理**（关键词/刷屏自动撤回或禁言）。`notice` 事件目前只做透传与计数。
-6. 回复段的处理只取了被引用消息的 id；合并转发、嵌套回复链未处理。
-7. 群管理动作的实际效果（撤回是否成功、禁言时长是否被平台裁剪等）依赖具体 OneBot 实现，
+6. **未实现自动治理**（关键词/刷屏自动撤回或禁言）。`notice` 事件目前只做透传与计数。
+7. 回复段的处理只取了被引用消息的 id；合并转发、嵌套回复链未处理。
+8. 群管理动作的实际效果（撤回是否成功、禁言时长是否被平台裁剪等）依赖具体 OneBot 实现，
    本项目只保证按协议发出请求并如实回报结果。
 
 ### 第三方与协议归属
@@ -139,7 +141,8 @@ A human directed the requirements, made the design decisions, reviewed the outpu
 No source code from third-party projects was copied into this repository.
 
 - **Generated with:** an AI coding agent running on DeepSeek Harness (DSH). The 0.8.0 merge and the
-  0.9.x image-gen / persona / cross-conversation work were done against a **real DSH 0.2.1-rc.2 deployment**
+  0.9.x image-gen / persona / cross-conversation work and the 0.10.0 multi-protocol adapter layer
+  were done against a **real DSH 0.2.1-rc.2 deployment**
   over SSH (environment below).
 
 **Current deployment environment (maintainer's machine):**
@@ -155,7 +158,7 @@ No source code from third-party projects was copied into this repository.
 | Tools verified | `qqbot` / `qqgroup` / `qq_websearch` / `qq_webfetch` / `qq_imgsearch` / `qq_history` / `qq_draw` — all seven registered |
 
 - **Verification:** the browser settings page was **manually confirmed on a real device**.
-  **13 suites / 290 automated checks pass** (`npm test` = `node test/run-all.mjs`; CI runs on Node 22 and 24),
+  **18 suites / 614 automated checks pass** (`npm test` = `node test/run-all.mjs`; CI runs on Node 22 and 24),
   covering the forward/reverse WebSocket adapter, the Host plugin (fake `ctx` + real adapter + Config contract
   + config hot reload), the settings page, the permission/group-management subsystem, HTTP/proxy, multi-engine
   search parsing, the image-gen engine (retry / poll / response parsing) and the session-id workspace fallback.
@@ -178,7 +181,7 @@ No source code from third-party projects was copied into this repository.
    sessions.** It depends on the DSH `session-query-sqlite` index and its "identical cwd" authorization; the
    composition was validated locally, but real search results are still to be measured.
 3. **Platform coverage:** Linux (Debian 13 / Node 22) is the primary environment and CI adds Node 24;
-   Windows was measured in 0.6.1 (Windows 11 + Node 24) but **not re-tested in 0.8/0.9**; macOS is untested.
+   Windows was measured in 0.6.1 (Windows 11 + Node 24) but **not re-tested in 0.8–0.10**; macOS is untested.
 
 4. **The settings contract follows DSH 0.1.7**: `settings.register()` was removed, so the plugin exports a
    `Config` schema whose editable fields are marked `.volatile()`. If upstream reshapes that contract again,
