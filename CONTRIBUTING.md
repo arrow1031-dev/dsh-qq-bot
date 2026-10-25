@@ -6,7 +6,7 @@
 ## 环境
 
 - Node >= 22.6
-- DSH >= 0.1.7；0.2.x 已适配（见 README「DSH 0.2 兼容」）
+- DSH >= 0.2.0-rc.2（0.2.1 系列 rc.2 / rc.3 已实测；见 README「DSH 0.2 兼容」）
 - 协议端：NapCat / Lagrange（OneBot 11）、OneBot 12 实现端、Koishi（Satori）、Milky 协议端，或 QQ 开放平台机器人（见 README「三、协议与连接方式」）
 
 ## 本地开发

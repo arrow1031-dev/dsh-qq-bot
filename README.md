@@ -1,6 +1,9 @@
 # dsh-qq-bot —— 把 QQ 接到 DSH Agent
 
-> **当前版本 0.10.x**：要求 **DSH ≥ 0.2.0-rc.2**（工具走 `ctx.get('tools')` 注入契约；DSH 0.2.1 系列 rc.2 / rc.3 已实测适配）。
+> **当前版本 0.11.x**：要求 **DSH 0.2.0-rc.2 或更新的 0.2.x 版本**（工具走 `ctx.get('tools')` 注入契约；DSH 0.2.1 系列 rc.2 / rc.3 已实测适配）。
+>
+> **⚠️ 设置页入口变了**：不再是「设置 → QQ 机器人」，改为在**首页侧边栏打开 插件 → 已安装 → dsh-qq-bot**。
+> 配置项与落点（profile 的 `cordis.patch.yml`）都没变，**现有配置无需迁移**。
 > 0.10 起**一套插件接五种协议**：OneBot 11（默认）/ OneBot 12 / Satori / Milky / QQ 官方机器人，见「三、协议与连接方式」。
 > 本仓库就是维护主干 [arrow1031/dsh-qq-bot](https://github.com/arrow1031-dev/dsh-qq-bot)，**已解除封版**：
 > 安装跟随 `main`、功能与修复走 PR。需要兼容 DSH 0.1.6 及更早的旧版本（0.6.x）请自行选择早期 tag 下载；
@@ -39,7 +42,7 @@ lib/index.js（Cordis 插件入口）
    ├ lib/imgsearch.js      图床 + 反搜引擎
    ├ lib/imagegen.js       生图（qq_draw）
    └ lib/moli.js           dsh-moli 渲染抓取（可选）
-   ▲ 设置面板读写（lib/client.js）  ← 「设置 → QQ 机器人」选项卡
+   ▲ 设置面板读写（lib/client.js）  ← 插件面板「插件 → 已安装 → dsh-qq-bot」
    │ sessionController → agent.followup → whenIdle
    ▼
 DSH Agent（默认模型 + preset 人格 + 工具）
@@ -95,7 +98,20 @@ docker run -d --name napcat --restart=always \
 
 ### 2. 安装插件
 
-本插件**不在 npm 上**，从本仓库或 Release 附件装（维护仓库：<https://github.com/arrow1031-dev/dsh-qq-bot>）：
+本插件**不在 npm 上**，从本仓库或 Release 附件装（维护仓库：<https://github.com/arrow1031-dev/dsh-qq-bot>）。
+
+**方式一：在 DSH 界面里装（推荐）**
+
+在**首页侧边栏打开 插件 → 添加插件**，输入框里填写下面这行包名，确认后等它装完：
+
+```
+github:arrow1031-dev/dsh-qq-bot
+```
+
+装完**重启 DSH**（桌面版重启应用 / CLI 重启 `dsh web`），
+再到 **插件 → 已安装 → dsh-qq-bot** 打开配置面板。
+
+**方式二：命令行装**
 
 ```sh
 # 跟随 main（已解除封版：升级即最新，不锁 tag）
@@ -111,7 +127,7 @@ dsh plugin --profile web add ./dsh-qq-bot-<版本号>.tgz
 
 `dsh plugin` 本质是 pnpm 的前置封装：装完包后，它会**自动把声明了 `dsh.bundle.patch` 的依赖加入 profile 的层栈**（本包的 package.json 已声明），并连同唯一的运行时依赖 `@deepseek-ai/schemastery` 一起装上。装完**重启 DSH（桌面版重启应用 / CLI 重启 `dsh web`）**生效。
 
-> **版本要求**：0.10.x 要求 DSH ≥ 0.2.0-rc.2；DSH 0.2.1-rc.3 已实测（见下文「DSH 0.2 兼容」）。
+> **版本要求**：0.11.x 要求 DSH ≥ 0.2.0-rc.2；DSH 0.2.1-rc.3 已实测（见下文「DSH 0.2 兼容」）。
 
 > **升级注意**：`dsh plugin add` 走 pnpm，按 tarball **完整性哈希**缓存——改了代码要打成**新版本号文件名**再装（0.8.0 → 0.8.1），沿用旧名会被判「已最新」跳过。
 > `lib/client.js` 是浏览器侧代码，装完重启后还要**刷新浏览器页面**才加载新 bundle。
@@ -152,7 +168,7 @@ dsh plugin --profile web add ./dsh-qq-bot-<版本号>.tgz
 
 反向 WS 的鉴权：请求头 `Authorization: Bearer <token>` 或 URL 上的 `?access_token=<token>` 都接受（后者是因为标准 WebSocket 客户端无法自定义请求头）。
 
-### 其它协议的连接参数（设置页同名）
+### 其它协议的连接参数（插件设置页同名）
 
 | 协议 | 参数 |
 | --- | --- |
@@ -168,23 +184,31 @@ dsh plugin --profile web add ./dsh-qq-bot-<版本号>.tgz
 - `satori` / `milky`：协议层不定义限流，主动发言的节流仍由插件的 `proactive` 配置执行。
 ## 四、配置
 
-### 方式一：在 DSH 设置里改（推荐）
+### 方式一：在插件设置页里改（推荐）
 
-重启 `dsh web` 后，打开 **设置 → QQ 机器人**，所有配置都在这一个选项卡里：
-连接方式、WS/HTTP 地址、access_token、群聊开关与 @ 要求、白名单、命令前缀、
-身份权限（QQ 号、preset 分流、工具闸）、群管理、会话（独立会话、固定命名、preset）、
-回复分片长度、慢回复提示、来源前缀、逐帧日志、
-图片视觉（开关 / provider / model / 最多张数 / 下载超时）、联网搜索（代理 / 端点 / key）、
-生图（接口地址 / key / 模型 / 重试与轮询）、人格（开关 / 名字 / 设定 / 自定义 preset id）。
-设置页按功能分组排列：接入与范围 → 身份与权限 → 群管理 → 会话 → 回复 → 图片视觉 → 联网搜索。
+> **入口**：在**首页侧边栏打开 插件 → 已安装 → dsh-qq-bot**。
+> 这不是原来的「设置 → QQ 机器人」——设置页在 0.11.0 搬进了插件自己的面板。
+> **本版要求 DSH 0.2.0-rc.2 或更新的 0.2.x 版本。现有配置无需迁移。**
+
+重启 DSH 后面板分四档，字段按功能归位：
+
+| 标签 | 二级标签 | 放什么 |
+|---|---|---|
+| **连接** | — | 连接方式（OneBot 11 正向 / 反向、OneBot 12、Satori、Milky、QQ 官方）、WS/HTTP 地址、`access_token`、各协议参数 |
+| **基本** | 准入与名单 | 群聊 / 私聊开关、@ 要求、白名单、命令前缀、拥有者与高级管理员、访客工具白名单 |
+| **基本** | 发言与管理 | 回复策略（分片长度、慢回复提示、来源前缀、@ 回复、上下文头）、群管理指令与可管理群 |
+| **能力** | 识图与绘图 | 图片视觉（开关 / provider / model / 最多张数 / 下载超时）、生图（接口地址 / key / 模型 / 重试与轮询） |
+| **能力** | 搜索与抓取 | 联网搜索（代理 / 端点 / key）、图片反搜、`qq_webfetch` 与 moli 渲染 |
+| **能力** | 对话与人格 | 人格（开关 / 名字 / 设定 / 自定义 preset id）、主动发言（判断用 provider / 模型下拉）、聊天记录读取 |
+| **高级** | — | 会话（独立会话、固定命名、preset 与 owner/guest 分流 preset）、逐帧日志、重启退避 |
 
 - 改完点「保存」；**连接方式那几项**（模式/地址/token）保存后会自动重启适配器，其它项下一条消息生效。
 - 类型映射：布尔是勾选框；白名单是逗号分隔的文本框；连接方式是下拉框。
-- **配置落点（DSH ≥ 0.1.7）**：插件把自己的 `Config` schema 交给 DSH 当设置表单，界面上的改动由 DSH
+- **配置落点（本插件要求 DSH 0.2.0-rc.2 起）**：插件把自己的 `Config` schema 交给 DSH 当设置表单，界面上的改动由 DSH
   写进 **profile 的 `cordis.patch.yml`**（也就是下面「方式二」里那个文件）；0.1.6 时代的独立
   `settings.yaml` 文档已经不存在了。
 - 设置命名空间就是**条目 id**（默认 `dsh-qq-bot`）；条目被改名时，客户端会回退匹配「以 qq-bot 结尾」的那个命名空间。
-- 连接状态不在设置页里显示，在对话里让 Agent 调用 `qqbot` 工具（`action=status`）看。
+- 连接状态不在插件面板里显示，在对话里让 Agent 调用 `qqbot` 工具（`action=status`）看。
 - `access_token` 是**只写**字段：已设置时页面显示「已设置；留空则保持不变」，只有输入新值才会覆盖。
   Host 侧把它声明成 schema 的 secret，值不会下发到浏览器，保存时也不会被空值清掉。
 
@@ -479,7 +503,7 @@ Agent 会话的工作目录**不需要任何配置**：插件读取 DSH 官方�
 
 ### qq_draw（生图，可直接发到 QQ）
 
-在 设置 → QQ 机器人 里填好接口后，AI 就能按描述画图：
+在 插件 → 已安装 → dsh-qq-bot → 能力 → 识图与绘图 里填好接口后，AI 就能按描述画图：
 
 - `{prompt, model?, size?, reference?, caption?, send?}` —— `prompt` 越具体越好；`reference` 可给公网 URL 或 `qq-images` 下的本地图（保持同一形象做「自拍」）；
   `send` 默认 true，直接把图画成 QQ 图片段发到当前会话，`caption` 是随图发的文字。
@@ -766,7 +790,7 @@ DSH 不允许跨工作区复用同一个会话 id，插件现在的处理是：
 - 闸门：agent.ctx.get('tools').guard(...)，取不到才回退 agent.ctx.tools（0.1.x 形态）。
 
 tools 仍是可选服务：没有它时插件照常收发消息，只是少几个模型工具。
-要求 DSH >= 0.1.7；0.2.1-rc.2 与 0.2.1-rc.3 上都实测 8 个工具注册齐全（qqbot / qqconfig / qqgroup / qq_websearch / qq_webfetch / qq_imgsearch / qq_draw / qq_history）。
+要求 DSH >= 0.2.0-rc.2；0.2.1-rc.2 与 0.2.1-rc.3 上都实测 8 个工具注册齐全（qqbot / qqconfig / qqgroup / qq_websearch / qq_webfetch / qq_imgsearch / qq_draw / qq_history）。
 
 **版本支持不写死**：插件启动时读取当前实际加载的 DSH 版本并判定，日志形如
 `[dsh-qq-bot] 运行于 DSH 0.2.1-rc.3（在声明支持范围 0.1.7-0 <= v < 0.3.0-0 内）`；
