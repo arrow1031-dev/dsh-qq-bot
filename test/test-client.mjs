@@ -331,15 +331,25 @@ try {
   check('搜索与抓取页不显示生图与视觉字段',
     !capRetrievalJoined.includes('生图（qq_draw）') && !capRetrievalJoined.includes('图片视觉'), capRetrievalJoined.slice(0, 160));
 
+  const capVisionJoined = textsOf(clickSubTab('识图与绘图'));
+  check('识图与绘图页含图片识别窗口两项',
+    capVisionJoined.includes('识图往回找几条消息') && capVisionJoined.includes('这个范围内最多识别几张图'),
+    capVisionJoined.slice(0, 240));
+  check('图片识别窗口排在生图（qq_draw）之前',
+    capVisionJoined.indexOf('识图往回找几条消息') !== -1
+    && capVisionJoined.indexOf('识图往回找几条消息') < capVisionJoined.indexOf('生图（qq_draw）'),
+    JSON.stringify([capVisionJoined.indexOf('识图往回找几条消息'), capVisionJoined.indexOf('生图（qq_draw）')]));
+
   const capDialogueJoined = textsOf(clickSubTab('对话与人格'));
-  check('对话与人格页含人格/主动发言/聊天记录',
-    capDialogueJoined.includes('自定义人格') && capDialogueJoined.includes('启用主动发言')
-    && capDialogueJoined.includes('图片识别窗口'), capDialogueJoined.slice(0, 200));
+  check('对话与人格页含人格与主动发言',
+    capDialogueJoined.includes('自定义人格') && capDialogueJoined.includes('启用主动发言'),
+    capDialogueJoined.slice(0, 200));
   check('对话与人格页含主动发言的事件去重三项（上游 0.10.1 字段）',
     capDialogueJoined.includes('事件去重（防重复回复）') && capDialogueJoined.includes('事件过气阈值')
     && capDialogueJoined.includes('话题冷却'), capDialogueJoined.slice(0, 240));
   check('对话与人格页不显示视觉与检索字段',
-    !capDialogueJoined.includes('图片视觉') && !capDialogueJoined.includes('联网搜索 HTTP 代理'), capDialogueJoined.slice(0, 160));
+    !capDialogueJoined.includes('图片视觉') && !capDialogueJoined.includes('联网搜索 HTTP 代理')
+    && !capDialogueJoined.includes('识图往回找几条消息'), capDialogueJoined.slice(0, 160));
   check('切二级标签后底部保存/重新读取仍常驻',
     findByTextEarly(clickSubTab('搜索与抓取'), '保存') !== null);
 
