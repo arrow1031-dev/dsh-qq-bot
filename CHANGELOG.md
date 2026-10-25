@@ -14,7 +14,19 @@
   主动发言人设标明与全局人格的兜底关系；三处 API key 的回退链写清；
   视觉 provider/model 留空时提示「会话模型不一定支持图片」。
 - 补齐三个此前没暴露的配置：`protocols.onebot12.mode`（接入方式，并据此显隐正向地址 / 反向监听）、
-  `proactive.apiKeyEnv`、`proactive.timeoutMs`。
+  `proactive.provider`、`proactive.timeoutMs`；`proactive.provider` / `proactive.model` 两项做成和识图一样的下拉。
+
+### 主动发言
+
+- **和识图完全对齐：统一走 `ctx.llm.stream()`，不再自建 OpenAI 兼容端点。**
+  原来必须自己配 `baseUrl` + `model` + `apiKey` 才能说话，现在 `provider` / `model` 留空就**跟随该群会话的模型**，
+  零密钥；群里还没有会话时按全局 agent preset 建同一条会话再取。
+- 设置页里 `provider` / `model` 改成**下拉选择**（复用 DSH 同一份模型目录，model 跟随所选 provider），
+  与识图的交互一致；删掉 `baseUrl` / `apiKey` / `apiKeyEnv` 三个字段。
+- 修掉「界面显示已开启、实际一句不发」：`proactiveConsiderGroup` 里原有一道
+  「缺 `baseUrl` 或 `model` 就直接 return」的前置闸，配合 `imageGen` 兜底，配置一空就整轮跳过。
+  现在由 `resolveModel` 判断，启动日志打印「模型来源=跟随群会话模型 / 指定模型 x/y」，真缺项会明确告警。
+- 移除 `imageGen` 端点兜底：生图接口不是聊天接口，语义本就不对。
 
 ### 要求
 
@@ -30,7 +42,8 @@
 
 - `test/test-client.mjs` 从 32 项扩到 79 项：四档标签、二级标签、字段分组隔离、底栏常驻，
   外加一条**字段覆盖守卫**——schema 里可配置的字段若没出现在设置页就判失败（上游新增字段不会再被静默漏掉）。
-- 全套 18 个套件 / 675 项通过。
+- `test/test-proactive.mjs` 从 42 项扩到 49 项（来源解析：跟随会话 / 显式优先 / 只配一半 / 空白串 / 缺项报告）。
+- 全套 18 个套件 / 682 项通过。
 
 ## 0.10.1 —— 主动发言不再对同一件事重复回复
 

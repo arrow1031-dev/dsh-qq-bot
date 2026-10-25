@@ -2,7 +2,7 @@
 import {
   parseClock, nowMinutes, parseQuietRanges, isQuiet, summarizeSegments,
   normalizeMessages, newerThan, buildDigest, buildPrompt, parseDecision,
-  validateMessage, allowSend, analyzeEvent, topicKey, topicRepeated,
+  validateMessage, allowSend, analyzeEvent, topicKey, topicRepeated, resolveModel,
 } from '../lib/proactive.js';
 
 let pass = 0;
@@ -97,6 +97,31 @@ const manyWay = ev([
   { time: nowSec - 20, userId: '4', text: '带我一个我来打辅助', isSelf: false },
 ]);
 check('事件闸：多人场合可以接', manyWay.ok === true, JSON.stringify(manyWay));
+
+// ---- 模型来源解析：和识图一致，留空跟随群会话模型 ----
+const fromSession = resolveModel({}, { provider: 'uymu-ds', model: 'deepseek-v4-flash' });
+check('来源解析：留空时跟随群会话模型',
+  fromSession.provider === 'uymu-ds' && fromSession.model === 'deepseek-v4-flash' && fromSession.missing.length === 0,
+  JSON.stringify(fromSession));
+
+const noSession = resolveModel({}, null);
+check('来源解析：无会话也没配置 -> 缺 provider 与 model', noSession.missing.length === 2, JSON.stringify(noSession.missing));
+
+const explicit = resolveModel({ provider: 'p1', model: 'm1' }, { provider: 'p2', model: 'm2' });
+check('来源解析：显式 provider/model 优先于会话模型', explicit.provider === 'p1' && explicit.model === 'm1');
+
+const onlyProvider = resolveModel({ provider: 'p1' }, { provider: 'p2', model: 'm2' });
+check('来源解析：只配 provider 时 model 仍跟随会话', onlyProvider.provider === 'p1' && onlyProvider.model === 'm2');
+
+const onlyModel = resolveModel({ model: 'm1' }, { provider: 'p2', model: 'm2' });
+check('来源解析：只配 model 时 provider 仍跟随会话', onlyModel.provider === 'p2' && onlyModel.model === 'm1');
+
+const partial = resolveModel({ provider: 'p1' }, null);
+check('来源解析：缺 model 要单独报出来',
+  partial.missing.length === 1 && partial.missing[0].includes('model'), JSON.stringify(partial.missing));
+
+const blanks = resolveModel({ provider: '  ', model: '  ' }, { provider: 'p2', model: 'm2' });
+check('来源解析：空白字符串视为未配置', blanks.provider === 'p2' && blanks.model === 'm2');
 
 console.log('\n' + pass + ' 通过 / ' + fail + ' 失败');
 process.exit(fail === 0 ? 0 : 1);

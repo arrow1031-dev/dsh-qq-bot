@@ -67,9 +67,9 @@ DSH Agent（默认模型 + preset 人格 + 工具）
 | 会话 id 回退 | `node test/test-session-id.mjs` | 5/5 |
 | 运行时兼容自检 | `node test/test-compat.mjs` | 14/14 |
 | 历史消息鉴权与定向 | `node test/test-history.mjs` | 23/23 |
-| 主动发言 | `node test/test-proactive.mjs` | 42/42 |
+| 主动发言 | `node test/test-proactive.mjs` | 49/49 |
 | 拥有者设置通道 | `node test/test-owner-settings.mjs` | 58/58 |
-| 一键全量 | `node test/run-all.mjs` | **18/18 套件 · 675 项** |
+| 一键全量 | `node test/run-all.mjs` | **18/18 套件 · 682 项** |
 `test-plugin.mjs` 用假 ctx 加载真正的 `lib/index.js` + 真适配器 + 零依赖 OneBot 模拟器，跑通完整链路（无需 DSH / QQ / 网络）。
 
 ## 二、快速开始
@@ -284,9 +284,8 @@ Agent 会话的工作目录**不需要任何配置**：插件读取 DSH 官方�
       eventGuard: true            # 事件去重：跳过过气事件 / 只有应答的插话 / 刚聊过的话题
       staleMinutes: 15            # 最新消息超过这么久视为事件已过气，不接话
       topicCooldownMinutes: 120   # 同一话题在这么久内不再重复
-      baseUrl: ''                 # OpenAI 兼容；留空 = 用生图接口
-      apiKey: ''                  # 留空 = 用生图 key / IMAGE_API_KEY
-      model: ''                   # 例如 doubao-seed-2.0-lite
+      provider: ''                # 留空 = 跟随群会话模型（走 DSH 已配置的渠道，零密钥）
+      model: ''                   # 留空 = 跟随群会话模型；设置页是下拉，同一份模型目录
       maxChars: 120               # 单条最大字数
       interests: ''               # 话题偏好（可空；接什么仍由模型决定）
       dryRun: false               # 演练：只记日志不发送
@@ -573,7 +572,7 @@ node test/test-imagegen.mjs   # 生图引擎：重试 / 轮询 / 响应解析（
 node test/test-session-id.mjs # 会话 id 回退（5 项）
 node test/test-compat.mjs     # 运行时兼容自检（14 项）
 node test/test-history.mjs    # 历史消息鉴权与定向（23 项）
-node test/test-proactive.mjs  # 主动发言（42 项）
+node test/test-proactive.mjs  # 主动发言（49 项）
 node test/run-all.mjs         # 一键全量（18 套件）
 ```
 
@@ -738,7 +737,10 @@ AI 生成内容声明见 [AI-DISCLOSURE.md](AI-DISCLOSURE.md)，**使用前请�
 - 只有 `enabled: true` **且** `groups` 显式列了群号才生效；留空 = 完全不跑。
 - 免打扰时段 `quietHours`、每小时 / 每天上限、两次发言最小间隔会先拦一道；不足 `minNewMessages` 条新消息则不进入判断。
 - 模型返回 `speak=false` 就安静待着；不会 `` 人、不发链接；`dryRun: true` 只记日志，方便先观察。
-- 判断走 OpenAI 兼容接口（`baseUrl` / `model` / `apiKey`，留空复用生图的配置），不依赖 DSH 会话模型。
+- **判断用哪个模型**：和识图完全一条路——都走 `ctx.llm.stream()`。`provider` / `model` 留空就**跟随该群会话的模型**，
+  零密钥、不需要另配端点；设置页里两项都是**下拉**（provider 列出 DSH 的 provider，model 跟随 provider 列模型），
+  想用便宜模型就显式选一个。群里还没有会话时按全局 agent preset 建同一条会话再取，不会因为「还没人说话」直接失败。
+  启动日志会打出「模型来源=跟随群会话模型 / 指定模型 x/y」；配置不全时明确告警，不会静默不发言。
 - **事件去重（`eventGuard`，默认开）**：模型很容易对一件早就聊完的事再回一次。开着的效果：
   - 最新消息超过 `staleMinutes` 分钟（默认 15）就当你已经错过接话窗口，不接；
   - 最新一条只是「行」「OK」这类应答（短、且不是提问）就不插话；

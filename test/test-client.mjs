@@ -378,17 +378,19 @@ try {
   check('全局人格说明提到主动发言会复用', capDialogueJoined.includes('主动发言未单独设人设时也会复用这里'), capDialogueJoined.slice(0, 200));
 
   // 第 6 项：三处 key 的回退链与独立性
-  check('主动发言 key 写明完整回退链', capDialogueJoined.includes('留空回退链：生图「API key」→ 下面「判断用 key 的环境变量名」'), capDialogueJoined.slice(0, 240));
-  check('生图 key 说明会被主动发言复用', capJoined.includes('主动发言的判断 key 留空时也复用这里'));
+  check('主动发言 provider 是模型目录下拉（留空=会话模型）', capDialogueJoined.includes('（留空 = 会话模型）'), capDialogueJoined.slice(0, 240));
+  check('生图 key 说明不再给主动发言兜底', capJoined.includes('不再给主动发言兜底'), capJoined.slice(0, 240));
   check('搜索 key 声明与生图/主动发言互不影响', capRetrievalJoined.includes('与生图 / 主动发言的 key 互不影响'), capRetrievalJoined.slice(0, 200));
 
   // 第 8 项：视觉留空 = 会话模型的风险提示
   check('视觉 provider 标注会话模型不一定支持图片', capJoined.includes('会话模型不一定支持图片'), capJoined.slice(0, 200));
   check('视觉 model 说明留空时会探测并回报可读错误', capJoined.includes('它会先探测是否支持图片'), capJoined.slice(0, 200));
 
-  console.log('\n4d. 审查补齐的字段（OneBot 12 接入方式 / 主动发言 key 环境变量与超时）');
-  check('对话与人格页含「判断用 key 的环境变量名」',
-    capDialogueJoined.includes('判断用 key 的环境变量名'), capDialogueJoined.slice(0, 240));
+  console.log('\n4d. 审查补齐的字段（OneBot 12 接入方式 / 主动发言模型下拉与超时）');
+  check('主动发言 model 跟随 provider 下拉且未选时禁用',
+    capDialogueJoined.includes('留空 = 跟随会话模型；想指定模型，先在上面的 provider 里选一个'), capDialogueJoined.slice(0, 260));
+  check('主动发言不再出现自定义端点三件套',
+    !capDialogueJoined.includes('判断用接口地址') && !capDialogueJoined.includes('判断用 API key'), capDialogueJoined.slice(0, 260));
   check('对话与人格页含「判断请求超时」',
     capDialogueJoined.includes('判断请求超时（毫秒）'), capDialogueJoined.slice(0, 240));
 
