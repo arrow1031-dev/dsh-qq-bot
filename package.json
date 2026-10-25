@@ -2,6 +2,10 @@
   "name": "dsh-qq-bot",
   "version": "0.10.1",
   "description": "把 QQ 接到 DSH Agent 的插件（社区化维护）：经 NapCat / OneBot 11 收发消息，每个 QQ 会话一个 DSH Agent。",
+  "meta": {
+    "title": "QQ 机器人",
+    "description": "把 QQ 接进 DSH：qqbot / qqgroup / qq_history 管收发与群管理，qq_draw / qq_imgsearch / qq_websearch / qq_webfetch 管绘图、搜图与联网抓取，qqconfig 让拥有者在私聊里改设置。"
+  },
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -9,7 +13,8 @@
     "./adapter": "./lib/onebot-adapter.mjs",
     "./client": {
       "default": "./lib/client.js"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "lib",
