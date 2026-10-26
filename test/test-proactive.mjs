@@ -1,7 +1,7 @@
 // 主动发言：时间窗 / 消息清洗 / 摘要 / 提示词 / 决策解析 / 发言校验 / 频率闸。
 import {
   parseClock, nowMinutes, parseQuietRanges, isQuiet, summarizeSegments,
-  normalizeMessages, newerThan, buildDigest, buildPrompt, parseDecision,
+  normalizeMessages, newerThan, buildDigest, buildPrompt, parseDecision, runSpeakStage,
   validateMessage, allowSend, analyzeEvent, topicKey, topicRepeated, resolveStageModels, buildSpeakPrompt, resolveModel,
 } from '../lib/proactive.js';
 
@@ -131,8 +131,10 @@ check('两段式：默认判断与发言同源', single.judge.provider === 'p1' 
 const both = resolveStageModels({ provider: 'p1', model: 'm1', speakModel: 'm2' }, null);
 check('两段式：配了 speakModel 才启用', both.twoStage === true && both.speak.model === 'm2' && both.judge.model === 'm1');
 check('两段式：发言沿用判断的 provider', both.speak.provider === 'p1');
-const split = resolveStageModels({ judgeProvider: 'jp', judgeModel: 'jm', speakProvider: 'sp', speakModel: 'sm' }, null);
-check('两段式：判断/发言完全独立', split.judge.provider === 'jp' && split.judge.model === 'jm' && split.speak.provider === 'sp' && split.speak.model === 'sm');
+const split = resolveStageModels({ provider: 'jp', model: 'jm', speakProvider: 'sp', speakModel: 'sm' }, null);
+check('两段式：判断沿用 provider/model、发言独立', split.judge.provider === 'jp' && split.judge.model === 'jm' && split.speak.provider === 'sp' && split.speak.model === 'sm');
+const aliasCheck = resolveStageModels({ judgeProvider: 'x1', judgeModel: 'x2', provider: 'p1', model: 'm1' }, null);
+check('两段式：judge* 已不再参与解析（判 read 只认 provider/model）', aliasCheck.judge.provider === 'p1' && aliasCheck.judge.model === 'm1');
 const sessionStage = resolveStageModels({}, { provider: 'sp0', model: 'sm0' });
 check('两段式：留空跟随群会话模型', sessionStage.judge.provider === 'sp0' && sessionStage.judge.model === 'sm0');
 const missing = resolveStageModels({ speakModel: 'm2' }, null);
@@ -141,6 +143,40 @@ const speakPromptText = buildSpeakPrompt({ persona: '一只猫娘', digest: '[10
 check('发言提示词：带人设/话题/字数', speakPromptText.includes('一只猫娘') && speakPromptText.includes('开黑') && speakPromptText.includes('60'));
 check('发言提示词：要求只输出正文', speakPromptText.includes('只输出这句话本身') && speakPromptText.includes('不要输出 JSON'));
 check('发言提示词：禁止编造具体事实', speakPromptText.includes('不要编造具体事实') && speakPromptText.includes('只使用上面聊天记录里的信息'));
+
+// ---- 发言阶段胶水：重试 → 全被拦 → 回退 → 放弃 ----
+const ok = (text) => ({ ok: true, reason: '', text });
+const bad = (reason) => ({ ok: false, reason: reason || 'blocked', text: '' });
+const seqStage = await runSpeakStage({
+  call: async (i) => (i === 0 ? 'first' : 'second'),
+  validate: (raw) => (raw === 'second' ? ok('第二次通过') : bad('too-long')),
+  attempts: 2,
+  fallback: { enabled: true, ok: true, text: '判断正文' },
+});
+check('发言阶段：第一次被拦、第二次通过就用第二次', seqStage.used === 'speak' && seqStage.text === '第二次通过' && seqStage.attempts === 2);
+const allBlocked = await runSpeakStage({
+  call: async () => 'x',
+  validate: () => bad('too-long'),
+  attempts: 2,
+  fallback: { enabled: true, ok: true, text: '判断正文' },
+});
+check('发言阶段：两次都被拦则回退判断正文', allBlocked.used === 'fallback' && allBlocked.text === '判断正文' && allBlocked.attempts === 2);
+const noFallback = await runSpeakStage({
+  call: async () => 'x',
+  validate: () => bad('too-long'),
+  attempts: 2,
+  fallback: { enabled: false, ok: true, text: '判断正文' },
+});
+check('发言阶段：关闭回退时不出声', noFallback.used === 'none' && noFallback.text === '');
+let blockedCount = 0;
+const badJudge = await runSpeakStage({
+  call: async () => 'x',
+  validate: () => bad('too-long'),
+  attempts: 2,
+  fallback: { enabled: true, ok: false, text: '' },
+  onBlocked: () => { blockedCount += 1; },
+});
+check('发言阶段：判断正文不可用时不回退、且逐次记录被拦', badJudge.used === 'none' && badJudge.text === '' && blockedCount === 2);
 
 console.log('\n' + pass + ' 通过 / ' + fail + ' 失败');
 process.exit(fail === 0 ? 0 : 1);

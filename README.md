@@ -70,9 +70,9 @@ DSH Agent（默认模型 + preset 人格 + 工具）
 | 会话 id 回退 | `node test/test-session-id.mjs` | 5/5 |
 | 运行时兼容自检 | `node test/test-compat.mjs` | 14/14 |
 | 历史消息鉴权与定向 | `node test/test-history.mjs` | 23/23 |
-| 主动发言 | `node test/test-proactive.mjs` | 60/60 |
+| 主动发言 | `node test/test-proactive.mjs` | 65/65 |
 | 拥有者设置通道 | `node test/test-owner-settings.mjs` | 58/58 |
-| 一键全量 | `node test/run-all.mjs` | **18/18 套件 · 696 项** |
+| 一键全量 | `node test/run-all.mjs` | **18/18 套件 · 701 项** |
 `test-plugin.mjs` 用假 ctx 加载真正的 `lib/index.js` + 真适配器 + 零依赖 OneBot 模拟器，跑通完整链路（无需 DSH / QQ / 网络）。
 
 ## 二、快速开始
@@ -205,8 +205,9 @@ dsh plugin --profile web add ./dsh-qq-bot-<版本号>.tgz
 - 改完点「保存」；**连接方式那几项**（模式/地址/token）保存后会自动重启适配器，其它项下一条消息生效。
 - 类型映射：布尔是勾选框；白名单是逗号分隔的文本框；连接方式是下拉框。
 - **主动发言可以分用两个模型（可选）**：默认单段——判断模型在同一次 JSON 里把话也写出来。填了 `proactive.speakModel`
-  才切成两段：判断只要稳出 `{speak, topic}`，正文交给发言模型单独写（判断挑便宜快的、发言挑文风合适的，
-  不用逼一个模型既守 JSON 又要有文采）。不填就走原来的单段路径，日志里也不多打东西。详见下面「主动发言（可选）」。
+  才切成两段：判断沿用上面的 provider / model（只要稳出 `{speak, topic}`），正文交给发言模型单独写（判断挑便宜快的、发言挑文风合适的，
+  不用逼一个模型既守 JSON 又要有文采）。不填就走原来的单段路径，日志里也不多打东西。
+  两段式每次接话是 **2 次模型调用**（发言阶段重试的话最多 4 次），成本按两次算。详见下面「主动发言（可选）」。
 - **配置落点（本插件要求 DSH 0.2.0-rc.2 起）**：插件把自己的 `Config` schema 交给 DSH 当设置表单，界面上的改动由 DSH
   写进 **profile 的 `cordis.patch.yml`**（也就是下面「方式二」里那个文件）；0.1.6 时代的独立
   `settings.yaml` 文档已经不存在了。
@@ -313,8 +314,6 @@ Agent 会话的工作目录**不需要任何配置**：插件读取 DSH 官方�
       topicCooldownMinutes: 120   # 同一话题在这么久内不再重复
       provider: ''                # 留空 = 跟随群会话模型（走 DSH 已配置的渠道，零密钥）
       model: ''                   # 留空 = 跟随群会话模型；设置页是下拉，同一份模型目录
-      judgeProvider: ''           # 判断阶段 provider（留空 = 用上面的 provider）
-      judgeModel: ''              # 判断阶段模型（留空 = 用上面的 model）
       speakProvider: ''           # 发言阶段 provider（留空 = 与判断阶段相同）
       speakModel: ''              # 发言阶段模型（留空 = 单段模式；填了才启用两段式）
       speakFallback: true         # 两段式下发言失败时，回退用判断模型给的正文
@@ -604,7 +603,7 @@ node test/test-imagegen.mjs   # 生图引擎：重试 / 轮询 / 响应解析（
 node test/test-session-id.mjs # 会话 id 回退（5 项）
 node test/test-compat.mjs     # 运行时兼容自检（14 项）
 node test/test-history.mjs    # 历史消息鉴权与定向（23 项）
-node test/test-proactive.mjs  # 主动发言（60 项）
+node test/test-proactive.mjs  # 主动发言（65 项）
 node test/run-all.mjs         # 一键全量（18 套件）
 ```
 
@@ -772,6 +771,7 @@ AI 生成内容声明见 [AI-DISCLOSURE.md](AI-DISCLOSURE.md)，**使用前请�
   填了 `speakModel`（或 `speakProvider`）才切成两段：判断阶段只出 `{speak, topic}`，正文交给发言模型单独写——
   判断挑便宜快的、发言挑文风更合口味的，不用逼一个模型既守 JSON 又要有文采。发言阶段报错或写不出可用正文时，
   `speakFallback`（默认开）回退到判断模型给的句子，不会因为第二段挂了就不说话；两项都不填时行为与以前完全一致。
+  注意**判断阶段仍在写正文**（那句 `message` 就是回退素材），精简 judge 提示词时别把它删了，否则回退会静默失效。
 - 模型返回 `speak=false` 就安静待着；不会 `@` 人、不发链接；`dryRun: true` 只记日志，方便先观察。
 - **提示词两道防编造约束**：判断阶段的 `topic` 只能来自聊天记录里出现过的事（没得接就 `false`），发言阶段只用记录里的信息、不编造具体事实。
   这条是生产上真发出去一条「自编经历」之后补的——模型编造是概率性的，约束只压概率，消不掉。
