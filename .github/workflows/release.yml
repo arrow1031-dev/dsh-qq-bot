@@ -11,6 +11,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write
 
 jobs:
   release:
@@ -40,6 +41,10 @@ jobs:
         run: |
           npm install
           npm test
+
+      - name: 发布到 npm（Trusted Publishing，无长期 token）
+        if: steps.check.outputs.skip == 'false'
+        run: npm publish --provenance --access public
 
       - name: 取「首次引入当前版本号」的 commit 内容作为 Release 正文
         if: steps.check.outputs.skip == 'false'
