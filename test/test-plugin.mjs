@@ -27,7 +27,12 @@ const PKG_ROOT = path.join(here, '..');
 // 装到 DSH profile 之后，@deepseek-ai/dsh-tools 由 DSH 运行时解析。这里允许用
 // DSH_PROFILE_MODULES 显式指向 profile 的 node_modules 来复现那种布局；
 // 解析不到就跳过依赖宿主服务的断言（裸克隆照样跑）。
-const PROFILE_MODULES = process.env.DSH_PROFILE_MODULES
+// 候选目录按顺序试：显式环境变量 > profile 的 node_modules > DSH 自己的安装目录。
+// 最后一项很重要：没有它，本地跑永远跳过工具注册断言，工具数量从 7 漂到 9 也没人发现。
+const DSH_INSTALL_MODULES = path.join('/usr/local/lib/node_modules/@deepseek-ai/dsh', 'node_modules');
+const PROFILE_MODULES = [process.env.DSH_PROFILE_MODULES,
+  path.join(process.env.DSH_HOME ?? path.join(os.homedir(), '.dsh'), 'profiles', 'node_modules'),
+  DSH_INSTALL_MODULES].filter((p) => typeof p === 'string' && p !== '' && fs.existsSync(path.join(p, '@deepseek-ai', 'dsh-tools')))[0]
   ?? path.join(process.env.DSH_HOME ?? path.join(os.homedir(), '.dsh'), 'profiles', 'node_modules');
 
 let failures = 0;
@@ -55,11 +60,19 @@ async function waitFor(fn, timeoutMs, label) {
 }
 
 // ---- 临时软链：模拟「装进 profile 之后」的解析位置 ----
-const linkPath = path.join(PKG_ROOT, 'node_modules');
+// 整包 node_modules 已经在（schemastery 等），所以只给 dsh-tools 单独建一个链接；
+// 以前整目录建链的写法在已有 node_modules 时永远不落，导致工具断言永远被跳过。
+const linkPath = path.join(PKG_ROOT, 'node_modules', '@deepseek-ai', 'dsh-tools');
 let createdLink = false;
-if (!fs.existsSync(linkPath) && fs.existsSync(PROFILE_MODULES)) {
-  fs.symlinkSync(PROFILE_MODULES, linkPath, process.platform === 'win32' ? 'junction' : 'dir');
-  createdLink = true;
+if (!fs.existsSync(linkPath)) {
+  const linkTarget = path.join(PROFILE_MODULES, '@deepseek-ai', 'dsh-tools');
+  if (fs.existsSync(linkTarget)) {
+    try {
+      fs.mkdirSync(path.dirname(linkPath), { recursive: true });
+      fs.symlinkSync(linkTarget, linkPath, process.platform === 'win32' ? 'junction' : 'dir');
+      createdLink = true;
+    } catch (error) { /* 建不出就照旧跳过 */ }
+  }
 }
 // 插件现在静态 import @deepseek-ai/schemastery（Config schema 必需）。
 try { await import.meta.resolve('@deepseek-ai/schemastery'); }
@@ -200,6 +213,9 @@ const ctx = {
   timeout(cb, delay) { const t = setTimeout(cb, delay); return () => clearTimeout(t); },
   effect(fn) { const d = fn(); if (typeof d === 'function') disposers.push(d); return () => {}; },
   tools: { register(tool) { registeredTools.push(tool); return () => {}; } },
+  // 0.2 起宿主用 ctx.get('tools') 取工具服务（Guard 要求）；mock 不实现的话会被当成
+  // 「服务还没就绪」，工具注册走 inject 分支，registeredTools 永远是空的。
+  get(name) { return name === 'tools' ? this.tools : undefined; },
   // 图片视觉桩：saveImage 返回假 ref；resolveModelInfo 返回能力；stream 产出识别文本。
   attachments: {
     async saveImage({ data, mediaType }) {
@@ -314,7 +330,13 @@ try {
   if (hasDshTools !== true) {
     check('（跳过）工具注册需 @deepseek-ai/dsh-tools；路由/回复断言不受影响', true);
   } else {
-    check('注册了 qqbot + qqgroup + qq_websearch + qq_webfetch + qq_imgsearch + qq_history + qqauth 七个工具', registeredTools.length === 7, String(registeredTools.length));
+    const EXPECTED_TOOLS = ['qqbot', 'qqconfig', 'qqgroup', 'qq_websearch', 'qq_webfetch', 'qq_imgsearch', 'qq_history', 'qq_draw', 'qqauth'];
+    check('注册了 ' + EXPECTED_TOOLS.length + ' 个工具（qqbot / qqconfig / qqgroup / qq_websearch / qq_webfetch / qq_imgsearch / qq_history / qq_draw / qqauth）',
+      registeredTools.length === EXPECTED_TOOLS.length, String(registeredTools.length));
+    check('工具名与预期完全一致', (() => {
+      const names = registeredTools.map((t) => t.name).slice().sort();
+      return JSON.stringify(names) === JSON.stringify(EXPECTED_TOOLS.slice().sort());
+    })(), JSON.stringify(registeredTools.map((t) => t.name)));
     check('工具名含 qqbot / qqgroup / qq_websearch / qq_history / qqauth', (() => { const names = registeredTools.map((t) => t.name); return names.includes('qqauth'); })());
     check('工具名分别是 qqbot / qqgroup / qq_websearch / qq_history',
       (() => { const names = registeredTools.map((t) => t.name); return names.includes('qqbot') && names.includes('qqgroup') && names.includes('qq_websearch') && names.includes('qq_history'); })(),
@@ -353,7 +375,8 @@ try {
   {
     const ownerAgent = agents.get('qqbot-group-33333');
     const touched = ownerAgent === undefined ? 0 : (ownerAgent.restricts.length + ownerAgent.registers.length);
-    check('会话创建时对高危编排工具做过 deny / 遮蔽（不再静默失败）', touched > 0, JSON.stringify({ restricts: ownerAgent === undefined ? -1 : ownerAgent.restricts.length, registers: ownerAgent === undefined ? -1 : ownerAgent.registers.length }));
+    // 0.12 起接管只在流程授权开启时发生：关着的时候必须与 0.11 完全一致（既不遮蔽也不摘除）。
+    check('流程授权关着时不动工具面（0.11 行为）', touched === 0, JSON.stringify({ restricts: ownerAgent === undefined ? -1 : ownerAgent.restricts.length, registers: ownerAgent === undefined ? -1 : ownerAgent.registers.length }));
   }
   console.log('\n4. 群里没 @ 机器人 -> 忽略');
   const before = mock.sent.length;
@@ -855,7 +878,8 @@ try {
   const status = hasDshTools === true ? await tool.execute({ action: 'status' }, {}) : null;
   if (status !== null) {
     check('status 报告已连接', status.connected === true);
-    check('status 报告 1 个会话', status.conversations.length === 1, JSON.stringify(status.conversations));
+    check('status 报告当前会话（至少含 group-33333）',
+      status.conversations.some((c) => c.conversation === 'group-33333'), JSON.stringify(status.conversations));
     check('status 里有统计计数', status.stats.accepted >= 1 && status.stats.replies >= 1, JSON.stringify(status.stats));
   }
   if (status === null) check('（跳过）status 动作需要 dsh-tools', true);

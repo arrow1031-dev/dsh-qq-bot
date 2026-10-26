@@ -55,12 +55,12 @@ DSH Agent（默认每个 QQ 会话一个）
 | `lib/imagegen.js` | 生图：OpenAI 兼容 `/images/generations`，含重试与任务轮询 | `generateImage` `parseImagePayload` | `index.js`（qq_draw） |
 | `lib/proactive.js` | 主动发言纯逻辑：时间窗、消息清洗、提示词、决策解析、频率闸、模型解析（含可选两段式） | `parseClock` `buildPrompt` `parseDecision` `allowSend` `resolveModel` `resolveStageModels` `buildSpeakPrompt` `runSpeakStage` | `index.js`（模型请求走 `ctx.llm.stream()`，经 DSH 已配置渠道，0.11 起） |
 | `lib/history-auth.js` | 历史消息的会话定向与鉴权（纯逻辑） | `resolveHistoryTarget` `judgeHistoryAccess` `buildHistoryRequest` | `tools.js`（qq_history） |
-| `lib/totp.js` | （0.12.0 新增模块） | — | — |
-| `lib/totp-cli.mjs` | （0.12.0 新增模块） | — | — |
-| `lib/qr.js` | （0.12.0 新增模块） | — | — |
-| `lib/flow-auth.js` | （0.12.0 新增模块） | — | — |
-| `lib/flow-store.js` | （0.12.0 新增模块） | — | — |
-| `lib/flow-commands.js` | （0.12.0 新增模块） | — | — |
+| `lib/totp.js` | 零依赖 TOTP/HOTP 与恢复码（RFC 4226 / 6238、base32 容错、scrypt 哈希、弱密钥拒绝） | `generateSecret` `hotp` `totp` `totpVerify` `generateBackupCodes` `hashBackupCode` `verifyBackupCode` `otpauthUri` | `flow-auth.js`、`totp-cli.mjs`、`index.js`（/auth） |
+| `lib/totp-cli.mjs` | 终端绑定：打印 base32 secret / otpauth URI / 终端二维码 / 恢复码（密钥不经 QQ） | —（命令行入口） | 运维手动执行 |
+| `lib/qr.js` | 自研二维码编码器（字节模式、纠错等级 M、版本 1..9），零依赖 | `encode` `chooseVersion` `toTerminal` `MAX_VERSION` | `totp-cli.mjs`、`lib/client.js`（浏览器版同算法副本） |
+| `lib/flow-auth.js` | 授权状态机 + 闸门：申请 / 验码 / grant / 一次性消费 / 连错锁定 / 审计 | `createFlowAuth` `createFlowGate` | `index.js`、`session.js` |
+| `lib/flow-store.js` | 流程脚本存取：名字白名单、sha256、路径穿越与覆盖防护 | `createFlowStore` `isValidFlowName` `sha256` | `index.js`（/flow 指令） |
+| `lib/flow-commands.js` | `/auth` `/flow` 文本解析、拦截判定、打包输入归一化、帮助文案 | `parseAuthCommand` `parseFlowCommand` `flowInterceptKind` `artifactInputLines` `FLOW_HELP` | `index.js`、`session.js` |
 | `lib/compat.js` | DSH 版本兼容自检（范围只维护两个常量） | `SUPPORT_FLOOR` `SUPPORT_CEILING` `compatibilityInfo` | `index.js` |
 | `lib/bridge/ws.mjs` | 手写 RFC 6455：帧编解码、正向/反向 WS、链路集合、指数退避重连 | `connectForward` `startReverseServer` `createLinkSet` `decodeFrames` | 五个适配器 |
 | `lib/bridge/stdio.mjs` | stdio 帧工具：发射器、发送队列（限速）、stdin 命令循环、`postJson` | `createEmitter` `createSendQueue` `installStdin` `postJson` | 五个适配器 |
@@ -74,7 +74,7 @@ DSH Agent（默认每个 QQ 会话一个）
 
 **扩展点**（其余文件基本不用动）：加协议 → 新写 `lib/adapters/<协议>.mjs` + 在 `lib/index.js` 的 `ADAPTER_FILES` 与 `lib/config.js` 加一项；加协议动作 → 改对应适配器的映射表；加 Agent 工具 → 只改 `lib/tools.js`。
 
-**测试与发布**：`test/run-all.mjs` 汇总 **26 个套件**（5 个协议各一套，其余为插件/权限/设置/搜索/生图/历史等），每个协议都自带零依赖假协议端（OneBot 11 的是 `test/mock-onebot.mjs`，其余在各自 `test-adapter-*.mjs` 内）；`npm test` 即跑全部。进 npm 包的只有 `lib/`、`cordis.patch.yml` 与根目录文档（见 `package.json` 的 `files`），`test/`、`examples/` 只在仓库里。
+**测试与发布**：`test/run-all.mjs` 汇总 **27 个套件**（5 个协议各一套，其余为插件/权限/设置/搜索/生图/历史/授权链路等），每个协议都自带零依赖假协议端（OneBot 11 的是 `test/mock-onebot.mjs`，其余在各自 `test-adapter-*.mjs` 内）；`npm test` 即跑全部。进 npm 包的只有 `lib/`、`cordis.patch.yml` 与根目录文档（见 `package.json` 的 `files`），`test/`、`examples/` 只在仓库里。
 
 ## 3. 关键数据流
 

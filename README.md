@@ -60,8 +60,8 @@ DSH Agent（默认模型 + preset 人格 + 工具）
 | Satori 适配器 | `node test/test-adapter-satori.mjs` | 70/70 |
 | Milky 适配器 | `node test/test-adapter-milky.mjs` | 79/79 |
 | QQ 官方适配器 | `node test/test-adapter-qq-official.mjs` | 87/87 |
-| 打包后插件端到端（Host） | `node test/test-plugin.mjs` | 87/87 |
-| 客户端设置页 | `node test/test-client.mjs` | 82/82 |
+| 打包后插件端到端（Host） | `node test/test-plugin.mjs` | 103/103 |
+| 客户端设置页 | `node test/test-client.mjs` | 83/83 |
 | 权限 · 群管理 · 访客工具闸 | `node test/test-admin.mjs` | 32/32 |
 | HTTP / 代理层 | `node test/test-http.mjs` | 17/17 |
 | 配置合并与还原 | `node test/test-config.mjs` | 19/19 |
@@ -78,9 +78,10 @@ DSH Agent（默认模型 + preset 人格 + 工具）
 | 二维码编码器 | `node test/test-qr.mjs` | 18/18 |
 | 流程授权状态机 | `node test/test-flow-auth.mjs` | 24/24 |
 | 流程脚本存取 | `node test/test-flow-store.mjs` | 16/16 |
-| /auth 与 /flow 指令解析 | `node test/test-flow-commands.mjs` | 29/29 |
+| /auth 与 /flow 指令解析 | `node test/test-flow-commands.mjs` | 34/34 |
 | 流程授权闸门 | `node test/test-flow-gate.mjs` | 16/16 |
-| 一键全量 | `node test/run-all.mjs` | **26/26 套件 · 936 项** |
+| 流程授权接线（守卫 + 遮蔽，一次调用一个码） | `node test/test-flow-wiring.mjs` | 14/14 |
+| 一键全量 | `node test/run-all.mjs` | **27/27 套件 · 971 项** |
 `test-plugin.mjs` 用假 ctx 加载真正的 `lib/index.js` + 真适配器 + 零依赖 OneBot 模拟器，跑通完整链路（无需 DSH / QQ / 网络）。
 
 ## 二、快速开始
@@ -434,11 +435,11 @@ Agent 会话的工作目录**不需要任何配置**：插件读取 DSH 官方�
 
 **手机丢了怎么办（可选）**：同样是终端生成，不走 QQ——跑 `node lib/totp-cli.mjs recovery`，它打印盐、8 条一次性恢复码与对应哈希：
 把哈希（逗号分隔）填进设置页 **恢复码哈希**、盐填 **恢复码哈希用的盐**，明文抄在纸上（验完就删）。
-之后在私聊里发 `/auth XXXXX-XXXXX`（字母+数字，和 6 位纯数字动态码靠格式区分）。恢复码也是一次性的：用掉后请到设置页把对应那条哈希删掉——插件不替你改配置。
+之后在私聊里发 `/auth XXXXX-XXXXX`（字母+数字，和 6 位纯数字动态码靠格式区分）。恢复码也是一次性的：用掉后插件会把对应那条哈希从配置里删掉（写盘失败才需要你手动去设置页删，日志里会写一行）。
 
 > 边界：`/auth` 只在**私聊**生效，群里叫不动；撤回只作用于机器人自己发的消息，**动态码那条要你自己撤**；
 > 产物上传依赖协议端支持 `upload_private_file` / `upload_group_file`（NapCat 的私聊上传实测可用，群文件上传未实测，其余协议端未逐一验证；失败会回一条带本地路径的说明）；
-> 产物按 mtime 扫会话工作区：如果会话直接挂在 `QQ_msg` 根目录，同一时间窗里别的会话的新文件也会被扫进来（数量与体积受 `flow.maxFiles` / `flow.maxBytes` 限制）。
+> 产物只扫**这个会话自己的目录**：开关打开后新会话会独占 `QQ_msg/<会话id>` 当工作目录（没开的时候仍共用 `QQ_msg` 根，行为与 0.11 一致）；数量与体积受 `flow.maxFiles` / `flow.maxBytes` 限制。
 
 ### 非拥有者不使用 DSH 内部功能：执行级工具闸
 
@@ -517,7 +518,7 @@ Agent 会话的工作目录**不需要任何配置**：插件读取 DSH 官方�
 
 ## 六、Agent 能用的工具
 
-插件向 DSH 注册 8 个工具（访客只能看到 `auth.guestToolAllow` 里的那几个）。先看通用的 `qqbot`：
+插件向 DSH 注册 9 个工具（访客只能看到 `auth.guestToolAllow` 里的那几个）。先看通用的 `qqbot`：
 
 - `{action:'status'}` —— 连接状态、模式、适配器 pid/端口、各 QQ 会话的回合数、统计计数
 - `{action:'send', message_type:'group'|'private', target_id:'123', text:'...', image?}` —— 主动发一条 QQ 消息；`image` 传本地图片绝对路径（**只允许 `<QQ_msg>/qq-images` 目录内**），插件转 base64 后与文本一起发出，用于「发自拍 / 自画像 / 刚生成的图」这类场景。
@@ -573,6 +574,16 @@ Agent 会话的工作目录**不需要任何配置**：插件读取 DSH 官方�
 - 异步供应商：响应里是 `task_id` 时按 `pollIntervalMs` 轮询（依次试 `.../images/generations/<id>`、`.../images/tasks/<id>`、`.../tasks/<id>`），最多 `maxPolls` 次；关掉 `poll` 就只尝试一次。
 - 图片落盘：`<QQ_msg>/qq-images/gen/`；`qq_draw` 不在访客默认白名单（会花钱），要放开就自己加到 `auth.guestToolAllow`。
 - 接口约定：OpenAI 兼容 `POST <baseUrl>/images/generations`，请求体 `{model, prompt, n:1, size?, image?}`，返回 `data[0].url` 或 `data[0].b64_json`（实测 `seedream-5.0-lite` 返回 url、约 40 秒）。
+
+### qqauth（流程授权的两个动作）
+
+只在**拥有者私聊**里可用，是「高级 → 流程授权」在模型侧的入口。开关没打开时调用会被直接拒绝。
+
+- `{action:'request', purpose?}` —— 申请一次授权：机器人私聊发一条提示，主人回 `/auth 6位动态码` 之后，被拦下的那一轮自动续跑。
+- `{action:'status'}` —— 看当前状态：开关、是否已绑定、待授权请求、未用授权（不打印密钥）。
+
+被闸门拦下的工具调用会收到可读文案（要哪个工具、还剩多久），模型按提示走 `request` 即可；
+授权一次只管一次调用、默认 30 秒内有效，用掉即弃。
 
 ### 人格（人设）也在设置里换
 
@@ -630,7 +641,7 @@ npm install
 装好之后裸克隆即可运行：需要 DSH 运行时才能成立的少数断言（动态工具注册、qqgroup 工具路径）
 会自动跳过，而不是判失败；想看全，把 `DSH_PROFILE_MODULES` 指向一个装了 DSH 运行时的 profile 的
 `node_modules`。
-整套 **936 项**（26 个套件）：
+整套 **971 项**（27 个套件）：
 
 ```sh
 npm test
@@ -648,7 +659,7 @@ node test/test-adapter-milky.mjs        # Milky（79 项）
 node test/test-adapter-qq-official.mjs  # QQ 官方（87 项）
 
 # 插件本体（假 ctx + 真适配器 + 假协议端）
-node test/test-plugin.mjs     # Host 半边（87 项，含 Config 契约与热更新）
+node test/test-plugin.mjs     # Host 半边（103 项，含 Config 契约与热更新、9 个工具）
 node test/test-client.mjs     # 客户端设置页（83 项）
 node test/test-admin.mjs      # 权限·群管理·访客工具闸（32 项）
 node test/test-http.mjs       # HTTP / 代理隧道（17 项）
@@ -666,9 +677,10 @@ node test/test-totp-cli.mjs   # 终端绑定（secret / otpauth URI / 二维码�
 node test/test-qr.mjs         # 二维码编码器（版本/掩码/固定矩阵，18 项）
 node test/test-flow-auth.mjs  # 授权状态机（授权/重放/锁定/过期，24 项）
 node test/test-flow-store.mjs # 流程脚本存取（路径穿越/覆盖保护/sha 校验，16 项）
-node test/test-flow-commands.mjs  # /auth 与 /flow 解析（29 项）
+node test/test-flow-commands.mjs  # /auth 与 /flow 解析（34 项）
 node test/test-flow-gate.mjs  # 工具闸门（放行一次/别人的授权/过期，16 项）
-node test/run-all.mjs         # 一键全量（26 套件）
+node test/test-flow-wiring.mjs # 闸门接线：守卫+遮蔽只吃一个码 / 关着不动工具面（14 项）
+node test/run-all.mjs         # 一键全量（27 套件）
 ```
 
 也可以手动拿假 OneBot 试（端口正好是 NapCat 默认值）：
@@ -706,7 +718,7 @@ AstrBot 是 OneBot 的**消费方**（内置 aiocqhttp 反向 WS 服务端），
 | `lib/adapters/` | 协议适配器：`onebot11` / `onebot12` / `satori` / `milky` / `qq-official`，各自可独立执行 |
 | `lib/owner-settings.js` | 拥有者设置通道：白名单校验、`propose/apply` 两步确认、限流、审计 |
 | `lib/workspace.js` | `QQ_msg` 工作区根解析（index 与 imgsearch 共用，避免 0.9.5 的 ReferenceError） |
-| `lib/tools.js` | 8 个模型工具（qqbot/qqconfig/qqgroup/qq_websearch/qq_webfetch/qq_imgsearch/qq_draw/qq_history）；注册统一走 `registerTool(ctx, make)`（DSH 0.2 契约） |
+| `lib/tools.js` | 9 个模型工具（qqbot/qqconfig/qqgroup/qq_websearch/qq_webfetch/qq_imgsearch/qq_draw/qq_history/qqauth）；注册统一走 `registerTool(ctx, make)`（DSH 0.2 契约） |
 | `lib/admin.js` | 群管理指令、三路权限、动态授权 |
 | `lib/http.js` | fetch + HTTP CONNECT 代理隧道 + 公网地址校验 |
 | `lib/websearch.js` | Tavily / DuckDuckGo / Yandex / Bing / Wikipedia 组合搜索 |
@@ -718,7 +730,7 @@ AstrBot 是 OneBot 的**消费方**（内置 aiocqhttp 反向 WS 服务端），
 | `test/mock-onebot.mjs` | 零依赖 OneBot 11 模拟器（手写 RFC 6455 帧编解码） |
 | `test/test-adapter.mjs` | 正向 WS 适配器回归（19 项） |
 | `test/test-adapter-reverse.mjs` | 反向 WS 适配器回归（12 项） |
-| `test/test-plugin.mjs` | Host 插件端到端（87 项，假 ctx + 真适配器 + Config 契约 + 配置热更新） |
+| `test/test-plugin.mjs` | Host 插件端到端（103 项，假 ctx + 真适配器 + Config 契约 + 配置热更新） |
 | `test/test-client.mjs` | 客户端设置页（83 项，模拟模块加载器 + 最小 React 渲染 + 四档标签/二级分类 + 只写密钥护栏 + 命名空间回退） |
 | `test/test-admin.mjs` | 权限·群管理·访客工具闸专项（32 项；dsh-tools 可解析时另含工具路径断言） |
 | `test/test-http.mjs` | HTTP / 代理隧道（17 项） |
@@ -727,7 +739,7 @@ AstrBot 是 OneBot 的**消费方**（内置 aiocqhttp 反向 WS 服务端），
 | `test/test-qr.mjs` | 二维码编码器（固定矩阵哈希守回归，18 项） |
 | `test/test-flow-auth.mjs` `test-flow-store.mjs` `test-flow-commands.mjs` `test-flow-gate.mjs` | 流程授权链路（24 + 16 + 29 + 16 项） |
 | `test/test-websearch.mjs` | 多引擎搜索结果解析（5 项） |
-| `test/run-all.mjs` | 一键全量（26 套件） |
+| `test/run-all.mjs` | 一键全量（27 套件） |
 | `CONTRIBUTING.md` / `CODE_OF_CONDUCT.md` / `SECURITY.md` | 贡献流程、行为准则、安全报告 |
 | `.github/` | issue / PR 模板、CODEOWNERS |
 | `examples/dynamic-package-host.js` | 同一个桥接的「动态 Cordis Package」版本：不想装包、只想在当前 DSH 进程里临时跑时用 |
@@ -873,7 +885,7 @@ DSH 不允许跨工作区复用同一个会话 id，插件现在的处理是：
 - 闸门：agent.ctx.get('tools').guard(...)，取不到才回退 agent.ctx.tools（0.1.x 形态）。
 
 tools 仍是可选服务：没有它时插件照常收发消息，只是少几个模型工具。
-要求 DSH >= 0.2.0-rc.2；0.2.1-rc.2 与 0.2.1-rc.3 上都实测 8 个工具注册齐全（qqbot / qqconfig / qqgroup / qq_websearch / qq_webfetch / qq_imgsearch / qq_draw / qq_history）。
+要求 DSH >= 0.2.0-rc.2；0.2.1-rc.2 与 0.2.1-rc.3 上都实测 9 个工具注册齐全（qqbot / qqconfig / qqgroup / qq_websearch / qq_webfetch / qq_imgsearch / qq_draw / qq_history / qqauth）。
 
 **版本支持不写死**：插件启动时读取当前实际加载的 DSH 版本并判定，日志形如
 `[dsh-qq-bot] 运行于 DSH 0.2.1-rc.3（在声明支持范围 0.1.7-0 <= v < 0.3.0-0 内）`；
