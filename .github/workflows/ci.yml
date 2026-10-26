@@ -1,7 +1,7 @@
 # CI：push（main）与 PR 自动跑全部测试。
-# 18 套件经 run-all 汇总：adapter / adapter-reverse / plugin / client / admin / http / config /
-# websearch / imagegen / session-id / compat / history / proactive / owner-settings /
-# adapter-onebot12 / adapter-milky / adapter-satori / adapter-qq-official。
+# 19 套件经 run-all 汇总：adapter / adapter-reverse / plugin / client / admin / http / config /
+# websearch / imagegen / session-id / compat / history / proactive / proactive-round /
+# owner-settings / adapter-onebot12 / adapter-milky / adapter-satori / adapter-qq-official。
 #
 # 纯文档改动不触发（README / CHANGELOG / 架构说明 / 许可证等 *.md 与 docs/），
 # 免得改个错别字也跑一轮全量。

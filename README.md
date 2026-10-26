@@ -60,20 +60,20 @@ DSH Agent（默认模型 + preset 人格 + 工具）
 | Satori 适配器 | `node test/test-adapter-satori.mjs` | 70/70 |
 | Milky 适配器 | `node test/test-adapter-milky.mjs` | 79/79 |
 | QQ 官方适配器 | `node test/test-adapter-qq-official.mjs` | 87/87 |
-| 打包后插件端到端（Host） | `node test/test-plugin.mjs` | 80/80 |
+| 打包后插件端到端（Host） | `node test/test-plugin.mjs` | 87/87 |
 | 客户端设置页 | `node test/test-client.mjs` | 82/82 |
 | 权限 · 群管理 · 访客工具闸 | `node test/test-admin.mjs` | 32/32 |
 | HTTP / 代理层 | `node test/test-http.mjs` | 17/17 |
-| 配置合并与还原 | `node test/test-config.mjs` | 17/17 |
+| 配置合并与还原 | `node test/test-config.mjs` | 19/19 |
 | 多引擎搜索结果解析 | `node test/test-websearch.mjs` | 5/5 |
 | 生图引擎 | `node test/test-imagegen.mjs` | 16/16 |
 | 会话 id 回退 | `node test/test-session-id.mjs` | 5/5 |
 | 运行时兼容自检 | `node test/test-compat.mjs` | 14/14 |
 | 历史消息鉴权与定向 | `node test/test-history.mjs` | 23/23 |
-| 主动发言 | `node test/test-proactive.mjs` | 78/78 |
-| 主动发言回合（端到端，不动定时器） | `node test/test-proactive-round.mjs` | 21/21 |
+| 主动发言 | `node test/test-proactive.mjs` | 84/84 |
+| 主动发言回合（端到端，不动定时器） | `node test/test-proactive-round.mjs` | 35/35 |
 | 拥有者设置通道 | `node test/test-owner-settings.mjs` | 58/58 |
-| 一键全量 | `node test/run-all.mjs` | **19/19 套件 · 745 项** |
+| 一键全量 | `node test/run-all.mjs` | **19/19 套件 · 774 项** |
 `test-plugin.mjs` 用假 ctx 加载真正的 `lib/index.js` + 真适配器 + 零依赖 OneBot 模拟器，跑通完整链路（无需 DSH / QQ / 网络）。
 
 ## 二、快速开始
@@ -208,7 +208,11 @@ dsh plugin --profile web add ./dsh-qq-bot-<版本号>.tgz
 - **主动发言可以分用两个模型（可选）**：默认单段——判断模型在同一次 JSON 里把话也写出来。填了 `proactive.speakModel`
   才切成两段：判断沿用上面的 provider / model（只要稳出 `{speak, topic}`），正文交给发言模型单独写（判断挑便宜快的、发言挑文风合适的，
   不用逼一个模型既守 JSON 又要有文采）。不填就走原来的单段路径，日志里也不多打东西。
-  两段式每次接话是 **2 次模型调用**（发言阶段重试的话最多 4 次），成本按两次算。详见下面「主动发言（可选）」。
+  两段式每次接话正常情况下是 **2 次模型调用**（判断 1 + 发言 1）；判断阶段自己最多试 3 次、发言阶段最多试 2 次，所以最坏 5 次。详见下面「主动发言（可选）」。
+- **升级后失效的旧配置会被自动清掉**：DSH 写设置是合并语义（只替换 schema 认识的字段），版本升级删掉的键没人删就会
+  一直躺在 `cordis.patch.yml` 里，既不生效也不会自己消失。插件在启动时、以及每次保存设置后比对一次 schema，
+  把本插件配置里 schema 已不存在的键摘掉再写回；只动本插件自己那一段（id 精确匹配），删掉的键连同旧值会打进日志，
+  想恢复照着日志加回去即可。清理成功会重挂一次插件、适配器断连重连——一次性，不会反复触发。
 - **配置落点（本插件要求 DSH 0.2.0-rc.2 起）**：插件把自己的 `Config` schema 交给 DSH 当设置表单，界面上的改动由 DSH
   写进 **profile 的 `cordis.patch.yml`**（也就是下面「方式二」里那个文件）；0.1.6 时代的独立
   `settings.yaml` 文档已经不存在了。
@@ -577,7 +581,7 @@ npm install
 装好之后裸克隆即可运行：需要 DSH 运行时才能成立的少数断言（动态工具注册、qqgroup 工具路径）
 会自动跳过，而不是判失败；想看全，把 `DSH_PROFILE_MODULES` 指向一个装了 DSH 运行时的 profile 的
 `node_modules`。
-整套 **745 项**（19 个套件）：
+整套 **774 项**（19 个套件）：
 
 ```sh
 npm test
@@ -595,18 +599,19 @@ node test/test-adapter-milky.mjs        # Milky（79 项）
 node test/test-adapter-qq-official.mjs  # QQ 官方（87 项）
 
 # 插件本体（假 ctx + 真适配器 + 假协议端）
-node test/test-plugin.mjs     # Host 半边（80 项，含 Config 契约与热更新）
-node test/test-client.mjs     # 客户端设置页（80 项）
+node test/test-plugin.mjs     # Host 半边（87 项，含 Config 契约与热更新）
+node test/test-client.mjs     # 客户端设置页（82 项）
 node test/test-admin.mjs      # 权限·群管理·访客工具闸（32 项）
 node test/test-http.mjs       # HTTP / 代理隧道（17 项）
-node test/test-config.mjs     # 配置合并与还原（17 项）
+node test/test-config.mjs     # 配置合并与还原（19 项）
 node test/test-websearch.mjs  # 多引擎搜索结果解析（5 项）
 node test/test-imagegen.mjs   # 生图引擎：重试 / 轮询 / 响应解析（16 项）
 node test/test-session-id.mjs # 会话 id 回退（5 项）
 node test/test-compat.mjs     # 运行时兼容自检（14 项）
 node test/test-history.mjs    # 历史消息鉴权与定向（23 项）
-node test/test-proactive.mjs  # 主动发言（78 项）
-node test/test-proactive-round.mjs  # 主动发言回合端到端（21 项）
+node test/test-proactive.mjs  # 主动发言（84 项）
+node test/test-proactive-round.mjs  # 主动发言回合端到端（35 项）
+node test/test-owner-settings.mjs  # 拥有者设置通道（58 项）
 node test/run-all.mjs         # 一键全量（19 套件）
 ```
 
@@ -657,19 +662,19 @@ AstrBot 是 OneBot 的**消费方**（内置 aiocqhttp 反向 WS 服务端），
 | `test/mock-onebot.mjs` | 零依赖 OneBot 11 模拟器（手写 RFC 6455 帧编解码） |
 | `test/test-adapter.mjs` | 正向 WS 适配器回归（19 项） |
 | `test/test-adapter-reverse.mjs` | 反向 WS 适配器回归（12 项） |
-| `test/test-plugin.mjs` | Host 插件端到端（80 项，假 ctx + 真适配器 + Config 契约 + 配置热更新） |
-| `test/test-client.mjs` | 客户端设置页（80 项，模拟模块加载器 + 最小 React 渲染 + 四档标签/二级分类 + 只写密钥护栏 + 命名空间回退） |
+| `test/test-plugin.mjs` | Host 插件端到端（87 项，假 ctx + 真适配器 + Config 契约 + 配置热更新） |
+| `test/test-client.mjs` | 客户端设置页（82 项，模拟模块加载器 + 最小 React 渲染 + 四档标签/二级分类 + 只写密钥护栏 + 命名空间回退） |
 | `test/test-admin.mjs` | 权限·群管理·访客工具闸专项（32 项；dsh-tools 可解析时另含工具路径断言） |
 | `test/test-http.mjs` | HTTP / 代理隧道（17 项） |
-| `test/test-config.mjs` | 配置合并与 volatile 还原（11 项） |
+| `test/test-config.mjs` | 配置合并与 volatile 还原（19 项） |
 | `test/test-websearch.mjs` | 多引擎搜索结果解析（5 项） |
-| `test/run-all.mjs` | 一键全量（8 套件） |
+| `test/run-all.mjs` | 一键全量（19 套件） |
 | `CONTRIBUTING.md` / `CODE_OF_CONDUCT.md` / `SECURITY.md` | 贡献流程、行为准则、安全报告 |
 | `.github/` | issue / PR 模板、CODEOWNERS |
 | `examples/dynamic-package-host.js` | 同一个桥接的「动态 Cordis Package」版本：不想装包、只想在当前 DSH 进程里临时跑时用 |
 | `ARCHITECTURE.md` | **改动指南**（给要 fork 的人）：文件职责、数据流、设计决策原因、分步改动指南、调试手册、术语表 |
 | `AI-DISCLOSURE.md` | AI 生成内容声明、验证情况、**尚未验证清单**、第三方归属、安全免责 |
-| `CHANGELOG.md` | 版本演进（0.1.0 → 0.8.2，含 0.8.0 合并下游分支与 0.8.1 输入框修复） |
+| `CHANGELOG.md` | 版本演进（0.1.0 → 0.11.0，含 0.8.0 合并下游分支与 0.8.1 输入框修复） |
 | `LICENSE` | MIT |
 
 ## 十二、设计说明（踩过的坑）
@@ -722,7 +727,7 @@ MIT，见 [LICENSE](LICENSE)。维护者与贡献者见顶部（维护 [@arrow10
 | --- | --- |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | **改动指南**：分层图、模块职责、关键数据流、设计取舍、已知边界 |
 | [AI-DISCLOSURE.md](AI-DISCLOSURE.md) | AI 生成方式、人类决策点、验证到什么程度、**尚未验证的清单**、第三方归属、安全免责 |
-| [CHANGELOG.md](CHANGELOG.md) | 0.1.0 → 0.10.0 的完整演进 |
+| [CHANGELOG.md](CHANGELOG.md) | 0.1.0 → 0.11.0 的完整演进 |
 
 ### 致谢
 
@@ -766,7 +771,7 @@ AI 生成内容声明见 [AI-DISCLOSURE.md](AI-DISCLOSURE.md)，**使用前请�
 
 ### 主动发言（可选）
 
-默认关闭。打开后按 `proactive.intervalMinutes` 看一次群里最近的消息，由模型自己判断**要不要接、接什么话题**；判断标准写在提示词里（宁可不说话；不接刷屏 / 吵架 / 敏感话题 / 广告 / 看不懂的梗 / 只针对某人的没头没尾对话），发言前还会过一遍长度、链接、``、重复校验。频率、时段、群范围全部由配置控制。
+默认关闭。打开后按 `proactive.intervalMinutes` 看一次群里最近的消息，由模型自己判断**要不要接、接什么话题**；判断标准写在提示词里（宁可不说话；不接刷屏 / 吵架 / 敏感话题 / 广告 / 看不懂的梗 / 只针对某人的没头没尾对话），发言前还会过一遍长度、链接、@、重复校验。频率、时段、群范围全部由配置控制。
 
 - 只有 `enabled: true` **且** `groups` 显式列了群号才生效；留空 = 完全不跑。
 - 免打扰时段 `quietHours`、每小时 / 每天上限、两次发言最小间隔会先拦一道；不足 `minNewMessages` 条新消息则不进入判断。
@@ -776,7 +781,7 @@ AI 生成内容声明见 [AI-DISCLOSURE.md](AI-DISCLOSURE.md)，**使用前请�
   `speakFallback`（默认开）回退到判断模型给的句子，不会因为第二段挂了就不说话；两项都不填时行为与以前完全一致。
   注意**判断阶段仍在写正文**（那句 `message` 就是回退素材），精简 judge 提示词时别把它删了，否则回退会静默失效。
 - **发送前兜底 `requireCjk`（默认关，单段 / 两段都生效）**：正文没有 CJK 字符、且长度超过 12 时判不可用。它治的不是「拒绝语」这个语义，而是「中文群里整句英文」这个结构性异常——模型偶尔会掉回英文拒答模板（形如「Sorry, it looks like I can not chat about this.」）。
-  长度阈值 12 是代码里的常量（`CJK_MIN_LENGTH`）不是配置：正常 ASCII 短回应（666 / 233 / OK / lol / yyds）基本 ≤ 10，整句英文拒绝语基本 ≥ 20，12 是安全中点。CJK 判据用 Unicode 属性转义（Han / Hiragana / Katakana / Hangul），`々` 与扩展 B 区生僻字都算中文。
+  长度按**码点**算（`Array.from(text).length`），一个 emoji 或扩展 B 区生僻字算 1 个字，不会因为 UTF-16 占两个码元被误判超长。长度阈值 12 是代码里的常量（`CJK_MIN_LENGTH`）不是配置：正常 ASCII 短回应（666 / 233 / OK / lol / yyds）基本 ≤ 10，整句英文拒绝语基本 ≥ 20，12 是安全中点。CJK 判据用 Unicode 属性转义（Han / Hiragana / Katakana / Hangul），`々` 与扩展 B 区生僻字都算中文。
 - 模型返回 `speak=false` 就安静待着；不会 `@` 人、不发链接；`dryRun: true` 只记日志，方便先观察。
 - **提示词两道防编造约束**：判断阶段的 `topic` 只能来自聊天记录里出现过的事（没得接就 `false`），发言阶段只用记录里的信息、不编造具体事实。
   这条是生产上真发出去一条「自编经历」之后补的——模型编造是概率性的，约束只压概率，消不掉。

@@ -36,14 +36,14 @@
 
 ### 验证情况
 
-- **自动化测试 18 个套件、628 项，全部通过**（`npm test` = `node test/run-all.mjs`；CI 在 Node 22 / 24 双版本上跑）：
+- **自动化测试 19 个套件、774 项，全部通过**（`npm test` = `node test/run-all.mjs`；CI 在 Node 22 / 24 双版本上跑）：
   - 正向 WebSocket 适配器 19 项 ／ 反向 12 项 ／ OneBot 12 30 项 ／ Satori 70 项 ／ Milky 79 项 ／ QQ 官方 87 项
-  - Host 插件端到端 76 项（假 ctx + 真适配器 + Config 契约 + 配置热更新）
-  - 客户端设置页 32 项 ／ 权限·群管理·访客工具闸 32 项
-  - HTTP·代理隧道 17 项 ／ 配置合并 11 项 ／ 多引擎搜索解析 5 项
+  - Host 插件端到端 87 项（假 ctx + 真适配器 + Config 契约 + 配置热更新 + 废弃配置清理）
+  - 客户端设置页 82 项 ／ 权限·群管理·访客工具闸 32 项
+  - HTTP·代理隧道 17 项 ／ 配置合并 19 项 ／ 多引擎搜索解析 5 项 ／ 运行时兼容自检 14 项
   - 生图引擎 16 项（URL 拼接、响应解析、500/429 重试、4xx 不重试、网络异常重试、task_id 轮询、关闭轮询）
   - 会话 id 作用域回退 5 项（旧工作区会话不删、改用 `-ws<哈希>` 新 id）
-  - 历史消息鉴权 23 项 ／ 主动发言 42 项 ／ 拥有者设置通道 58 项
+  - 历史消息鉴权 23 项 ／ 主动发言 84 项 ／ 主动发言回合端到端 35 项 ／ 拥有者设置通道 58 项
 - 测试对端是项目自带的**零依赖 OneBot 11 模拟器**（`test/mock-onebot.mjs`，手写 RFC 6455 帧编解码），
   **不需要真实 QQ 账号**即可回归。
 - **真机验证**（上述部署环境，证据来自 DSH 端日志，可复现）：
@@ -155,16 +155,16 @@ No source code from third-party projects was copied into this repository.
 | QQ transport | NapCat + OneBot 11 **forward WebSocket** (the plugin connects outbound to a loopback address; nothing is exposed publicly) |
 | Bot account | a real QQ account (via OneBot `get_login_info`), not a simulator |
 | LLM / image APIs | self-hosted OpenAI-compatible relays; **endpoints and keys live only in deployment config and are never committed** |
-| Tools verified | `qqbot` / `qqgroup` / `qq_websearch` / `qq_webfetch` / `qq_imgsearch` / `qq_history` / `qq_draw` — all seven registered |
+| Tools verified | `qqbot` / `qqgroup` / `qq_websearch` / `qq_webfetch` / `qqconfig` / `qq_imgsearch` / `qq_history` / `qq_draw` — all eight registered |
 
 - **Verification:** the browser settings page was **manually confirmed on a real device**.
-  **18 suites / 628 automated checks pass** (`npm test` = `node test/run-all.mjs`; CI runs on Node 22 and 24),
+  **19 suites / 774 automated checks pass** (`npm test` = `node test/run-all.mjs`; CI runs on Node 22 and 24),
   covering the forward/reverse WebSocket adapter, the Host plugin (fake `ctx` + real adapter + Config contract
   + config hot reload), the settings page, the permission/group-management subsystem, HTTP/proxy, multi-engine
   search parsing, the image-gen engine (retry / poll / response parsing) and the session-id workspace fallback.
   The QQ-side peer used in CI is a zero-dependency OneBot 11 simulator bundled in `test/`,
   so **no real QQ account is required** to reproduce the suite.
-- **Observed on the real deployment** (evidence in DSH logs, reproducible): all seven tool registrations;
+- **Observed on the real deployment** (evidence in DSH logs, reproducible): all eight tool registrations;
   `OneBot connected` over the forward WS link; group/private session creation and messaging; group-admin
   commands and the guest tool gate; settings read/write in a real browser; image generation end-to-end
   (one retry then success, `attempts=3, 38s`); config hot reload (adapter restart + reconnect);

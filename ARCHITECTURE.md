@@ -1,4 +1,4 @@
-# 架构（0.10.0）
+# 架构（0.11.0）
 
 把 QQ 消息桥给 DSH Agent：五种聊天协议各有一个**独立子进程适配器**，插件内核只认一套 stdio 帧和一套统一消息段（OneBot 11 风格）。帧的权威定义只有一处：[lib/bridge/CONTRACT.md](lib/bridge/CONTRACT.md)。
 
@@ -41,7 +41,7 @@ DSH Agent（默认每个 QQ 会话一个）
 | 文件 | 职责 | 关键导出 | 使用方 |
 | --- | --- | --- | --- |
 | `lib/index.js` | 装配与监管：适配器生命周期、帧分发、回合/回复/视觉、主动发言、配置热更新 | `Config` `apply` `inject` | DSH（`cordis.patch.yml` 挂载） |
-| `lib/config.js` | 配置契约：默认值 + schemastery schema + 合并/还原 | `Config` `DEFAULTS` `plainConfig` `mergeConfig` | `index.js`、`client.js`（按 schema 渲染） |
+| `lib/config.js` | 配置契约：默认值 + schemastery schema + 合并/还原 + 废弃键识别 | `Config` `DEFAULTS` `plainConfig` `mergeConfig` `staleConfigPaths` | `index.js`、`client.js`（按 schema 渲染） |
 | `lib/client.js` | 浏览器侧设置选项卡（手写 `__ModuleLoader__` bundle，只依赖 react） | —（浏览器模块） | DSH 设置页 |
 | `lib/admin.js` | 三路权限判定（静态名单/动态授权/本群身份）+ 群管理指令 | `createAdmin` → `resolveAuthority` `hasPerm` `handleAdminCommand` `TIER_LABEL` | `index.js`、`tools.js`（qqgroup 鉴权） |
 | `lib/session.js` | 会话条目与路由、访客工具闸、被回复图片收集 | `createSession` → `sessionRoute` `getEntry` `entryForAgent` `collectReplyImageUrls` | `index.js` |
@@ -53,7 +53,7 @@ DSH Agent（默认每个 QQ 会话一个）
 | `lib/imgsearch.js` | 图片反搜：TraceMoe / IQDB 等 + 图床上传 | `runImageSearch` `uploadToHost` | `index.js`（qq_imgsearch） |
 | `lib/moli.js` | Moli 无头浏览器渲染抓取 | `meFindMoli` `meMoliFetchText` | `index.js`（qq_webfetch 的 moli 分支） |
 | `lib/imagegen.js` | 生图：OpenAI 兼容 `/images/generations`，含重试与任务轮询 | `generateImage` `parseImagePayload` | `index.js`（qq_draw） |
-| `lib/proactive.js` | 主动发言纯逻辑：时间窗、消息清洗、提示词、决策解析、频率闸、模型解析（含可选两段式） | `parseClock` `buildPrompt` `parseDecision` `allowSend` `resolveModel` `resolveStageModels` `buildSpeakPrompt` | `index.js`（模型请求走 `ctx.llm.stream()`，经 DSH 已配置渠道，0.11 起） |
+| `lib/proactive.js` | 主动发言纯逻辑：时间窗、消息清洗、提示词、决策解析、频率闸、模型解析（含可选两段式） | `parseClock` `buildPrompt` `parseDecision` `allowSend` `resolveModel` `resolveStageModels` `buildSpeakPrompt` `runSpeakStage` | `index.js`（模型请求走 `ctx.llm.stream()`，经 DSH 已配置渠道，0.11 起） |
 | `lib/history-auth.js` | 历史消息的会话定向与鉴权（纯逻辑） | `resolveHistoryTarget` `judgeHistoryAccess` `buildHistoryRequest` | `tools.js`（qq_history） |
 | `lib/compat.js` | DSH 版本兼容自检（范围只维护两个常量） | `SUPPORT_FLOOR` `SUPPORT_CEILING` `compatibilityInfo` | `index.js` |
 | `lib/bridge/ws.mjs` | 手写 RFC 6455：帧编解码、正向/反向 WS、链路集合、指数退避重连 | `connectForward` `startReverseServer` `createLinkSet` `decodeFrames` | 五个适配器 |
@@ -68,7 +68,7 @@ DSH Agent（默认每个 QQ 会话一个）
 
 **扩展点**（其余文件基本不用动）：加协议 → 新写 `lib/adapters/<协议>.mjs` + 在 `lib/index.js` 的 `ADAPTER_FILES` 与 `lib/config.js` 加一项；加协议动作 → 改对应适配器的映射表；加 Agent 工具 → 只改 `lib/tools.js`。
 
-**测试与发布**：`test/run-all.mjs` 汇总 **18 个套件**（5 个协议各一套，其余为插件/权限/设置/搜索/生图/历史等），每个协议都自带零依赖假协议端（OneBot 11 的是 `test/mock-onebot.mjs`，其余在各自 `test-adapter-*.mjs` 内）；`npm test` 即跑全部。进 npm 包的只有 `lib/`、`cordis.patch.yml` 与根目录文档（见 `package.json` 的 `files`），`test/`、`examples/` 只在仓库里。
+**测试与发布**：`test/run-all.mjs` 汇总 **19 个套件**（5 个协议各一套，其余为插件/权限/设置/搜索/生图/历史等），每个协议都自带零依赖假协议端（OneBot 11 的是 `test/mock-onebot.mjs`，其余在各自 `test-adapter-*.mjs` 内）；`npm test` 即跑全部。进 npm 包的只有 `lib/`、`cordis.patch.yml` 与根目录文档（见 `package.json` 的 `files`），`test/`、`examples/` 只在仓库里。
 
 ## 3. 关键数据流
 
@@ -109,6 +109,21 @@ DSH Agent（默认每个 QQ 会话一个）
 3. 白名单 `SPECS`（群/私聊开关、白名单、回复长度、主动发言…）；密钥、连接参数、`auth.owners` 等按 `DENY_PATHS` 硬拒。
 4. `apply` 前复核 `revision`（期间被别人改过就作废），再 `ctx.settings.update(ns, patch, revision)` —— schema 校验 + 原子写 + 热重载，本模块不写任何 YAML。
 5. 限流（每小时 6 次 / 每天 30 次）+ 审计行追加到 `<QQ_msg>/qqbot-config-audit.jsonl`。
+
+### 3.5 废弃配置自动清理（升级删字段之后）
+
+1. 起点：DSH 写设置是**合并**语义（`settings.write()` 最后一步 `mergeLayers(strip(raw, form), next)`）——只替换 schema 认识的字段。
+   版本升级删掉的键不会进入 `next`，于是永远留在 `cordis.patch.yml` 里；Schemastery 对未知键也不报错，它们既不生效也不会自己消失。
+2. 触发：插件启动后（延时 1.2 秒）与每次保存设置（`loader/volatile-update`，延时 0.3 秒）各跑一次 `cleanupStaleConfig()`。
+3. 识别：`configEditor.configuration()` 里按 id / name **精确匹配**本插件那一行，取 `override`（profile 层）交给
+   `staleConfigPaths()`；它沿 schema 的 `dict` 下钻，schema 里没有的键按**最浅的一层**报出来（整段未知只报父键）。
+   路径用键名数组表示，键名本身带点（`a.b`）也不会被拆成嵌套路径。
+4. 写回：`configEditor.edit()` 是唯一能真正删键的入口（`settings.update / mutate` 都是合并，删不掉）。
+   基座用 profile 层的 `override`，不用回调给的 `current`——`current` 是各层同 id 后行整段替换后的最终配置，
+   拿它当基座会把上层 patch 抄进 profile 行。
+5. 收尾：没有废弃键时一次盘都不写；删掉的键连同旧值打进日志。写回对 loader 属于非 volatile 变更，
+   会重挂一次插件（适配器断连重连），一次性，不会自激。
+
 
 ## 4. 设计取舍
 

@@ -14,7 +14,7 @@
 
 - **身份不可伪造**：判定依据是当前 QQ 会话最近一条消息的发言人，不是工具参数里的字符串；插件重启后待确认的 token 全部失效（只存在内存里）。
 - **场域限制**：只在拥有者私聊里可用；群里调用直接拒绝。
-- **字段白名单**：`auth.*` / `onebot.*` / `imageGen.*` / `webSearch.*` / `proactive.model` / `mode` / `adapterPath` 等硬拒绝，即使有人误加进白名单也会被 `DENY_PREFIXES` 二次挡下——机器人无法通过这条通道给自己扩权。
+- **字段白名单**：`auth.*` / `onebot.*` / `imageGen.*` / `webSearch.*` / `proactive.model` / `proactive.speakProvider` / `proactive.speakModel` / `mode` / `adapterPath` 等硬拒绝，即使有人误加进白名单也会被 `DENY_PREFIXES` 二次挡下——机器人无法通过这条通道给自己扩权。
 - **两步确认 + 修订号**：`propose` 不落盘；`apply` 时若配置已被设置页改过（revision 变化）则作废。
 - **落盘不经手 YAML**：只调 DSH settings 服务（schema 校验、原子写、热重载）；服务不可用时拒绝，不退化成手写 `cordis.patch.yml`。
 - **限流与审计**：默认每小时 6 次 / 每天 30 次；每次结果追加到 `QQ_msg/qqbot-config-audit.jsonl`。
