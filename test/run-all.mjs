@@ -1,5 +1,5 @@
 /**
- * 汇总 runner：依次跑完 18 个测试套件（含 5 个协议适配器），单个失败不中断，末尾汇总。
+ * 汇总 runner：依次跑完 19 个测试套件（含 5 个协议适配器），单个失败不中断，末尾汇总。
  * 用法：node test/run-all.mjs（package.json 的 test 脚本指向这里）
  */
 import { spawn } from 'node:child_process';

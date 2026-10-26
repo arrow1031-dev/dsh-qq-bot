@@ -57,7 +57,8 @@ check('validateMessage 自称 AI', validateMessage('作为一个AI我觉得', { 
 check('validateMessage 重复上一条', validateMessage('这游戏我也在玩', { maxChars: 50, recentTexts: ['这游戏我也在玩。'] }).ok === false);
 
 // requireCjk：默认关（既有行为不变）；开启后「无 CJK 且长度 > 12」判不可用
-// 注意所有正例都必须 > 12 字符：长度门槛在判据最前面，短串会被短路掉、根本走不到 CJK 检测
+// 注意：除了专门测边界的两条，其余正例都必须 > 12 字符——长度门槛在 CJK 判据里最前面，
+// 短串会被短路掉、根本走不到字符集检测，写出来是「看着绿但什么都没验」。
 const refusal = "Sorry, it looks like I can't chat about this.";
 check('requireCjk 默认关：英文正文照旧放行', validateMessage(refusal, { maxChars: 200 }).ok === true);
 check('requireCjk 开启：整句英文被判不可用', (() => { const r = validateMessage(refusal, { maxChars: 200, requireCjk: true }); return r.ok === false && r.reason === 'no-cjk'; })());
@@ -65,7 +66,7 @@ check('requireCjk 开启：中文放行（14 字，过长度门槛）', validate
 check('requireCjk 开启：日文放行（14 字）', validateMessage('いいよ、またね、気をつけてね', { maxChars: 50, requireCjk: true }).ok === true);
 check('requireCjk 开启：中英混排放行（13 字）', validateMessage('那就用 OK 呗，我先撤啦', { maxChars: 50, requireCjk: true }).ok === true);
 check('requireCjk 开启：纯 々 串放行（真验到 U+3005）', validateMessage('々'.repeat(13), { maxChars: 50, requireCjk: true }).ok === true);
-check('requireCjk 开启：扩展 B 区生僻字放行（真验到 u 标志）', validateMessage('𠀀'.repeat(7), { maxChars: 50, requireCjk: true }).ok === true);
+check('requireCjk 开启：扩展 B 区生僻字放行（真验到 u 标志）', validateMessage('𠀀'.repeat(13), { maxChars: 50, requireCjk: true }).ok === true);
 check('requireCjk 边界：12 字符整句英文放行（门槛左）', validateMessage('abcdefghijkl', { maxChars: 50, requireCjk: true }).ok === true);
 check('requireCjk 边界：13 字符整句英文拦住（门槛右）', (() => { const r = validateMessage('abcdefghijklm', { maxChars: 50, requireCjk: true }); return r.ok === false && r.reason === 'no-cjk'; })());
 
