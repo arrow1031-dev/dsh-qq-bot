@@ -1,0 +1,441 @@
+# 开发与维护
+
+面向要**改代码、跑测试、发版**的人。只是想用起来请看 [README.md](README.md)。
+
+- 运行时：**Node 22+**（依赖内置 `WebSocket` / `fetch`），插件要求 **DSH ≥ 0.2.0-rc.2**。
+- 运行时依赖只有 `@deepseek-ai/schemastery`（Config schema）；`@deepseek-ai/dsh-tools` 可选，缺失时自动降级（少几个模型工具，消息照常收发）。
+
+## 1. 本地开发
+
+```sh
+git clone https://github.com/arrow1031-dev/dsh-qq-bot
+cd dsh-qq-bot
+npm install          # 只装 schemastery，用于跑测试
+node test/run-all.mjs
+```
+
+裸克隆即可跑全部测试：需要 DSH 运行时才能成立的少数断言（动态工具注册、`qqgroup` 工具路径）会自动跳过而不是判失败；
+想连那部分一起跑，把 `DSH_PROFILE_MODULES` 指向一个装了 DSH 运行时的 profile 的 `node_modules`。
+
+## 2. 测试（28 个套件 / 1018 项）
+
+```sh
+node test/run-all.mjs      # 一键全量
+npm test                   # 同上
+```
+
+| 套件 | 项数 | 覆盖什么 |
+| --- | --- | --- |
+| `test-adapter.mjs` | 19 | OneBot 11 正向适配器 |
+| `test-adapter-reverse.mjs` | 12 | OneBot 11 反向适配器 |
+| `test-adapter-onebot12.mjs` | 30 | OneBot 12 适配器 |
+| `test-adapter-satori.mjs` | 70 | Satori 适配器 |
+| `test-adapter-milky.mjs` | 79 | Milky 适配器 |
+| `test-adapter-qq-official.mjs` | 87 | QQ 官方适配器 |
+| `test-plugin.mjs` | 107 | Host 半边：假 ctx + 真适配器 + 真 `lib/index.js`，含 Config 契约、热更新、9 个工具、适配器重启 |
+| `test-client.mjs` | 84 | 客户端设置页：模拟模块加载器 + 最小 React 渲染 + 四档标签 + 只写密钥护栏 |
+| `test-admin.mjs` | 32 | 权限 · 群管理 · 访客工具闸 |
+| `test-http.mjs` | 17 | HTTP / 代理隧道 |
+| `test-config.mjs` | 24 | 配置合并、volatile 还原、废弃键清理 |
+| `test-websearch.mjs` | 5 | 多引擎搜索结果解析 |
+| `test-imagegen.mjs` | 16 | 生图重试 / 轮询 / 响应解析 |
+| `test-session-id.mjs` | 5 | 会话 id 回退 |
+| `test-compat.mjs` | 14 | 运行时兼容自检 |
+| `test-history.mjs` | 23 | 聊天记录鉴权与定向 |
+| `test-proactive.mjs` | 84 | 主动发言纯逻辑（时间窗、判据、去重、两段式） |
+| `test-proactive-round.mjs` | 35 | 主动发言回合端到端（不动定时器） |
+| `test-owner-settings.mjs` | 58 | 拥有者设置通道（白名单 / 确认码 / 限流 / 审计） |
+| `test-totp.mjs` | 44 | TOTP / HOTP（RFC 4226 + 6238 官方向量） |
+| `test-totp-cli.mjs` | 14 | 终端绑定（secret / otpauth URI / 二维码） |
+| `test-qr.mjs` | 18 | 二维码编码器（固定矩阵守回归） |
+| `test-flow-auth.mjs` | 27 | 授权状态机（授权 / 重放 / 锁定 / 过期） |
+| `test-flow-store.mjs` | 22 | 流程脚本存取（路径穿越 / 覆盖保护 / sha 校验） |
+| `test-flow-commands.mjs` | 42 | `/auth` 与 `/flow` 解析 |
+| `test-flow-gate.mjs` | 16 | 流程授权闸门 |
+| `test-flow-wiring.mjs` | 20 | 闸门接线：一次调用只吃一个授权 / 关着原样放行 |
+| `test-interim.mjs` | 14 | 中间发言：最后一条留给结论、锚点丢了不重播 |
+
+**手动联调**（假 OneBot 端口正好是 NapCat 默认值，不用真 QQ 号）：
+
+```sh
+node test/mock-onebot.mjs --http-port 3000 --ws-port 3001
+# 另开终端：伪造一条 @机器人的群消息
+node -e "fetch('http://127.0.0.1:3000/__inject',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({message_type:'group',group_id:33333,user_id:22222,nickname:'小明',message:[{type:'at',data:{qq:'10000'}},{type:'text',data:{text:'你好'}}]})}).then(r=>r.json()).then(console.log)"
+# 看它回了什么
+node -e "fetch('http://127.0.0.1:3000/__sent').then(r=>r.json()).then(j=>console.log(JSON.stringify(j.messages,null,2)))"
+```
+
+> **文档里的测试数必须自洽**：改测试就同步本表、README 的「28 套件 / 1018 项」与 `AI-DISCLOSURE.md` 的验证情况。
+
+<a id="完整配置参考"></a>
+## 3. 完整配置参考
+
+下面是全部字段与默认值（等价于「设置页什么都不改」的状态）。落点是 profile 的 `cordis.patch.yml`，**不要改包内的同名文件**。
+
+```yaml
+- id: dsh-qq-bot
+  name: '@sputnikzaychik/dsh-qq-bot'
+  config:
+    adapterPath: ''
+    nodePath: ''
+    protocol: "onebot11"   # onebot11 | onebot12 | satori | milky | qq-official
+    mode: "forward"   # forward | reverse（仅 onebot11/12）
+    onebot:
+      wsUrl: "ws://127.0.0.1:3001"   # mode=forward 用
+      listen: "0.0.0.0:6199"   # mode=reverse 用
+      httpUrl: "http://127.0.0.1:3000"   # 留空则改用 WS action 发消息
+      accessToken: ''
+    protocols:
+      onebot12:
+        wsUrl: "ws://127.0.0.1:3001"
+        httpUrl: "http://127.0.0.1:3000"
+        listen: "0.0.0.0:6199"
+        accessToken: ''
+        mode: "forward"
+      satori:
+        wsUrl: "ws://127.0.0.1:5140"
+        httpUrl: "http://127.0.0.1:5140"
+        token: ''
+        platform: "qq"
+        selfId: ''
+      milky:
+        wsUrl: "ws://127.0.0.1:3010/event"
+        httpUrl: "http://127.0.0.1:3010"
+        accessToken: ''
+      qqOfficial:
+        mode: "webhook"
+        appId: ''
+        appSecret: ''
+        botSecret: ''
+        listen: "0.0.0.0:8443"
+        path: "/qqbot"
+    group:
+      enabled: true
+      allow: []   # 群号白名单，空数组 = 所有群
+      requireAt: true
+    private:
+      enabled: true
+      allow: []   # 用户号白名单，空数组 = 所有人
+    commandPrefix: ''   # 例如 '/ai'，空串 = 不限制
+    reply:
+      maxChars: 1200
+      ackAfterMs: 8000   # 慢回合先回 ackText；0 关闭
+      ackText: "正在处理，请稍候…"
+      firstTurnHint: "（提示：这是一次 QQ 聊天。请用简体中文、简洁自然的口语作答；不要输出 Markdown 表格，代码块保持简短。群聊里被 @ 或需要结合群内近期消息/图片作答时，主动调 qq_history 工具拉取聊天记录与图片。）"
+      contextHeader: true   # 给消息加 "[QQ群 123 · 小明(22222)]" 前缀
+      botReply: true   # 回复（引用）bot 的消息也算 @
+      interim: true   # 中间发言：长回合里先说的那几句单独发（不引用、不 @）
+      interimMaxPerTurn: 4   # 每回合最多几条（0 = 关）
+      interimMinGapMs: 2500   # 两条之间最短间隔
+    auth:
+      owners: []   # 拥有者：全权限 + 永久授权
+      superAdmins: []   # 高级管理员：群管理权限，不能永久授权
+      ownerPreset: ''   # 填了才把拥有者/非拥有者分成两条会话（仅人格分离）
+      guestPreset: ''   # 非拥有者用的 preset（仅人格分离，不是安全边界）
+      grantTtlMinutes: 60
+      grantMaxTtlMinutes: 1440
+      guestToolAllow: ["qqgroup", "qq_websearch", "qq_webfetch", "qq_imgsearch", "qq_history", "moli_fetch"]   # 访客仍可用的工具白名单（qqbot / qqconfig / qq_draw 只给拥有者）
+      guestDshTools: false   # 是否允许访客用 DSH 内部工具（默认否）
+      ownerSettings: true
+      ownerSettingsMaxPerHour: 6
+      ownerSettingsMaxPerDay: 30
+    admin:
+      enabled: true
+      manageGroups: []   # 可管理的群；空 = 回退用 group.allow
+      requireGroupAdmin: true
+      prefix: "/"
+      dryRun: false   # true = 只回复将执行什么
+      allowConsole: false   # 允许 Web UI 会话直接调用管理工具
+    moli:
+      enabled: false   # qq_webfetch 改用 Moli 无头浏览器渲染（需已装 Moli 引擎）
+      proxy: ''
+      exePath: ''
+    flowAuth:
+      enabled: false   # 流程授权总开关（子代理/队友/工作流需私聊动态码）
+      totpSecret: ''   # base32；node lib/totp-cli.mjs enroll 生成后粘过来（不经 QQ）
+      enrolledAt: 0   # 0 = 未确认绑定；>0 后设置页不再展示二维码
+      grantTtlSeconds: 30
+      maxAttempts: 5
+      lockoutMinutes: 15
+      gatedTools: ["subagent", "subagent_fork", "spawn_teammate", "workflow"]   # 要过闸门的工具名
+      recoveryHashes: []
+      recoverySalt: ''
+    flow:
+      deliver: "private"   # 产物流向：private | group:<群号> | none
+      maxBytes: 20971520
+      maxFiles: 40
+      skipHidden: true
+    session:
+      fixedName: true   # 新会话名固定为 群聊_<群号> / 私聊_<QQ号>
+    perChatSession: true   # true = 每个 QQ 会话一条 DSH 会话
+    agentPreset: ''   # '' = 部署默认 preset；可填 standard / ptc / minimal / cordis 或自定义 id
+    restart:
+      baseMs: 1000
+      maxMs: 30000
+    logAdapterFrames: false
+    vision:
+      enabled: true
+      provider: ''   # 视觉 provider（留空 = 会话模型）
+      model: ''   # 视觉模型 id（留空 = 会话模型；须声明 input: [text, image]）
+      maxImages: 3   # 单条消息最多送入几张图
+      downloadTimeoutMs: 10000
+    webSearch:
+      baseUrl: ''
+      apiKeyEnv: ''
+      proxy: ''   # http://host:port；留空直连；搜索与抓取都走它
+      maxUses: 5
+      multiEngine: true   # 多引擎组合搜索（关则落回官方 DeepSeek web_search）
+    imgSearch:
+      enabled: true
+      maxResults: 5
+      saucenaoKey: ''   # SauceNAO API key；留空不启用该引擎
+      weightedShuffle: false   # 有代理时按体量权重随机重排引擎顺序
+    history:
+      scopeMessages: 5   # 识图窗口：触发消息往前多少条
+      imageLimit: 3   # 窗口内最多识别几张图
+    proactive:
+      enabled: false
+      groups: []   # 生效群号；留空 = 不启用
+      intervalMinutes: 60
+      windowMessages: 30
+      minNewMessages: 6
+      quietHours: ["23:00-08:00"]
+      maxPerHour: 2
+      maxPerDay: 8
+      minGapMinutes: 15
+      eventGuard: true
+      staleMinutes: 15
+      topicCooldownMinutes: 120
+      provider: ''   # 留空 = 跟随群会话模型（零密钥）
+      model: ''
+      speakProvider: ''
+      speakModel: ''   # 填了才启用两段式（判断 / 发言分用两个模型）
+      speakFallback: true
+      requireCjk: false   # 发送前兜底：没有中文且长于 12 字就丢掉
+      timeoutMs: 60000
+      maxChars: 120
+      interests: ''
+      persona: ''
+      dryRun: false   # 演练：只记日志不发送
+      verbose: false
+    imageGen:
+      enabled: false
+      baseUrl: ''   # OpenAI 兼容，例 https://api.example.com/v1
+      apiKeyEnv: "IMAGE_API_KEY"
+      apiKey: ''   # 只写字段；留空则读 apiKeyEnv
+      model: "seedream-5.0-lite"
+      size: "1024x1024"
+      timeoutMs: 180000
+      maxAttempts: 4
+      retryIntervalMs: 5000
+      poll: true
+      pollIntervalMs: 5000
+      maxPolls: 30
+    persona:
+      enabled: false   # 自定义人格：每个新会话第一轮附一次
+      name: ''
+      text: ''
+    agentPresetCustom: ''   # 非空时优先于 agentPreset
+```
+
+- **volatile 字段**（设置页可编辑的那些）改动即时生效，会触发 `loader/volatile-update`；连接类字段（`protocol` / `mode` / 各协议连接参数）改动会重启适配器。
+- `onebot.accessToken` / `flowAuth.totpSecret` / `flowAuth.recoverySalt` / `imageGen.apiKey` / `imgSearch.saucenaoKey` 是 `role('secret')`：**只写**，不下发到浏览器，空值不会覆盖已有值。
+- 本插件只认自己那一行：改配置形成的残留键会被自动清理（见 ARCHITECTURE.md「废弃配置自动清理」）。
+
+<a id="工具细节"></a>
+## 4. 工具细节
+
+插件注册 9 个工具，访客只能看到 `auth.guestToolAllow` 里的。工具之间共用同一套权限判定（见 README「权限与指令」）。
+
+### qqbot
+
+- `{action:'status'}` —— 连接状态、模式、适配器 pid/端口、各会话回合数、统计计数、当前 DSH 运行时版本。
+- `{action:'send', message_type:'group'|'private', target_id:'123', text, image?}` —— 主动发一条消息；`image` 是本地绝对路径（**只允许 `<QQ_msg>/qq-images` 目录内**），插件转 base64 与文本一起发。
+- `{action:'interrupt', conversation:'group-123'|'all'}` —— 中断正在跑的回合。
+
+### qq_websearch
+
+`{query, max_uses?}` → `{ok, count, sources, text}`。默认多引擎组合：Tavily（配 `TAVILY_API_KEY` 才启用）→ DuckDuckGo（html→lite，串行 + 限流记忆）→ Yandex / Bing / Wikipedia 并发兜底，聚合去重；`multiEngine: false` 落回官方 DeepSeek web_search。请求都走 `webSearch.proxy`（非空时 HTTP CONNECT 隧道 + TLS）。
+
+### qq_webfetch
+
+`{url, max_chars?}` → 抓公网网页原文；抓取前校验目标为公网 IP，内网 / 回环 / 私有地址一律拒绝（防经代理扫内网）。`moli.enabled` 时改用无头浏览器渲染（可抓 SPA），未检测到引擎时返回 `moliUnavailable` 并回退普通抓取。
+
+### qq_imgsearch
+
+`{url | file, max_results?, kind?}` → `{ok, count, sources, via, text}`。
+
+- 本地文件：先上传图床（zixiaoyun / scdn / uguu 按质量加权随机，依次试到成功）拿公网 URL 再反搜；上传失败直接文件传 TraceMoe。`file` 限 `qq-images` 目录内。
+- 引擎顺序：无代理按可用性（TraceMoe → IQDB → SauceNAO（有 key）→ Soutubot）；有代理放开全部按体量（Yandex → Tineye → Copyseeker → SauceNAO → Soutubot → IQDB → TraceMoe），`weightedShuffle` 时按权重随机重排。
+- `kind=comic`：漫画截图优先 Soutubot → SauceNAO → IQDB → TraceMoe；配合 `file` 时不上图床。
+
+实测（2026-10）：直连可用 TraceMoe / IQDB / Soutubot；代理可用 Copyseeker / Yandex / Tineye（新图未收录时为 0 条）；SauceNAO 需 key；ascii2d / anime_trace / bing / google_lens / ehentai 不可用。
+
+### qq_history
+
+`{group_id?, peer_id?, user_id?, count?, before_seq?, with_images?}` → 聊天记录（时间 / 说话人 / 文本 / 图片）。
+
+- 当前群或当前私聊直读；**跨群**要「拥有者 / 高级管理员」，或「本人是该群管理员且该群在可管理范围」；别人的私聊只有拥有者 / 高级管理员能读。
+- 分页：`before_seq` 传上一页最旧的 `message_id`，返回的 `next_before` 是下一页游标。
+- 识图窗口锚定「触发本条回复的那条消息」往前 `history.scopeMessages` 条、最多 `history.imageLimit` 张。
+
+### qq_draw
+
+`{prompt, model?, size?, reference?, caption?, send?}`：`send` 默认 true，直接画成 QQ 图片段发到当前会话。失败策略：429 / 5xx / 网络错 / 空结果按 `retryIntervalMs` 重试到 `maxAttempts`；4xx 直接报错不重试。响应是 `task_id` 时按 `pollIntervalMs` 轮询（依次试 `/images/generations/<id>`、`/images/tasks/<id>`、`/tasks/<id>`），最多 `maxPolls` 次。图片落盘 `<QQ_msg>/qq-images/gen/`。
+
+接口约定：OpenAI 兼容 `POST <baseUrl>/images/generations`，请求体 `{model, prompt, n:1, size?, image?}`，返回 `data[0].url` 或 `data[0].b64_json`。
+
+### qqauth
+
+只在拥有者私聊可用（`flowAuth.enabled` 关着时直接拒绝）：`{action:'request', purpose?}` 申请一次授权、`{action:'status'}` 看开关 / 绑定状态 / 待授权与未用授权（不打印密钥）。
+
+### qqgroup
+
+见 README 的权限表。工具路径的授权依据是「当前会话最近一条消息是否来自管理员白名单」——群里普通成员没法靠一句话驱动管理动作，这是提示注入的主要防线。
+
+### qqconfig
+
+拥有者私聊里改设置：`show` / `propose` / `apply` / `cancel`。`propose` 只校验不写盘并返回一次性确认码（TTL 5 分钟，绑定 owner + path + value + revision）；`apply` 前复核 revision，走 `ctx.settings.update`（schema 校验 + 原子写 + 热重载），本模块不手改 YAML。限流每小时 6 次 / 每天 30 次，审计写 `QQ_msg/qqbot-config-audit.jsonl`。总开关 `auth.ownerSettings`。
+
+### web_fetch（DSH 自带）
+
+仍然注册，但**已从访客默认白名单移除**：访客抓网页请用 `qq_webfetch`。拥有者不受白名单限制。
+
+### 人格
+
+两条路互不冲突：**自定义人格**（`persona.*`，每个新会话第一轮附一次设定，零额外 token）与**整档 preset**（`agentPreset` / `agentPresetCustom`，换的不只是人格还有工具面）。
+
+## 5. 主动发言（细节）
+
+默认关闭，只有 `enabled: true` **且** `groups` 显式列了群号才生效。流程：按 `intervalMinutes` 看一次群里最近 `windowMessages` 条 → 频率 / 时段 / 新消息量闸门 → 模型判断要不要接、接什么 → 文本校验（长度、链接、@、重复）→ 发送或安静待着。
+
+- **两段式（可选）**：填了 `speakModel` / `speakProvider` 才启用；判断阶段只出 `{speak, topic}`，正文交给发言模型写。判断阶段仍在写回退正文，精简 judge 提示词时别把它删了，否则 `speakFallback` 会静默失效。最坏 5 次模型调用（判断 3 + 发言 2）。
+- **`requireCjk`（默认关）**：正文没有 CJK 且长度 > 12 判为不可用。治的是「中文群里整句英文拒答模板」；长度按**码点**算（`Array.from(text).length`），阈值是代码常量 `CJK_MIN_LENGTH`。
+- **`eventGuard`（默认开）**：最新消息超过 `staleMinutes` 视为过错窗口；最新一条只是应答不插话；两个人来回说时视为他们的对话；同话题 `topicCooldownMinutes` 内不重复。
+- 提示词有两道防编造约束（`topic` 只能来自聊天记录、发言阶段只用记录里的信息），但模型编造是概率性的，只能压低不能消除。
+- `dryRun: true` 只记日志，先观察再开。
+
+## 6. 流程授权（细节）
+
+`flowAuth.enabled` 打开后，QQ 会话里的原生编排工具（`subagent` / `subagent_fork` / `spawn_teammate` / `workflow`）被同名遮蔽接管：拥有者私聊要过一次 6 位动态码，其它会话直接拿到「只能在拥有者私聊里驱动」的拒绝。DSH 里正常建的会话不受影响。
+
+- 密钥导入**不走 QQ**：设置页「高级 → 流程授权 → 绑定二维码」就地生成 base32 密钥并画二维码，认证器扫码绑定；也可以用 `node lib/totp-cli.mjs enroll` 在服务器上生成后粘贴。密钥只存 seed，不写日志。
+- 授权窗口 `grantTtlSeconds`（默认 30 秒，最小 30）内 **1 次有效**，用掉即弃；连续错 `maxAttempts` 次锁 `lockoutMinutes` 分钟。
+- 这一轮跑完把会话工作区里**本轮新增/改动**的文件打包回传（`flow.deliver`：`private` / `group:<群号>` / `none`），数量与体积受 `flow.maxFiles` / `flow.maxBytes` 限制；产物上传依赖协议端支持 `upload_private_file` / `upload_group_file`。
+- **手机丢了**：`node lib/totp-cli.mjs recovery` 打印盐、8 条一次性恢复码与哈希；把哈希与盐填进设置页，明文抄纸上。之后私聊发 `/auth XXXXX-XXXXX`（字母+数字，靠格式与 6 位动态码区分）。
+
+`/flow` 指令（只认拥有者私聊）：
+
+| 指令 | 作用 |
+| --- | --- |
+| `/flow ls` | 列出 `<QQ_msg>/flows/` 里的流程脚本（名字 / 标题 / 脚本 sha 前 8 位） |
+| `/flow use <名字>` | 设为活动流程（下次授权带上这个名字） |
+| `/flow off` | 取消活动流程 |
+| `/flow rm <名字>` | 删除流程脚本与元数据 |
+| `/flow auth [用途]` | 手动发起一次授权请求 |
+| `/flow reset` | 清空待授权请求与未用授权 |
+| `/flow unbind <6位动态码>` | 解绑（必须交一码，光发 `/flow unbind` 不解绑） |
+
+流程脚本是"下次跑什么"的任务书，**插件不执行它**：执行仍由模型用 `workflow` / `spawn_teammate` 完成。
+
+## 7. 跨对话检索
+
+- **QQ 层：`qq_history`** —— 只读，权限见工具细节。
+- **会话层：DSH 的 `session_search` 系列**（`@deepseek-ai/dsh-tool-session-query` 的 5 个只读工具）。授权规则是「目标会话的 cwd 与调用方完全一致」，QQ 的每个会话都落在同一个 `QQ_msg` 工作区，所以彼此可检索。在专属 preset 里挂一行即可：
+
+```yaml
+- id: preset-qq
+  name: "@deepseek-ai/dsh-agent-preset"
+  config:
+    id: qq
+    plugins:
+      - id: tool-session-query
+        name: "@deepseek-ai/dsh-tool-session-query"
+        # 可选：maxSearchResults / searchTimeoutMs
+```
+
+  不挂就没有这 5 个工具，`qq_history` 的跨群读取不受影响。
+
+## 8. 文件清单
+
+| 文件 | 作用 |
+| --- | --- |
+| `lib/index.js` | Cordis 插件入口（Host 侧）。导出 `name` / `inject` / `Config` / `apply` |
+| `lib/config.js` | `Config` schema、`DEFAULTS`、深合并、volatile 还原、废弃键识别 |
+| `lib/client.js` | 客户端半边（手写 bundle）：插件面板里的设置区。**模块 id 与插槽 key 必须等于 npm 包名**，设置命名空间仍是条目 id |
+| `lib/session.js` | 会话创建 / 复用、固定命名、访客工具闸、编排工具闸门接管 |
+| `lib/tools.js` | 9 个模型工具（统一走 `registerTool`，DSH 0.2 契约） |
+| `lib/admin.js` | 群管理指令、三路权限、动态授权 |
+| `lib/owner-settings.js` | 拥有者设置通道：白名单、两步确认、限流、审计 |
+| `lib/workspace.js` | `QQ_msg` 工作区根解析、会话独占工作目录 |
+| `lib/bridge/` | 适配器共享层：手写 WebSocket、stdio 契约、消息段归一（`CONTRACT.md` 是写新适配器的入口） |
+| `lib/adapters/` | 协议适配器：onebot11 / onebot12 / satori / milky / qq-official |
+| `lib/onebot-adapter.mjs` | 兼容入口（一行 import 到 `adapters/onebot11.mjs`） |
+| `lib/http.js` | fetch + HTTP CONNECT 代理隧道 + 公网地址校验 |
+| `lib/websearch.js` | Tavily / DuckDuckGo / Yandex / Bing / Wikipedia 组合搜索 |
+| `lib/imgsearch.js` | 图床 + TraceMoe / IQDB / SauceNAO / Soutubot 等反搜 |
+| `lib/imagegen.js` | 生图（`/images/generations` + 重试 + 任务轮询） |
+| `lib/moli.js` | Moli 渲染抓取探测（可选） |
+| `lib/totp.js` | 零依赖 TOTP / HOTP / base32 / 恢复码 |
+| `lib/totp-cli.mjs` | 终端绑定：secret / otpauth URI / 二维码 / 恢复码 |
+| `lib/qr.js` | 二维码编码器（字节模式、纠错 M、v1–v9），浏览器版同算法副本 |
+| `lib/flow-auth.js` | 流程授权状态机 + 闸门 |
+| `lib/flow-store.js` | 流程脚本存取（名字白名单、sha256、路径穿越防护） |
+| `lib/flow-commands.js` | `/auth` `/flow` 解析、拦截判定、产物输入归一 |
+| `lib/interim.js` | 中间发言挑选（哪段现在发、哪段留结论） |
+| `lib/history-auth.js` | 历史消息的会话定向与鉴权 |
+| `lib/proactive.js` | 主动发言纯逻辑（时间窗、提示词、决策解析、频率闸、两段式） |
+| `lib/compat.js` | DSH 版本兼容自检（只维护两个常量） |
+| `cordis.patch.yml` | bundle 补丁：把插件插入 profile 组合树（`id` 固定，`name` 跟包名走） |
+| `test/` | 28 个测试套件 + `mock-onebot.mjs`（零依赖 OneBot 11 模拟器） |
+| `examples/dynamic-package-host.js` | 动态 Cordis Package 版（不装包也能在当前进程里试） |
+
+## 9. 设计说明（踩过的坑）
+
+- **为什么中间要子进程？** 动态插件沙箱没有 `fetch` / `WebSocket` / `require`；用 `ctx.subprocess` 拉真 Node 进程、换行分隔 JSON 通信，协议层可独立测试，换 QQ 框架不影响插件。
+- **为什么用 `sessionController` 建会话？** 直接 `agentLoop.create()` 建的 Agent 没装模型路由（首次请求必败）；`sessionController.create()` + `resolveAgent()` 才是官方组装路径。
+- **为什么用 `whenIdle()` + `deriveMessages()` 取回复？** 回合串行排队，回合后会话日志最新一条有文本的 assistant 消息就是回复，比订阅流式事件简单稳。
+- **访客工具闸为什么用 guard？** 拆会话破坏对话一致性；`restrict` 是静态过滤器需反复增删（工具面抖动还会多记 `request/header`）。`tools.guard` 注册一次、每次执行才求值：0 额外 token、单会话单历史；标志位必须在**串行回合内部**设置。
+- **设置契约为什么跟 DSH 0.1.7 改？** 0.1.7 删了 `settings.register()`，改为读插件导出的 schemastery `Config`（可编辑字段必须 `.volatile()`）；volatile 变更不重挂插件，需监听 `loader/volatile-update` 自己刷新配置。
+- **为什么动态 `import('@deepseek-ai/dsh-tools')`？** 它是 peerDependency，由 DSH 提供；动态 import + try/catch，包不在时桥接照样工作。
+- **客户端为什么有两个 id？** DSH 的 client-modules 按 **npm 包名**索引模块行、插件面板也按包名派发配置区，而设置命名空间是**条目 id**。0.12.1 改名后前两个没跟着改，就出现「整块插件加载失败 / 配置区空白」——0.12.2 修的就是这个，别再写死旧名字。
+
+## 10. 不想重启 DSH 也能先跑起来
+
+`examples/dynamic-package-host.js` 是同一套桥接的「动态 Cordis Package」版本：交给 `cordis_define`（`code.host`）再 `cordis_run`，与常驻插件共用同一份磁盘源码。
+优点：立刻生效、不用重启；限制：**DSH 一重启就没了**，长期在线还得装包。动态沙箱里没有 `require` / `fetch` / `setTimeout`，传输层必须靠 `ctx.subprocess` 拉子进程。
+
+## 11. 发布流程
+
+1. 改 `package.json` 的 `version`（**不要手动打 tag**），同时更新 `CHANGELOG.md` 与文档里的版本号。
+2. 推 `main`。`.github/workflows/release.yml`（Auto Release）在 push 触达 `package.json` 时启动：
+   checkout → `actions/setup-node@v4`（node 24）→ 读版本 → 已存在同名 tag 就跳过 → `npm install && npm test` →
+   `npm publish --provenance --access public` → 用「引入这个版本的第一个提交」的提交信息做正文建 GitHub Release。
+3. 发布走 **Trusted Publishing（OIDC）**：`permissions: id-token: write`，runner 的 npm 必须 ≥ 11.5.1（所以有 setup-node 那一步；npm 10 会在 OIDC 之前就报 `ENEEDAUTH`）。
+4. tag 与 Release 由工作流创建；版本号一经发布不可复用（unpublish 过的版本也不行）。
+5. 发版后抽查一次 tarball（`npm pack` 或直接下载）确认关键文件在包里。
+
+## 12. 兼容性
+
+- **DSH 版本**：要求 `>= 0.2.0-rc.2 < 0.3.0`。插件启动时读实际版本并判定，日志形如
+  `[dsh-qq-bot] 运行于 DSH 0.2.1-rc.3（在声明支持范围 0.1.7-0 <= v < 0.3.0-0 内）`；`qqbot status` 的 `runtime` 字段给同一结论。
+  支持范围只维护 `lib/compat.js` 的 `SUPPORT_FLOOR` / `SUPPORT_CEILING`，DSH 出新版本不用改代码。识别失败或超范围只提示，不影响收发消息。
+- **工具注册与闸门（0.8.0 起）**：注册先 `ctx.get('tools')`，未就绪用 `ctx.inject(['tools'], …)` 动态挂载；闸门走 `agent.ctx.get('tools').guard(…)`，取不到才回退 `agent.ctx.tools`。`tools` 仍是可选服务：没有它插件照常收发消息，只是少几个模型工具。
+- **旧会话不会被删**：旧版本建的 QQ 会话可能绑在别的工作区。插件检测到 `belongs to "…"` 时**不动旧会话**（历史完整保留），改用工作区限定的 id（`qqbot-group-<群号>-ws<6位哈希>`）新建一条，重试一次即成功，日志写明。
+
+## 13. 部署备注
+
+- **ARM / 手机容器跑 NapCat**：官方镜像有 arm64 版，但容器里再跑 Docker 通常需要 privileged。备选是直接在容器里跑 NapCat.Shell（要对应的 Linux QQ 版本）。同容器用 `forward` 连 `127.0.0.1:3001` 最省事；跨容器用 `reverse`，让 NapCat 连 `ws://<DSH主机IP>:6199/`。**6099（WebUI）不要暴露到公网**。
+- **重启 DSH**：插件是常驻 Cordis 插件，装/升级/改连接方式后都要重启 Host；桌面版重启应用，CLI 重启 `dsh web`。
+- **日志**：插件前缀 `[dsh-qq-bot]`，适配器前缀 `[dsh-qq-bot]/adapter`，都打到 Host 的 stdout（systemd 部署看 `journalctl -u dsh-web`）。
+- **与 AstrBot 互斥**：AstrBot 也是 OneBot 消费方，两边同时接会让同一条消息被回两次。
+
+## 14. 维护状态
+
+本仓库就是主干：0.8.0 并入下游分支（模块化重构 + 联网/抓取/反搜/历史工具），0.10.0 把协议层拆成 `lib/bridge/` + `lib/adapters/`（一套插件接五种协议），0.11.0 把设置面板搬进插件详情页，0.12 加入流程授权与中间发言。
+
+- 安装跟随 `main`，不再锁 tag；每次合并后在 `main` 打 tag 发 Release。
+- 提 issue / PR / Discussions 都欢迎，活跃贡献者会被邀请为协作者。
+- 0.6.x 及更早（兼容 DSH ≤ 0.1.6）保留为历史 tag。
+
+**联系**：仓库 [arrow1031-dev/dsh-qq-bot](https://github.com/arrow1031-dev/dsh-qq-bot) · QQ 群 1091766276 · 贡献流程 [CONTRIBUTING.md](CONTRIBUTING.md) · 行为准则 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) · 安全 [SECURITY.md](SECURITY.md)。

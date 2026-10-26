@@ -1,4 +1,4 @@
-# 架构（0.12.1）
+# 架构（0.12.2）
 
 把 QQ 消息桥给 DSH Agent：五种聊天协议各有一个**独立子进程适配器**，插件内核只认一套 stdio 帧和一套统一消息段（OneBot 11 风格）。帧的权威定义只有一处：[lib/bridge/CONTRACT.md](lib/bridge/CONTRACT.md)。
 
@@ -29,7 +29,19 @@ DSH Agent（默认每个 QQ 会话一个）
 
 中间层 **lib/bridge/** 被五个适配器 import，不含业务：WS 传输（正向/反向、帧编解码、重连）、stdio 帧工具（发射器、发送队列、stdin 循环）、统一消息段。
 
-浏览器侧是另一条独立的边：`lib/client.js` 是设置页「QQ 机器人」选项卡，只经 DSH 设置服务读写配置，不参与消息链路。
+浏览器侧是另一条独立的边：`lib/client.js` 是插件详情页里的配置区（`plugins.bundle.config` 插槽），只经 DSH 设置服务读写配置，不参与消息链路。
+
+### 身份契约（改包名时别踩）
+
+同一个插件在 DSH 里有**三个身份**，各按各的 key 派发，混用会出现"面板打不开 / 配置区空白"：
+
+| 身份 | 由谁决定 | 当前值 | 用错的表现 |
+| --- | --- | --- | --- |
+| 客户端模块 id（`__ModuleLoader__.load({ id })`） | **npm 包名** | `@sputnikzaychik/dsh-qq-bot` | 整个客户端插件不加载：`loaded without registering …` |
+| 配置区插槽 key（`slots.register({ key })`） | **npm 包名**（插件页按 `pkg.name` 派发） | 同上 | 插件在、配置区空白 |
+| 设置命名空间 `ns`（读写配置） | **profile 条目 id** | `dsh-qq-bot` | 读不到 / 写不进配置（改了这个，老配置也会丢） |
+
+包名以 `package.json` 的 `name` 为准，`cordis.patch.yml` 的 `name` 必须与之一致（`id` 保持不变）。0.12.1 就是只改了包名、前两个 key 还写死旧名字，所以整版客户端不可用——0.12.2 修的就是这三者的关系。
 
 两条贯穿全局的约束：
 
@@ -42,7 +54,7 @@ DSH Agent（默认每个 QQ 会话一个）
 | --- | --- | --- | --- |
 | `lib/index.js` | 装配与监管：适配器生命周期、帧分发、回合/回复/视觉、主动发言、配置热更新 | `Config` `apply` `inject` | DSH（`cordis.patch.yml` 挂载） |
 | `lib/config.js` | 配置契约：默认值 + schemastery schema + 合并/还原 + 废弃键识别 | `Config` `DEFAULTS` `plainConfig` `mergeConfig` `staleConfigPaths` | `index.js`、`client.js`（按 schema 渲染） |
-| `lib/client.js` | 浏览器侧设置选项卡（手写 `__ModuleLoader__` bundle，只依赖 react） | —（浏览器模块） | DSH 设置页 |
+| `lib/client.js` | 浏览器侧设置区（手写 `__ModuleLoader__` bundle，只依赖 react）。**模块 id 与插槽 key 都必须是 npm 包名**，设置命名空间 `NS` 仍是条目 id `dsh-qq-bot`（见「身份契约」） | —（浏览器模块） | DSH 插件详情页 |
 | `lib/admin.js` | 三路权限判定（静态名单/动态授权/本群身份）+ 群管理指令 | `createAdmin` → `resolveAuthority` `hasPerm` `handleAdminCommand` `TIER_LABEL` | `index.js`、`tools.js`（qqgroup 鉴权） |
 | `lib/session.js` | 会话条目与路由、访客工具闸、被回复图片收集 | `createSession` → `sessionRoute` `getEntry` `entryForAgent` `collectReplyImageUrls` | `index.js` |
 | `lib/tools.js` | 9 个 Agent 工具：`qqbot` `qqconfig` `qqgroup` `qq_websearch` `qq_webfetch` `qq_imgsearch` `qq_history` `qq_draw` `qqauth` | `createTools` → `registerTools` | `index.js`（动态 import `@deepseek-ai/dsh-tools`） |
@@ -74,7 +86,7 @@ DSH Agent（默认每个 QQ 会话一个）
 
 **扩展点**（其余文件基本不用动）：加协议 → 新写 `lib/adapters/<协议>.mjs` + 在 `lib/index.js` 的 `ADAPTER_FILES` 与 `lib/config.js` 加一项；加协议动作 → 改对应适配器的映射表；加 Agent 工具 → 只改 `lib/tools.js`。
 
-**测试与发布**：`test/run-all.mjs` 汇总 **28 个套件**（5 个协议各一套，其余为插件/权限/设置/搜索/生图/历史/授权链路等），每个协议都自带零依赖假协议端（OneBot 11 的是 `test/mock-onebot.mjs`，其余在各自 `test-adapter-*.mjs` 内）；`npm test` 即跑全部。进 npm 包的只有 `lib/`、`cordis.patch.yml` 与根目录文档（见 `package.json` 的 `files`），`test/`、`examples/` 只在仓库里。
+**测试与发布**：`test/run-all.mjs` 汇总 **28 个套件 / 1018 项**（5 个协议各一套，其余为插件/权限/设置/搜索/生图/历史/授权链路等），每个协议都自带零依赖假协议端（OneBot 11 的是 `test/mock-onebot.mjs`，其余在各自 `test-adapter-*.mjs` 内）；`npm test` 即跑全部。进 npm 包的只有 `lib/`、`cordis.patch.yml` 与根目录文档（见 `package.json` 的 `files`），`test/`、`examples/` 只在仓库里。
 
 ## 3. 关键数据流
 

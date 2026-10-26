@@ -20,6 +20,7 @@
     "lib",
     "cordis.patch.yml",
     "README.md",
+    "DEVELOPMENT.md",
     "ARCHITECTURE.md",
     "LICENSE",
     "AI-DISCLOSURE.md",
