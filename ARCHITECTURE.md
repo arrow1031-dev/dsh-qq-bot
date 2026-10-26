@@ -42,7 +42,7 @@ DSH Agent（默认每个 QQ 会话一个）
 | --- | --- | --- | --- |
 | `lib/index.js` | 装配与监管：适配器生命周期、帧分发、回合/回复/视觉、主动发言、配置热更新 | `Config` `apply` `inject` | DSH（`cordis.patch.yml` 挂载） |
 | `lib/config.js` | 配置契约：默认值 + schemastery schema + 合并/还原 + 废弃键识别 | `Config` `DEFAULTS` `plainConfig` `mergeConfig` `staleConfigPaths` | `index.js`、`client.js`（按 schema 渲染） |
-| `lib/client.js` | 浏览器侧设置选项卡（手写 `__ModuleLoader__` bundle，只依赖 react） | —（浏览器模块） | DSH 设置页 |
+| `lib/client.js` | 浏览器侧设置选项卡（手写 `__ModuleLoader__` bundle，只依赖 react）；`__ModuleLoader__` 的 `id` 与 `plugins.bundle.config` 注册的 `key` 都必须等于 **npm 包名**（`id` 错 → 报 `loaded without registering`，整个面板不加载；`key` 错 → 面板在、配置区空白），设置命名空间 `NS` 仍是条目 id `dsh-qq-bot` | —（浏览器模块） | DSH 设置页 |
 | `lib/admin.js` | 三路权限判定（静态名单/动态授权/本群身份）+ 群管理指令 | `createAdmin` → `resolveAuthority` `hasPerm` `handleAdminCommand` `TIER_LABEL` | `index.js`、`tools.js`（qqgroup 鉴权） |
 | `lib/session.js` | 会话条目与路由、访客工具闸、被回复图片收集 | `createSession` → `sessionRoute` `getEntry` `entryForAgent` `collectReplyImageUrls` | `index.js` |
 | `lib/tools.js` | 9 个 Agent 工具：`qqbot` `qqconfig` `qqgroup` `qq_websearch` `qq_webfetch` `qq_imgsearch` `qq_history` `qq_draw` `qqauth` | `createTools` → `registerTools` | `index.js`（动态 import `@deepseek-ai/dsh-tools`） |

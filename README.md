@@ -131,6 +131,9 @@ dsh plugin --profile web add github:arrow1031-dev/dsh-qq-bot
 # 本地 tarball（自己改了代码之后）
 npm pack
 dsh plugin --profile web add ./dsh-qq-bot-<版本号>.tgz
+
+# 从 npm 装（0.12.1 起走 Trusted Publishing，带可核的 provenance）
+dsh plugin --profile web add @sputnikzaychik/dsh-qq-bot
 ```
 
 `--profile` 换成你实际在用的 profile：**桌面版是 `--profile desktop`**，`dsh web` 部署一般是 `--profile web`。
@@ -228,6 +231,7 @@ dsh plugin --profile web add ./dsh-qq-bot-<版本号>.tgz
   写进 **profile 的 `cordis.patch.yml`**（也就是下面「方式二」里那个文件）；0.1.6 时代的独立
   `settings.yaml` 文档已经不存在了。
 - 设置命名空间就是**条目 id**（默认 `dsh-qq-bot`）；条目被改名时，客户端会回退匹配「以 qq-bot 结尾」的那个命名空间。
+- **客户端有两个 id 都必须是 npm 包名**：`__ModuleLoader__.load({ id })` 的模块 id，和 `plugins.bundle.config` 插槽注册的 `key`（插件详情页按 `pkg.name` 派发）。模块 id 写错的后果是报 `loaded without registering`、**整个设置面板不加载**；插槽 key 写错的后果是面板在、**配置区空白**。它们跟**设置命名空间**（读写配置用的那个，始终是 profile 条目 id `dsh-qq-bot`）不是一回事。
 - 连接状态不在插件面板里显示，在对话里让 Agent 调用 `qqbot` 工具（`action=status`）看。
 - `access_token` 是**只写**字段：已设置时页面显示「已设置；留空则保持不变」，只有输入新值才会覆盖。
   Host 侧把它声明成 schema 的 secret，值不会下发到浏览器，保存时也不会被空值清掉。
@@ -739,7 +743,7 @@ AstrBot 是 OneBot 的**消费方**（内置 aiocqhttp 反向 WS 服务端），
 | `lib/flow-store.js` | 流程脚本存取（手写 `<名字>.js` 即可，元数据与 sha256 可选） |
 | `lib/interim.js` | 中间发言挑选：哪段 assistant 文字可以现在发、哪段留给最终结论 |
 | `lib/flow-commands.js` | `/auth` `/flow` 解析、拦截判定、打包入参归一化、帮助文案 |
-| `lib/client.js` | 客户端半边（手写 bundle）：在插件面板里给 `dsh-qq-bot` 挂设置页（命名空间 = 条目 id） |
+| `lib/client.js` | 客户端半边（手写 bundle）：在插件面板里挂设置页——**模块 id 与插槽 key = npm 包名**，设置命名空间 = 条目 id（`dsh-qq-bot`） |
 | `lib/onebot-adapter.mjs` | OneBot 11 传输适配器。零依赖（Node 22 内置 `WebSocket`/`fetch`），正向/反向 WS + HTTP，自动重连、发送限速 |
 | `cordis.patch.yml` | bundle 补丁：把插件插入 profile 组合树 |
 | `test/mock-onebot.mjs` | 零依赖 OneBot 11 模拟器（手写 RFC 6455 帧编解码） |
@@ -904,7 +908,7 @@ tools 仍是可选服务：没有它时插件照常收发消息，只是少几�
 要求 DSH >= 0.2.0-rc.2；0.2.1-rc.2 与 0.2.1-rc.3 上都实测 9 个工具注册齐全（qqbot / qqconfig / qqgroup / qq_websearch / qq_webfetch / qq_imgsearch / qq_draw / qq_history / qqauth）。
 
 **版本支持不写死**：插件启动时读取当前实际加载的 DSH 版本并判定，日志形如
-`[dsh-qq-bot] 运行于 DSH 0.2.1-rc.3（在声明支持范围 0.1.7-0 <= v < 0.3.0-0 内）`；
+`[dsh-qq-bot] 运行于 DSH 0.2.1-rc.3（在声明支持范围 0.2.0-rc.2 <= v < 0.3.0-0 内）`；
 `qqbot` 工具 `action="status"` 返回的 `runtime` 字段给出同一结论。支持范围只维护
 `lib/compat.js` 里的 `SUPPORT_FLOOR` / `SUPPORT_CEILING` 两个常量，DSH 出新版本不用改代码、也不用补版本表；
 版本识别失败或超出范围只提示，不影响收发消息。
