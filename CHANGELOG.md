@@ -1,3 +1,45 @@
+## 0.12.2 —— 修 0.12.1 的网页端设置面板与配置身份，顺带一轮文档订正
+
+0.12.1 换成带作用域的包名后，client bundle 里的模块 id 还写着 `dsh-qq-bot`。DSH 的 client-modules
+按**包名**索引模块行，于是判成「加载了但没注册自己」——**网页端整个设置面板不加载**。消息链路与工具
+在 Host 侧（`lib/index.js`），是另一条边，不受影响；修复 `e377fd5` 晚于发布，所以 0.12.1 的 tarball 里没有它。
+
+### 修复
+
+客户端侧其实有**两个** id 都必须是 npm 包名，而设置命名空间仍是条目 id——这三者被混在一起，害了两次：
+
+- `__ModuleLoader__.load({ id })` 的**模块 id** → `@sputnikzaychik/dsh-qq-bot`。DSH 的 client-modules 按包名索引模块行，
+  写错就报 `loaded without registering`，**整个设置面板不加载**（`e377fd5`）。
+- `plugins.bundle.config` 插槽注册的 **`key`** → 同样用包名。插件管理页渲染配置区时按 `pkg.name` 派发，
+  key 写成条目 id 的结果是**面板在、配置区空白**（`b7b5024`）。
+- **设置命名空间**（`NS`，读写配置用的那个）保持不变，仍是 profile 条目 id `dsh-qq-bot`——条目改名时的回退匹配也还按它。
+- `test/test-client.mjs` 两处断言都改成从 `package.json` 读包名（`registration.id === PKG_ID`、`options.key === PKG_ID`），
+  以后改包名不会再静默漏掉。
+- 配置残留清理（`cleanupStaleConfig`）原来只按条目 id `dsh-qq-bot` 认自己的配置行；0.12 起 DSH 自报的 `name`
+  已经是带作用域的包名，改成 `SELF_IDS` 精确命中两个名字（`8a68dd9`）。刻意不加 `qq-bot## 0.12.2 —— 修 0.12.1 的网页端设置面板与配置身份，顺带一轮文档订正
+
+0.12.1 换成带作用域的包名后，client bundle 里的模块 id 还写着 `dsh-qq-bot`。DSH 的 client-modules
+按**包名**索引模块行，于是判成「加载了但没注册自己」——**网页端整个设置面板不加载**。消息链路与工具
+在 Host 侧（`lib/index.js`），是另一条边，不受影响；修复 `e377fd5` 晚于发布，所以 0.12.1 的 tarball 里没有它。
+
+### 修复
+
+客户端侧其实有**两个** id 都必须是 npm 包名，而设置命名空间仍是条目 id——这三者被混在一起，害了两次：
+
+- `__ModuleLoader__.load({ id })` 的**模块 id** → `@sputnikzaychik/dsh-qq-bot`。DSH 的 client-modules 按包名索引模块行，
+  写错就报 `loaded without registering`，**整个设置面板不加载**（`e377fd5`）。
+- `plugins.bundle.config` 插槽注册的 **`key`** → 同样用包名。插件管理页渲染配置区时按 `pkg.name` 派发，
+  key 写成条目 id 的结果是**面板在、配置区空白**（`b7b5024`）。
+- **设置命名空间**（`NS`，读写配置用的那个）保持不变，仍是 profile 条目 id `dsh-qq-bot`——条目改名时的回退匹配也还按它。
+ 这类后缀正则兜底——
+  会把 `my-qq-bot` 这种别的插件误认成自己，现有测试里有一条专门守这个。
+
+### 文档订正
+
+- README：启动日志示例的支持范围还写着 `0.1.7-0`（`SUPPORT_FLOOR` 早已是 `0.2.0-rc.2`）；安装一节补上
+  从 npm 装的方式；设置页一节写清上面那个「模块 id / 命名空间」的区别。
+- ARCHITECTURE：`lib/client.js` 一行补同样的约束。
+- README 与 ARCHITECTURE 的版本号、CHANGELOG 演进范围同步到 0.12.2。
 ## 0.12.1 —— 与 0.12.0 同一批内容，外加发布链路与文档的补齐
 
 0.12.0 在清理 registry 残留时被 unpublish 过，npm 的政策是「用过的版本号永不复用」，
