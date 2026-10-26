@@ -61,7 +61,7 @@ DSH Agent（默认模型 + preset 人格 + 工具）
 | Milky 适配器 | `node test/test-adapter-milky.mjs` | 79/79 |
 | QQ 官方适配器 | `node test/test-adapter-qq-official.mjs` | 87/87 |
 | 打包后插件端到端（Host） | `node test/test-plugin.mjs` | 76/76 |
-| 客户端设置页 | `node test/test-client.mjs` | 80/80 |
+| 客户端设置页 | `node test/test-client.mjs` | 82/82 |
 | 权限 · 群管理 · 访客工具闸 | `node test/test-admin.mjs` | 32/32 |
 | HTTP / 代理层 | `node test/test-http.mjs` | 17/17 |
 | 配置合并与还原 | `node test/test-config.mjs` | 11/11 |
@@ -70,9 +70,9 @@ DSH Agent（默认模型 + preset 人格 + 工具）
 | 会话 id 回退 | `node test/test-session-id.mjs` | 5/5 |
 | 运行时兼容自检 | `node test/test-compat.mjs` | 14/14 |
 | 历史消息鉴权与定向 | `node test/test-history.mjs` | 23/23 |
-| 主动发言 | `node test/test-proactive.mjs` | 49/49 |
+| 主动发言 | `node test/test-proactive.mjs` | 65/65 |
 | 拥有者设置通道 | `node test/test-owner-settings.mjs` | 58/58 |
-| 一键全量 | `node test/run-all.mjs` | **18/18 套件 · 683 项** |
+| 一键全量 | `node test/run-all.mjs` | **18/18 套件 · 701 项** |
 `test-plugin.mjs` 用假 ctx 加载真正的 `lib/index.js` + 真适配器 + 零依赖 OneBot 模拟器，跑通完整链路（无需 DSH / QQ / 网络）。
 
 ## 二、快速开始
@@ -199,11 +199,15 @@ dsh plugin --profile web add ./dsh-qq-bot-<版本号>.tgz
 | **基本** | 发言与管理 | 回复策略（分片长度、慢回复提示、来源前缀、@ 回复、上下文头）、群管理指令与可管理群 |
 | **能力** | 识图与绘图 | 图片视觉（开关 / provider / model / 最多张数 / 下载超时）、生图（接口地址 / key / 模型 / 重试与轮询） |
 | **能力** | 搜索与抓取 | 联网搜索（代理 / 端点 / key）、图片反搜、`qq_webfetch` 与 moli 渲染 |
-| **能力** | 对话与人格 | 人格（开关 / 名字 / 设定 / 自定义 preset id）、主动发言（判断用 provider / 模型下拉）、聊天记录读取 |
+| **能力** | 对话与人格 | 人格（开关 / 名字 / 设定 / 自定义 preset id）、主动发言（判断 / 发言两段式可选，provider / 模型都是下拉）、聊天记录读取 |
 | **高级** | — | 会话（独立会话、固定命名、preset 与 owner/guest 分流 preset）、逐帧日志、重启退避 |
 
 - 改完点「保存」；**连接方式那几项**（模式/地址/token）保存后会自动重启适配器，其它项下一条消息生效。
 - 类型映射：布尔是勾选框；白名单是逗号分隔的文本框；连接方式是下拉框。
+- **主动发言可以分用两个模型（可选）**：默认单段——判断模型在同一次 JSON 里把话也写出来。填了 `proactive.speakModel`
+  才切成两段：判断沿用上面的 provider / model（只要稳出 `{speak, topic}`），正文交给发言模型单独写（判断挑便宜快的、发言挑文风合适的，
+  不用逼一个模型既守 JSON 又要有文采）。不填就走原来的单段路径，日志里也不多打东西。
+  两段式每次接话是 **2 次模型调用**（发言阶段重试的话最多 4 次），成本按两次算。详见下面「主动发言（可选）」。
 - **配置落点（本插件要求 DSH 0.2.0-rc.2 起）**：插件把自己的 `Config` schema 交给 DSH 当设置表单，界面上的改动由 DSH
   写进 **profile 的 `cordis.patch.yml`**（也就是下面「方式二」里那个文件）；0.1.6 时代的独立
   `settings.yaml` 文档已经不存在了。
@@ -310,6 +314,9 @@ Agent 会话的工作目录**不需要任何配置**：插件读取 DSH 官方�
       topicCooldownMinutes: 120   # 同一话题在这么久内不再重复
       provider: ''                # 留空 = 跟随群会话模型（走 DSH 已配置的渠道，零密钥）
       model: ''                   # 留空 = 跟随群会话模型；设置页是下拉，同一份模型目录
+      speakProvider: ''           # 发言阶段 provider（留空 = 与判断阶段相同）
+      speakModel: ''              # 发言阶段模型（留空 = 单段模式；填了才启用两段式）
+      speakFallback: true         # 两段式下发言失败时，回退用判断模型给的正文
       maxChars: 120               # 单条最大字数
       interests: ''               # 话题偏好（可空；接什么仍由模型决定）
       dryRun: false               # 演练：只记日志不发送
@@ -596,7 +603,7 @@ node test/test-imagegen.mjs   # 生图引擎：重试 / 轮询 / 响应解析（
 node test/test-session-id.mjs # 会话 id 回退（5 项）
 node test/test-compat.mjs     # 运行时兼容自检（14 项）
 node test/test-history.mjs    # 历史消息鉴权与定向（23 项）
-node test/test-proactive.mjs  # 主动发言（49 项）
+node test/test-proactive.mjs  # 主动发言（65 项）
 node test/run-all.mjs         # 一键全量（18 套件）
 ```
 
@@ -760,7 +767,14 @@ AI 生成内容声明见 [AI-DISCLOSURE.md](AI-DISCLOSURE.md)，**使用前请�
 
 - 只有 `enabled: true` **且** `groups` 显式列了群号才生效；留空 = 完全不跑。
 - 免打扰时段 `quietHours`、每小时 / 每天上限、两次发言最小间隔会先拦一道；不足 `minNewMessages` 条新消息则不进入判断。
+- **判断和发言可以分用两个模型（两段式，可选）**：默认单段——判断模型在同一次 JSON 里把话写出来，够用就别动。
+  填了 `speakModel`（或 `speakProvider`）才切成两段：判断阶段只出 `{speak, topic}`，正文交给发言模型单独写——
+  判断挑便宜快的、发言挑文风更合口味的，不用逼一个模型既守 JSON 又要有文采。发言阶段报错或写不出可用正文时，
+  `speakFallback`（默认开）回退到判断模型给的句子，不会因为第二段挂了就不说话；两项都不填时行为与以前完全一致。
+  注意**判断阶段仍在写正文**（那句 `message` 就是回退素材），精简 judge 提示词时别把它删了，否则回退会静默失效。
 - 模型返回 `speak=false` 就安静待着；不会 `@` 人、不发链接；`dryRun: true` 只记日志，方便先观察。
+- **提示词两道防编造约束**：判断阶段的 `topic` 只能来自聊天记录里出现过的事（没得接就 `false`），发言阶段只用记录里的信息、不编造具体事实。
+  这条是生产上真发出去一条「自编经历」之后补的——模型编造是概率性的，约束只压概率，消不掉。
 - **判断用哪个模型**：和识图完全一条路——都走 `ctx.llm.stream()`。`provider` / `model` 留空就**跟随该群会话的模型**，
   零密钥、不需要另配端点；设置页里两项都是**下拉**（provider 列出 DSH 的 provider，model 跟随 provider 列模型），
   想用便宜模型就显式选一个。群里还没有会话时按全局 agent preset 建同一条会话再取，不会因为「还没人说话」直接失败。
