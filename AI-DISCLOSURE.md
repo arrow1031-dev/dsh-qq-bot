@@ -36,7 +36,7 @@
 
 ### 验证情况
 
-- **自动化测试 27 个套件、971 项，全部通过**（`npm test` = `node test/run-all.mjs`；CI 在 Node 22 / 24 双版本上跑）：
+- **自动化测试 27 个套件、975 项，全部通过**（`npm test` = `node test/run-all.mjs`；CI 在 Node 22 / 24 双版本上跑）：
   - 正向 WebSocket 适配器 19 项 ／ 反向 12 项 ／ OneBot 12 30 项 ／ Satori 70 项 ／ Milky 79 项 ／ QQ 官方 87 项
   - Host 插件端到端 103 项（假 ctx + 真适配器 + Config 契约 + 配置热更新 + 废弃配置清理 + 9 个工具注册 / 搜索与生图工具路径）
   - 客户端设置页 83 项 ／ 权限·群管理·访客工具闸 32 项

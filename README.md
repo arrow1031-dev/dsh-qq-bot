@@ -64,7 +64,7 @@ DSH Agent（默认模型 + preset 人格 + 工具）
 | 客户端设置页 | `node test/test-client.mjs` | 83/83 |
 | 权限 · 群管理 · 访客工具闸 | `node test/test-admin.mjs` | 32/32 |
 | HTTP / 代理层 | `node test/test-http.mjs` | 17/17 |
-| 配置合并与还原 | `node test/test-config.mjs` | 19/19 |
+| 配置合并与还原 | `node test/test-config.mjs` | 23/23 |
 | 多引擎搜索结果解析 | `node test/test-websearch.mjs` | 5/5 |
 | 生图引擎 | `node test/test-imagegen.mjs` | 16/16 |
 | 会话 id 回退 | `node test/test-session-id.mjs` | 5/5 |
@@ -81,7 +81,7 @@ DSH Agent（默认模型 + preset 人格 + 工具）
 | /auth 与 /flow 指令解析 | `node test/test-flow-commands.mjs` | 34/34 |
 | 流程授权闸门 | `node test/test-flow-gate.mjs` | 16/16 |
 | 流程授权接线（守卫 + 遮蔽，一次调用一个码） | `node test/test-flow-wiring.mjs` | 14/14 |
-| 一键全量 | `node test/run-all.mjs` | **27/27 套件 · 971 项** |
+| 一键全量 | `node test/run-all.mjs` | **27/27 套件 · 975 项** |
 `test-plugin.mjs` 用假 ctx 加载真正的 `lib/index.js` + 真适配器 + 零依赖 OneBot 模拟器，跑通完整链路（无需 DSH / QQ / 网络）。
 
 ## 二、快速开始
@@ -641,7 +641,7 @@ npm install
 装好之后裸克隆即可运行：需要 DSH 运行时才能成立的少数断言（动态工具注册、qqgroup 工具路径）
 会自动跳过，而不是判失败；想看全，把 `DSH_PROFILE_MODULES` 指向一个装了 DSH 运行时的 profile 的
 `node_modules`。
-整套 **971 项**（27 个套件）：
+整套 **975 项**（27 个套件）：
 
 ```sh
 npm test
@@ -663,7 +663,7 @@ node test/test-plugin.mjs     # Host 半边（103 项，含 Config 契约与热�
 node test/test-client.mjs     # 客户端设置页（83 项）
 node test/test-admin.mjs      # 权限·群管理·访客工具闸（32 项）
 node test/test-http.mjs       # HTTP / 代理隧道（17 项）
-node test/test-config.mjs     # 配置合并与还原（19 项）
+node test/test-config.mjs     # 配置合并与还原（23 项）
 node test/test-websearch.mjs  # 多引擎搜索结果解析（5 项）
 node test/test-imagegen.mjs   # 生图引擎：重试 / 轮询 / 响应解析（16 项）
 node test/test-session-id.mjs # 会话 id 回退（5 项）
@@ -734,7 +734,7 @@ AstrBot 是 OneBot 的**消费方**（内置 aiocqhttp 反向 WS 服务端），
 | `test/test-client.mjs` | 客户端设置页（83 项，模拟模块加载器 + 最小 React 渲染 + 四档标签/二级分类 + 只写密钥护栏 + 命名空间回退） |
 | `test/test-admin.mjs` | 权限·群管理·访客工具闸专项（32 项；dsh-tools 可解析时另含工具路径断言） |
 | `test/test-http.mjs` | HTTP / 代理隧道（17 项） |
-| `test/test-config.mjs` | 配置合并与 volatile 还原（19 项） |
+| `test/test-config.mjs` | 配置合并、volatile 还原与废弃键清理（23 项） |
 | `test/test-totp.mjs` | TOTP / HOTP 官方向量与 fail-closed（44 项） |
 | `test/test-qr.mjs` | 二维码编码器（固定矩阵哈希守回归，18 项） |
 | `test/test-flow-auth.mjs` `test-flow-store.mjs` `test-flow-commands.mjs` `test-flow-gate.mjs` | 流程授权链路（24 + 16 + 29 + 16 项） |

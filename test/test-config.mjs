@@ -43,6 +43,24 @@ check('空对象不算废弃（只是没写过）', staleConfigPaths({ restart: 
 check('数组整体算叶子，不检查里面的键', staleConfigPaths({ proactive: { groups: ['a', 'b'] } }).length === 0);
 check('非对象入参返回空', staleConfigPaths(null).length === 0 && staleConfigPaths([1, 2]).length === 0 && staleConfigPaths('x').length === 0);
 
+console.log('9. staleConfigPaths 的两个边界（评审提出，曾会破坏用户配置）');
+{
+  // !!js 表达式在 DSH 配置里是合法值，解析出来是类实例；当成「未知子键」删掉会把表达式换成默认值。
+  class JsExpr { constructor(source) { this.source = source; } }
+  check('已知键上的 !!js 表达式不被当成废弃子键',
+    staleConfigPaths({ mode: new JsExpr('x'), auth: new JsExpr('y') }).length === 0,
+    JSON.stringify(staleConfigPaths({ mode: new JsExpr('x'), auth: new JsExpr('y') })));
+  check('带 symbol 标记的表达式包装也不被拆', (() => {
+    const tag = Symbol('expr');
+    const wrapped = { [tag]: true, value: 1 };
+    return staleConfigPaths({ auth: wrapped }).length === 0;
+  })());
+  check('未知键的值是 null 也算残留（以前永远清不掉）',
+    JSON.stringify(staleConfigPaths({ legacy: null })) === '[["legacy"]]');
+  const cleanDefaults = staleConfigPaths(DEFAULTS);
+  check('加了表达式跳过之后，DEFAULTS 仍然没有废弃键', cleanDefaults.length === 0, JSON.stringify(cleanDefaults));
+}
+
 const passed = results.filter(Boolean).length;
 console.log('\n' + passed + '/' + results.length + ' 项通过');
 if (failures > 0) { console.log('配置自测失败'); process.exit(1); }
