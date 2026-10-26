@@ -16,10 +16,13 @@
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
 import process from 'node:process';
+import { readFileSync } from 'node:fs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const BUNDLE = path.join(here, '..', 'lib', 'client.js');
-const PKG_ID = 'dsh-qq-bot';
+// 模块 id 必须等于包名，而包名会变（0.12 起带作用域）——从 package.json 读，别再写死，
+// 否则这条断言会在改名后继续“通过”，而线上 bundle 其实是坏的。
+const PKG_ID = JSON.parse(readFileSync(path.join(here, '..', 'package.json'), 'utf8')).name;
 
 let failures = 0;
 const results = [];
