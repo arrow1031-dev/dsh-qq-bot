@@ -53,9 +53,10 @@ check('describe 非数组', matchNamespace(null).ok === false);
 
 // ---------- 调用方闸门 ----------
 const cfg = { auth: { owners: ['319543886'], ownerSettings: true } };
-const privateEntry = { key: 'private-319543886', groupId: null, speaker: { userId: '319543886' } };
-const groupEntry = { key: 'group-488136808', groupId: '488136808', speaker: { userId: '319543886' } };
-const guestEntry = { key: 'group-488136808', groupId: '488136808', speaker: { userId: '10000' } };
+// 私聊判定读回合快照（turnSpeaker.groupId），所以夹具照真实结构写。
+const privateEntry = { key: 'private-319543886', groupId: null, turnSpeaker: { userId: '319543886', groupId: null } };
+const groupEntry = { key: 'group-488136808', groupId: '488136808', turnSpeaker: { userId: '319543886', groupId: '488136808' } };
+const guestEntry = { key: 'group-488136808', groupId: '488136808', turnSpeaker: { userId: '10000', groupId: '488136808' } };
 check('拥有者私聊放行', checkCaller(cfg, privateEntry).ok === true);
 check('拥有者在群里也拒绝', checkCaller(cfg, groupEntry).code === 'not-private');
 check('非拥有者拒绝', checkCaller(cfg, guestEntry).code === 'not-owner');

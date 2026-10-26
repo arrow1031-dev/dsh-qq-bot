@@ -1,3 +1,19 @@
+## 0.12.3 —— 安全修复：路径、跨群权限、私聊判定、撤回绑群（待发布）
+
+一轮攻防审计（四路：授权/身份、注入/路径、网络/协议端，加我自己一轮）扫出来的，按「能打穿」排序先修这四条。完整清单在 issue #13–#26。
+
+### 修复
+
+- **协议帧 chat id 未校验 → 会话目录越界，识图临时目录还会被递归删除**（#17）：外部 id 只放行 `[A-Za-z0-9._-]{1,64}`，其余取 `sha1` 前 12 位（`safeSessionId`）；`sessionWorkdir` 与新增的 `imageCacheDir` 都走它；`rm` 之前再用 `isInside(QQ_msg/qq-images, dir)` 复核一次归属。
+- **`qqgroup` 跨群越权**（#23）：动作目标群与说话人群不一致时，权限按**目标群**重算（`resolveTargetAuthority`）。之前默认 `manageGroups`/`group.allow` 为空让 `groupInScope` 对所有群为真，A 群管理员一句话能把 B 群全员禁言、踢人、改名。
+- **私聊判定读会被后到消息覆盖的 `entry.groupId`**（#24）：`owner-settings.checkCaller` 与 `qqauth` 的私聊判定改读回合快照 `turnSpeaker.groupId`；`perChatSession=false` 时不再能借群回合冒充私聊。
+- **`/recall` 不校验消息归属**（#25）：撤回前用 `get_msg` 核对 `group_id`，不是本群一律拒；`qqgroup` 的 recall 同规则。
+
+### 测试
+
+- 新增 `test/test-security.mjs`（21 项）：id 净化、越界复核、跨群重算、私聊快照、撤回绑群。
+- `test/mock-onebot.mjs` 的 `get_msg` 补 `group_id` 与 `retcode`，与真 NapCat 的返回对齐（之前假协议端不返回这两项，撤回校验测不出来）。
+- 全套 **29/29 套件通过**。
 ## 0.12.2 —— 修好「网页端加载失败」与「设置面板空白」
 
 0.12.1 把包名改成 `@sputnikzaychik/dsh-qq-bot` 之后，插件里有两处身份还写死着旧名字，
