@@ -5,6 +5,7 @@ import { safeSessionId, sessionWorkdir, imageCacheDir, isInside, qqMsgRootSync }
 import { resolveTargetAuthority, createAdmin } from '../lib/admin.js';
 import { checkCaller } from '../lib/owner-settings.js';
 import { assertPublicHost, publicFetch, multiEngineRequest, MAX_FETCH_BYTES } from '../lib/http.js';
+import { resolveListenAddress, tokenEquals, decodeFrames } from '../lib/bridge/ws.mjs';
 
 let pass = 0;
 const fails = [];
@@ -124,6 +125,43 @@ await check('publicFetch 拒绝回环', async () => { await assert.rejects(() =>
 await check('publicFetch 拒绝非 http(s)', async () => { await assert.rejects(() => publicFetch('file:///etc/passwd')); });
 await check('multiEngineRequest 直连分支拒绝内网', async () => { await assert.rejects(() => multiEngineRequest('GET', 'http://127.0.0.1:1/x', {}, null, '')); });
 await check('响应体上限是 8MB', () => assert.strictEqual(MAX_FETCH_BYTES, 8 * 1024 * 1024));
-console.log('\n' + pass + '/' + (pass + fails.length) + ' 项通过');
+
+console.log('' + String.fromCharCode(10) + '7. 反向 WS：默认只监听回环 + 恒定时间 token + 帧上限');
+await check('未配 token 时 0.0.0.0 被收回到回环', () => {
+  const a = resolveListenAddress('0.0.0.0:6199', false);
+  assert.strictEqual(a.host, '127.0.0.1');
+  assert.strictEqual(a.port, '6199');
+  assert.strictEqual(a.forcedLoopback, true);
+});
+await check('配了 token 才允许公网监听', () => {
+  const a = resolveListenAddress('0.0.0.0:6199', true);
+  assert.strictEqual(a.host, '0.0.0.0');
+  assert.strictEqual(a.forcedLoopback, false);
+});
+await check('本来就是回环的不动', () => assert.strictEqual(resolveListenAddress('127.0.0.1:6199', false).host, '127.0.0.1'));
+await check('只给端口也收回到回环', () => assert.strictEqual(resolveListenAddress('6199', false).host, '127.0.0.1'));
+await check('token 相等为真', () => assert.strictEqual(tokenEquals('s3cret', 's3cret'), true));
+await check('token 不等为假', () => assert.strictEqual(tokenEquals('s3cret', 's3cres'), false));
+await check('空 token 恒假（不允许空口令放行）', () => assert.strictEqual(tokenEquals('', ''), false));
+await check('长度不同不抛', () => assert.strictEqual(tokenEquals('a', 'aaaaaaaa'), false));
+function frameOf(len) {
+  const head = Buffer.alloc(10);
+  head[0] = 0x81;
+  head[1] = 0x7f;
+  head.writeBigUInt64BE(BigInt(len), 2);
+  return head;
+}
+await check('声明超大帧被标记 oversize', () => {
+  const got = decodeFrames(frameOf(1024 * 1024 * 100));
+  assert.strictEqual(got.oversize, true);
+});
+await check('正常小帧不误判', () => {
+  const payload = Buffer.from('hi');
+  const head = Buffer.alloc(2);
+  head[0] = 0x81; head[1] = payload.length;
+  const got = decodeFrames(Buffer.concat([head, payload]));
+  assert.ok(got.oversize !== true);
+  assert.strictEqual(got.messages.length, 1);
+});console.log('\n' + pass + '/' + (pass + fails.length) + ' 项通过');
 if (fails.length > 0) { console.log('安全回归失败：' + fails.join('; ')); process.exit(1); }
 console.log('安全回归通过');
