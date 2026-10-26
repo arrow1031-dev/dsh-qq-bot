@@ -81,7 +81,9 @@ async function runScenario(options) {
   const fakeWorkspaces = new Map();
   // 抓 proactive 的定时器：首次检查 = intervalMinutes*60000/2，远大于阈值。
   const proactiveTimers = [];
-  const stats = { speakCalls: 0 };
+  const stats = { speakCalls: 0, prompts: [] };
+  // 模拟插件 fiber 已经卸载：此时 ctx.timeout 会抛 INACTIVE（真 cordis 的 assertActive）。
+  let timerBroken = false;
   // 只看本场景这段日志：上一个场景的「OneBot 已连接」「no-cjk」不能算数。
   const logStart = logLines.length;
   const logs = () => logLines.slice(logStart);
@@ -126,7 +128,11 @@ async function runScenario(options) {
       async resolveAgent(sessionId) { if (!agents.has(sessionId)) agents.set(sessionId, fakeAgent(sessionId)); return { agent: agents.get(sessionId) }; },
     },
     timeout(cb, delay) {
-      if (Number(delay) >= 30000) { proactiveTimers.push({ cb, delay: Number(delay) }); return () => {}; }
+      if (Number(delay) >= 30000) {
+        if (timerBroken === true) throw new Error('cannot get required service "timer" in inactive context');
+        proactiveTimers.push({ cb, delay: Number(delay) });
+        return () => {};
+      }
       const t = setTimeout(cb, delay);
       return () => clearTimeout(t);
     },
@@ -137,6 +143,12 @@ async function runScenario(options) {
       async resolveModelInfo(provider, model) { return { provider, model, inputModalities: ['text'] }; },
       async *stream(options) {
         const model = String(options.model ?? '');
+        const promptText = (() => {
+          const msg = Array.isArray(options.messages) && options.messages.length > 0 ? options.messages[0] : null;
+          const part = msg !== null && Array.isArray(msg.content) && msg.content.length > 0 ? msg.content[0] : null;
+          return part !== null && typeof part.text === 'string' ? part.text : '';
+        })();
+        stats.prompts.push({ model, text: promptText });
         if (model === 'judge-m') {
           yield { type: 'text-delta', index: 0, text: JSON.stringify({ speak: true, topic: '下午打球', message: judgeMessage }) };
           return;
@@ -200,6 +212,8 @@ async function runScenario(options) {
     // 手动触发那一轮检查（不用真的等三分钟）。
     const best = proactiveTimers.slice().sort((a, b) => b.delay - a.delay)[0];
     const tick = best.cb;
+    // 让 tick 结束后的「排下一轮」撞上已卸载的定时器服务（B1 的回归点）。
+    if (options.breakTimer === true) timerBroken = true;
     await tick();
     await verify({ mock, stats, logs, waitFor });
   } catch (error) {
@@ -223,7 +237,13 @@ for (const scenario of [
     async verify({ mock, stats, logs, waitFor }) {
       const sentGroup = await waitFor(() => mock.sent.find((s) => Number(s.group_id) === 33333 || Number(s.target_id) === 33333), 20000, '主动发言发送');
       const text = textOf({ message: sentGroup.message });
-      check('发言阶段两次拿到英文拒绝语（说明真调到了发言模型）', stats.speakCalls >= 2, 'speakCalls=' + stats.speakCalls);
+      check('发言阶段正好试了 2 次（attempts 改了这里会挂）', stats.speakCalls === 2, 'speakCalls=' + stats.speakCalls);
+      // 摘要方向：旧→新。排序被删掉时这条会挂（此前只有纯函数测试，端到端漏了）。
+      const judgePrompt = stats.prompts.find((item) => item.model === 'judge-m');
+      const promptText = judgePrompt === undefined ? '' : judgePrompt.text;
+      const oldAt = promptText.indexOf('下午有人打球吗');
+      const newAt = promptText.indexOf('那我来订');
+      check('判断提示词里的摘要按旧→新排列', oldAt >= 0 && newAt > oldAt, 'old@' + oldAt + ' new@' + newAt);
       check('英文拒绝语没有被发出去', !/^Sorry,/i.test(text), JSON.stringify(text.slice(0, 40)));
       check('回退到了判断阶段的正文', text.includes('老地方'), JSON.stringify(text));
       check('verbose 日志记录了 no-cjk 拦截', logs().some((l) => l.includes('no-cjk')), 'logLines=' + logs().length);
@@ -252,6 +272,31 @@ for (const scenario of [
       const text = textOf({ message: sentGroup.message });
       check('反向对照：requireCjk 关掉后英文被发出去了（且只发一条）', mock.sent.length === 1, 'sent=' + mock.sent.length);
       check('反向对照：发出去的正是判断阶段那句英文', /^Sorry,/.test(text), JSON.stringify(text.slice(0, 40)));
+    },
+  },
+  {
+    label: '两段式关掉兜底：发言模型两次回英文 → 一条都不发（不回退）',
+    judgeMessage: JUDGE_TEXT,
+    // speakFallback:false 时发言阶段全军覆没就该闭嘴；此前没有用例，把它改成恒 true 也不会挂。
+    proactive: { speakModel: 'speak-m', speakFallback: false, requireCjk: true },
+    async verify({ mock, stats, logs }) {
+      await sleep(300);
+      check('关掉兜底：发言阶段仍旧试了 2 次', stats.speakCalls === 2, 'speakCalls=' + stats.speakCalls);
+      check('关掉兜底：一条都没有发出去', mock.sent.length === 0, 'sent=' + mock.sent.length);
+      check('关掉兜底：没有走回退分支', !logs().some((line) => line.includes('回退用判断模型给的正文')));
+    },
+  },
+  {
+    label: '卸载竞态：tick 回来时定时器服务已不可用（B1 回归点）',
+    judgeMessage: JUDGE_TEXT,
+    proactive: {},
+    // 让 tick 结束后的「排下一轮」抛 INACTIVE：以前这个异常会变成 unhandled rejection，
+    // timer 回调丢弃返回值，Node 24 直接 exit 1——插件重挂/升级就能带崩整个宿主。
+    breakTimer: true,
+    async verify({ logs }) {
+      await sleep(200);
+      check('排不了下一轮时只记一行日志，不把异常抛进进程', logs().some((line) => line.includes('不再排下一轮')), 'logLines=' + logs().length);
+      check('进程还活着（能跑到这一行就说明没有 unhandled rejection）', true);
     },
   },
 ]) {

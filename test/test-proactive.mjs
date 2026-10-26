@@ -60,6 +60,17 @@ const ordered = normalizeMessages(rawNewestFirst, null);
 check('归一化把「最新在前」纠正为升序', ordered.length === 3 && ordered[0].time < ordered[1].time && ordered[2].time === nowSec2 - 60, JSON.stringify(ordered.map((m) => m.time)));
 check('事件闸按最新一条算时效', Math.abs(analyzeEvent(ordered, { nowSec: nowSec2, staleMinutes: 15 }).ageMinutes - 1) <= 1);
 check('摘要最后一行是最新消息', buildDigest(ordered, 3).trim().split(String.fromCharCode(10)).pop().includes('几点到'));
+// 同秒连发：time 相同就只能靠 message_id 定先后；排序反了会把「最早那条」当成最新一条。
+const sameSec = nowSec2 - 30;
+const sameSecond = normalizeMessages([
+  { message_id: 12, time: sameSec, user_id: 2, sender: { nickname: '乙' }, message: [{ type: 'text', data: { text: '行' } }] },
+  { message_id: 11, time: sameSec, user_id: 1, sender: { nickname: '甲' }, message: [{ type: 'text', data: { text: '下午打球吗？' } }] },
+], null);
+check('同秒消息按 message_id 升序（id 小的先发）',
+  sameSecond.length === 2 && Number(sameSecond[0].id) === 11 && Number(sameSecond[1].id) === 12,
+  JSON.stringify(sameSecond.map((m) => m.id)));
+check('同秒两条时认最后一条为最新（短应答 → 不接）',
+  analyzeEvent(sameSecond, { nowSec: nowSec2, staleMinutes: 15 }).ok === false);
 check('validateMessage 正常', validateMessage('这游戏我也在玩', { maxChars: 50 }).ok === true);
 check('validateMessage 超长', validateMessage('很长'.repeat(60), { maxChars: 50 }).ok === false);
 check('validateMessage 链接', validateMessage('看这个 https://x.com', { maxChars: 50 }).ok === false);
@@ -79,8 +90,18 @@ check('requireCjk 开启：中英混排放行（13 字）', validateMessage('那
 check('requireCjk 开启：纯 々 串放行（真验到 U+3005）', validateMessage('々'.repeat(13), { maxChars: 50, requireCjk: true }).ok === true);
 check('requireCjk 开启：扩展 B 区生僻字放行（真验到 u 标志）', validateMessage('𠀀'.repeat(13), { maxChars: 50, requireCjk: true }).ok === true);
 check('requireCjk 开启：emoji 短回应按码点算长度，不误拦', validateMessage('ok 👍👍👍👍👍', { maxChars: 50, requireCjk: true }).ok === true);
+// 判据顺序：no-cjk 必须排在最后，否则纯符号串会被报成 "no-cjk" 而不是 "无实质内容"。
+check('requireCjk 开启：纯符号串仍报「无实质内容」（no-cjk 不吞具体原因）',
+  validateMessage('！'.repeat(15), { maxChars: 50, requireCjk: true }).reason === '无实质内容');
+check('requireCjk 开启：超长英文报长度而不是 no-cjk',
+  validateMessage('a'.repeat(80), { maxChars: 50, requireCjk: true }).reason === '超过长度上限 50');
 check('requireCjk 边界：12 字符整句英文放行（门槛左）', validateMessage('abcdefghijkl', { maxChars: 50, requireCjk: true }).ok === true);
 check('requireCjk 边界：13 字符整句英文拦住（门槛右）', (() => { const r = validateMessage('abcdefghijklm', { maxChars: 50, requireCjk: true }); return r.ok === false && r.reason === 'no-cjk'; })());
+// maxChars 也按码点：「ok + 58 个 👍」是 60 码点 / 118 码元，按码元算会被误判超长。
+check('长度上限按码点：60 码点 / 118 码元在 maxChars=60 下放行',
+  validateMessage('ok' + '👍'.repeat(58), { maxChars: 60 }).ok === true);
+check('长度上限按码点：61 码点仍然拦住',
+  validateMessage('ok' + '👍'.repeat(59), { maxChars: 60 }).reason === '超过长度上限 60');
 
 const now = Date.now();
 check('allowSend 正常放行', allowSend({ now, sentTimes: [], lastSentAt: 0, maxPerHour: 2, maxPerDay: 4, minGapMinutes: 10 }).ok === true);
