@@ -2,7 +2,7 @@
 import {
   parseClock, nowMinutes, parseQuietRanges, isQuiet, summarizeSegments,
   normalizeMessages, newerThan, buildDigest, buildPrompt, parseDecision,
-  validateMessage, allowSend, analyzeEvent, topicKey, topicRepeated, resolveModel,
+  validateMessage, allowSend, analyzeEvent, topicKey, topicRepeated, resolveStageModels, buildSpeakPrompt, resolveModel,
 } from '../lib/proactive.js';
 
 let pass = 0;
@@ -40,6 +40,7 @@ check('buildDigest 含昵称与正文', digest.includes('小明') && digest.incl
 const prompt = buildPrompt({ persona: '一只猫娘', interests: '游戏', digest: '[10:00] 小明：在吗', maxChars: 80 });
 check('buildPrompt 含人设/偏好/摘要', prompt.includes('一只猫娘') && prompt.includes('游戏') && prompt.includes('在吗'));
 check('buildPrompt 含 JSON 指令与长度', prompt.includes('speak') && prompt.includes('80'));
+check('buildPrompt 约束话题来源（不许虚构经历）', prompt.includes('topic 只能来自') && prompt.includes('不要虚构自己做过什么'));
 
 const d1 = parseDecision('{"speak":true,"topic":"游戏","message":"我也在"}');
 check('parseDecision 正常 JSON', d1 !== null && d1.speak === true && d1.message === '我也在' && d1.topic === '游戏');
@@ -122,6 +123,24 @@ check('来源解析：缺 model 要单独报出来',
 
 const blanks = resolveModel({ provider: '  ', model: '  ' }, { provider: 'p2', model: 'm2' });
 check('来源解析：空白字符串视为未配置', blanks.provider === 'p2' && blanks.model === 'm2');
+
+// ---- 两段式：判断与发言可分用不同模型（全部留空 = 单段模式，行为不变）----
+const single = resolveStageModels({ provider: 'p1', model: 'm1' }, null);
+check('两段式：默认不启用', single.twoStage === false);
+check('两段式：默认判断与发言同源', single.judge.provider === 'p1' && single.judge.model === 'm1' && single.speak.model === 'm1');
+const both = resolveStageModels({ provider: 'p1', model: 'm1', speakModel: 'm2' }, null);
+check('两段式：配了 speakModel 才启用', both.twoStage === true && both.speak.model === 'm2' && both.judge.model === 'm1');
+check('两段式：发言沿用判断的 provider', both.speak.provider === 'p1');
+const split = resolveStageModels({ judgeProvider: 'jp', judgeModel: 'jm', speakProvider: 'sp', speakModel: 'sm' }, null);
+check('两段式：判断/发言完全独立', split.judge.provider === 'jp' && split.judge.model === 'jm' && split.speak.provider === 'sp' && split.speak.model === 'sm');
+const sessionStage = resolveStageModels({}, { provider: 'sp0', model: 'sm0' });
+check('两段式：留空跟随群会话模型', sessionStage.judge.provider === 'sp0' && sessionStage.judge.model === 'sm0');
+const missing = resolveStageModels({ speakModel: 'm2' }, null);
+check('两段式：缺 provider 会报缺项', missing.judge.missing.length > 0 && missing.speak.missing.length > 0);
+const speakPromptText = buildSpeakPrompt({ persona: '一只猫娘', digest: '[10:00] 甲：今天开黑吗', topic: '开黑', maxChars: 60 });
+check('发言提示词：带人设/话题/字数', speakPromptText.includes('一只猫娘') && speakPromptText.includes('开黑') && speakPromptText.includes('60'));
+check('发言提示词：要求只输出正文', speakPromptText.includes('只输出这句话本身') && speakPromptText.includes('不要输出 JSON'));
+check('发言提示词：禁止编造具体事实', speakPromptText.includes('不要编造具体事实') && speakPromptText.includes('只使用上面聊天记录里的信息'));
 
 console.log('\n' + pass + ' 通过 / ' + fail + ' 失败');
 process.exit(fail === 0 ? 0 : 1);
