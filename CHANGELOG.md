@@ -1,8 +1,29 @@
-## 0.12.1 —— 与 0.12.0 同一批内容（0.12.0 这个号没能发出去）
+## 0.12.1 —— 与 0.12.0 同一批内容，外加发布链路与文档的补齐
 
 0.12.0 在清理 registry 残留时被 unpublish 过，npm 的政策是「用过的版本号永不复用」，
-所以 0.12.x 的首个发布版本是 0.12.1。内容与下面 0.12.0 两节完全一致——没有代码改动，
-只改版本号与版本叙述。
+所以 0.12.x 的首个发布版本是 0.12.1。**功能内容与下面 0.12.0 两节完全一致，代码没有改动**；
+这一版单独记的是发布链路和文档——它们属于这一批改动的一部分，不能只留在 PR 里。
+
+### 发布链路
+
+- **`release.yml` 补 `actions/setup-node`（node 24）**：runner 镜像自带的 npm 10.9.9 不认 OIDC，
+  `npm publish --provenance` 在发起 OIDC 交换之前就报 `ENEEDAUTH`——这跟 `id-token: write` 无关，
+  Trusted Publishing 要求 npm ≥ 11.5.1。补上之后本版首次以 OIDC 身份发布成功（npm 上发布者显示为
+  GitHub Actions，provenance 进了 sigstore transparency log）。
+- **新版本会先有元数据、后有 tarball**：publish 返回成功后 registry 上立刻能查到版本号，但 tarball
+  仍 404 约 4 分钟（`npm notice Your package is being processed`），期间 `npm pack` / `npm install` 会 404。
+  不是失败，等即可——别据此重发一个版本号。
+
+### 文档
+
+- README：当前版本 0.11.x → 0.12.x；两处「一键全量（27 套件）」→ 28；CHANGELOG 范围 → 0.12.1。
+- ARCHITECTURE：标题版本、`tools.js` 8 → 9 个工具（补 `qqauth`）、套件数 27 → 28；新增 §3.6
+  「编排工具闸门与产物投递」数据流（同名接管 → 私聊动态码落成 grant → 一次消费 → 按会话目录打包回传）；
+  设计取舍补 5 行（同名接管 / 一次性授权 + 30 秒窗口 / 回合身份快照 / 产物按会话目录 / 中间发言顺序）。
+- AI-DISCLOSURE：已验证工具补 `qqauth`（9 个）；配置合并项数 23 → 24。
+- 去掉 README 与 AI-DISCLOSURE 的「1018 项」总项数：它与逐套件列表之和（1013）对不上，且随可选 peer
+  是否存在而变化；改为只报套件数，逐项数留在各自那一行（那部分本机可核）。
+- `ci.yml` 注释：26 个套件 → 28，补 `flow-wiring` / `interim`。
 
 ## 0.12.0 —— 私聊动态码授权（流程授权）与产物投递
 
