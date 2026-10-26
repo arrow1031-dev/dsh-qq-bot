@@ -22,6 +22,14 @@ jobs:
         with:
           fetch-depth: 0
 
+      # runner 镜像自带的 npm 不足以做 Trusted Publishing：ubuntu-24.04（镜像 20261012.334.1）
+      # 预装 Node 22.23.3 / npm 10.9.9，OIDC 交换要求 npm ≥ 11.5.1，
+      # 不装这一步 publish 连 OIDC 都不会尝试，直接 need auth（ENEEDAUTH）。
+      - name: 安装 Node.js（npm ≥ 11.5.1 才认 OIDC）
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
       - name: 读取新版本号
         id: version
         run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
