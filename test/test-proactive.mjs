@@ -49,6 +49,17 @@ const d2 = parseDecision(fence + 'json\n{"speak":false}\n' + fence);
 check('parseDecision 去掉代码块', d2 !== null && d2.speak === false);
 check('parseDecision 非法返回 null', parseDecision('不是 JSON') === null);
 
+// 历史消息方向：NapCat 是最新在前，归一化必须纠正成升序，否则事件闸/提示词全看错消息
+const nowSec2 = Math.floor(Date.now() / 1000);
+const rawNewestFirst = [
+  { message_id: 3, time: nowSec2 - 60, user_id: 3, sender: { nickname: '丙' }, message: [{ type: 'text', data: { text: '你们几点到？' } }] },
+  { message_id: 2, time: nowSec2 - 300, user_id: 2, sender: { nickname: '乙' }, message: [{ type: 'text', data: { text: '还早' } }] },
+  { message_id: 1, time: nowSec2 - 600, user_id: 1, sender: { nickname: '甲' }, message: [{ type: 'text', data: { text: '下午打球吗' } }] },
+];
+const ordered = normalizeMessages(rawNewestFirst, null);
+check('归一化把「最新在前」纠正为升序', ordered.length === 3 && ordered[0].time < ordered[1].time && ordered[2].time === nowSec2 - 60, JSON.stringify(ordered.map((m) => m.time)));
+check('事件闸按最新一条算时效', Math.abs(analyzeEvent(ordered, { nowSec: nowSec2, staleMinutes: 15 }).ageMinutes - 1) <= 1);
+check('摘要最后一行是最新消息', buildDigest(ordered, 3).trim().split(String.fromCharCode(10)).pop().includes('几点到'));
 check('validateMessage 正常', validateMessage('这游戏我也在玩', { maxChars: 50 }).ok === true);
 check('validateMessage 超长', validateMessage('很长'.repeat(60), { maxChars: 50 }).ok === false);
 check('validateMessage 链接', validateMessage('看这个 https://x.com', { maxChars: 50 }).ok === false);
