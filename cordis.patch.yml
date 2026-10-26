@@ -3,6 +3,9 @@
 # 这里不写 config，插件会用代码里的默认值（正向 WS ws://127.0.0.1:3001、
 # HTTP http://127.0.0.1:3000）。
 #
+# 注意：`name` 必须是安装后的真实包名（DSH 按 profile 目录解析它），`id` 才是配置键——
+# 改包名时只改 name，id 保持不变，老用户的配置覆盖才不会失效。
+#
 # 想改配置，不要改这个文件（升级会覆盖），而是写进你自己的
 # $DSH_HOME/profiles/<profile>/cordis.patch.yml —— 它在所有 bundle 之后应用，
 # 用 id 定向覆盖即可：
@@ -18,4 +21,4 @@
 #
 - insert:
     - id: dsh-qq-bot
-      name: 'dsh-qq-bot'
+      name: '@sputnikzaychik/dsh-qq-bot'
