@@ -32,15 +32,15 @@
 | 机器人账号 | 真实 QQ 号（OneBot `get_login_info` 可查），非模拟器 |
 | LLM | 自定义 OpenAI 兼容中转（地址与 key **只存在于部署侧配置，不进仓库**） |
 | 生图 | 自填 OpenAI 兼容 `/images/generations`（实测 `seedream-5.0-lite`，约 40 秒出图、单张约 3.6 MB） |
-| 已验证工具 | `qqbot` / `qqconfig` / `qqgroup` / `qq_websearch` / `qq_webfetch` / `qq_imgsearch` / `qq_history` / `qq_draw`（8 个全部注册成功） |
+| 已验证工具 | `qqbot` / `qqconfig` / `qqgroup` / `qq_websearch` / `qq_webfetch` / `qq_imgsearch` / `qq_history` / `qq_draw` / `qqauth`（9 个全部注册成功） |
 
 ### 验证情况
 
-- **自动化测试 28 个套件、1018 项，全部通过**（`npm test` = `node test/run-all.mjs`；CI 在 Node 22 / 24 双版本上跑）：
+- **自动化测试 28 个套件全部通过**（`npm test` = `node test/run-all.mjs`；CI 在 Node 22 / 24 双版本上跑）：
   - 正向 WebSocket 适配器 19 项 ／ 反向 12 项 ／ OneBot 12 30 项 ／ Satori 70 项 ／ Milky 79 项 ／ QQ 官方 87 项
   - Host 插件端到端 103 项（假 ctx + 真适配器 + Config 契约 + 配置热更新 + 废弃配置清理 + 9 个工具注册 / 搜索与生图工具路径）
   - 客户端设置页 84 项 ／ 中间发言 14 项 ／ 权限·群管理·访客工具闸 32 项
-  - HTTP·代理隧道 17 项 ／ 配置合并 23 项 ／ 多引擎搜索解析 5 项 ／ 运行时兼容自检 14 项
+  - HTTP·代理隧道 17 项 ／ 配置合并 24 项 ／ 多引擎搜索解析 5 项 ／ 运行时兼容自检 14 项
   - 生图引擎 16 项（URL 拼接、响应解析、500/429 重试、4xx 不重试、网络异常重试、task_id 轮询、关闭轮询）
   - 会话 id 作用域回退 5 项（旧工作区会话不删、改用 `-ws<哈希>` 新 id）
   - 历史消息鉴权 23 项 ／ 主动发言 84 项 ／ 主动发言回合端到端 35 项 ／ 拥有者设置通道 58 项

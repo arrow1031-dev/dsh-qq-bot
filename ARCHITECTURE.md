@@ -1,4 +1,4 @@
-# 架构（0.11.0）
+# 架构（0.12.1）
 
 把 QQ 消息桥给 DSH Agent：五种聊天协议各有一个**独立子进程适配器**，插件内核只认一套 stdio 帧和一套统一消息段（OneBot 11 风格）。帧的权威定义只有一处：[lib/bridge/CONTRACT.md](lib/bridge/CONTRACT.md)。
 
@@ -19,7 +19,7 @@ lib/adapters/*.mjs        独立子进程，零 npm 依赖 —— 只懂协议�
    ▼
 lib/index.js              Cordis 插件，Host 侧 —— 只懂业务
    ├─ admin.js 权限 + 群管理指令      ├─ session.js 会话/路由/访客工具闸
-   ├─ tools.js 8 个 Agent 工具        ├─ owner-settings.js 拥有者改设置
+   ├─ tools.js 9 个 Agent 工具        ├─ owner-settings.js 拥有者改设置
    ├─ workspace.js QQ_msg 工作区根
    └─ 联网与媒体：http.js · websearch.js · imgsearch.js · moli.js · imagegen.js
    │ ctx.sessionController（官方组装路径）
@@ -45,7 +45,7 @@ DSH Agent（默认每个 QQ 会话一个）
 | `lib/client.js` | 浏览器侧设置选项卡（手写 `__ModuleLoader__` bundle，只依赖 react） | —（浏览器模块） | DSH 设置页 |
 | `lib/admin.js` | 三路权限判定（静态名单/动态授权/本群身份）+ 群管理指令 | `createAdmin` → `resolveAuthority` `hasPerm` `handleAdminCommand` `TIER_LABEL` | `index.js`、`tools.js`（qqgroup 鉴权） |
 | `lib/session.js` | 会话条目与路由、访客工具闸、被回复图片收集 | `createSession` → `sessionRoute` `getEntry` `entryForAgent` `collectReplyImageUrls` | `index.js` |
-| `lib/tools.js` | 8 个 Agent 工具：`qqbot` `qqconfig` `qqgroup` `qq_websearch` `qq_webfetch` `qq_imgsearch` `qq_history` `qq_draw` | `createTools` → `registerTools` | `index.js`（动态 import `@deepseek-ai/dsh-tools`） |
+| `lib/tools.js` | 9 个 Agent 工具：`qqbot` `qqconfig` `qqgroup` `qq_websearch` `qq_webfetch` `qq_imgsearch` `qq_history` `qq_draw` `qqauth` | `createTools` → `registerTools` | `index.js`（动态 import `@deepseek-ai/dsh-tools`） |
 | `lib/owner-settings.js` | 拥有者设置通道：白名单、确认码、限流、审计 | `createOwnerSettings` → `show` `propose` `apply` `cancel`，`SPECS` `checkCaller` | `tools.js`（qqconfig）、`index.js`（审计落盘） |
 | `lib/workspace.js` | QQ_msg 工作区根解析（Documents 解析，与 DSH 默认工作区同级） | `qqMsgRootSync` `sessionWorkdir` | `index.js`、`imgsearch.js` |
 | `lib/http.js` | 通用 HTTP + CONNECT 代理隧道 + 响应文本工具 | `multiEngineRequest` `fetchUrlViaProxy` `webSearchPost` | `websearch.js`、`imgsearch.js`、`index.js`（qq_webfetch） |
@@ -74,7 +74,7 @@ DSH Agent（默认每个 QQ 会话一个）
 
 **扩展点**（其余文件基本不用动）：加协议 → 新写 `lib/adapters/<协议>.mjs` + 在 `lib/index.js` 的 `ADAPTER_FILES` 与 `lib/config.js` 加一项；加协议动作 → 改对应适配器的映射表；加 Agent 工具 → 只改 `lib/tools.js`。
 
-**测试与发布**：`test/run-all.mjs` 汇总 **27 个套件**（5 个协议各一套，其余为插件/权限/设置/搜索/生图/历史/授权链路等），每个协议都自带零依赖假协议端（OneBot 11 的是 `test/mock-onebot.mjs`，其余在各自 `test-adapter-*.mjs` 内）；`npm test` 即跑全部。进 npm 包的只有 `lib/`、`cordis.patch.yml` 与根目录文档（见 `package.json` 的 `files`），`test/`、`examples/` 只在仓库里。
+**测试与发布**：`test/run-all.mjs` 汇总 **28 个套件**（5 个协议各一套，其余为插件/权限/设置/搜索/生图/历史/授权链路等），每个协议都自带零依赖假协议端（OneBot 11 的是 `test/mock-onebot.mjs`，其余在各自 `test-adapter-*.mjs` 内）；`npm test` 即跑全部。进 npm 包的只有 `lib/`、`cordis.patch.yml` 与根目录文档（见 `package.json` 的 `files`），`test/`、`examples/` 只在仓库里。
 
 ## 3. 关键数据流
 
@@ -131,6 +131,19 @@ DSH Agent（默认每个 QQ 会话一个）
    会重挂一次插件（适配器断连重连），一次性，不会自激。
 
 
+### 3.6 编排工具闸门与产物投递（`flowAuth`，默认关）
+
+| # | 位置 | 做什么 |
+| --- | --- | --- |
+| 1 | `session.js` 接管块 | 开关打开时，在**本 agent 的 tools 作用域**里给 `subagent` / `subagent_fork` / `spawn_teammate` / `workflow` 各注册一个同名遮蔽层：先问闸门，放行才把参数原样转给被遮蔽的实现；单个工具注册失败就退回 `tools.restrict({deny})` 收掉它 |
+| 2 | `flow-auth.js` | `requestAuth` 记一条待授权；私聊里 `/auth <6位码>` 命中即 `consumeToken`（30 秒窗口、同窗口不可重放、连错 5 次锁 15 分钟），落成一条 **grant** |
+| 3 | `session.js` guard | 工具真正执行前查闸门：一次 grant 只够一次消费；放行时记一笔账，同一回合里遮蔽层不再二次消费 |
+| 4 | `entry.turnSpeaker` | 身份按**回合快照**固化——排队期间别人插话，不会把访客的调用判成拥有者的 |
+| 5 | `workspace.js sessionWorkdir` | 开关打开时给会话独占 `QQ_msg/<会话id>`；这一轮跑完只扫这个目录里新增/改动的文件（隐藏文件跳过、符号链接不跟、`flow.maxBytes` / `flow.maxFiles` 截断） |
+| 6 | `index.js deliverFlowArtifacts` | 按 `flow.deliver` 回传（默认私聊，`group:<群号>` 丢群，`none` 只回文字）；打包输入经 `artifactInputLines` 归一化，防 `zip -@` 把文件名当参数 |
+
+中间发言（interim）走同一条发送队列：先发一条无引用的短句，本轮结束后的结论才带 `reply_to`，用户不必等整轮跑完才收到第一声。
+
 ## 4. 设计取舍
 
 | 决策 | 为什么 |
@@ -145,6 +158,11 @@ DSH Agent（默认每个 QQ 会话一个）
 | 访客工具闸用白名单 + 每次执行求值 | 黑名单易漏（如 PTC 的 `run_code`）；按消息增删工具会让工具面抖动、多耗 token，故用可变标志位 |
 | 发送走队列限速 | 平台有频控；每适配器自带 `--send-gap-ms`，默认 350ms（Milky 900ms） |
 | `reply` 段不写进正文 | 写 `[回复]` 会让「引用 + `/mute`」的正文以 `[回复]` 开头，斜杠不在首位，群指令永远匹配不上 |
+| 同名接管而非替换 | 高危工具本来就不该展示给一般对话 bot；在本 agent 的 tools 作用域里同名覆盖，DSH 正常会话的工具面完全不受影响，插件卸载后原样恢复 |
+| 授权一次性消费 + 30 秒窗口 | 动态码会被截图/转发，所以只放行一次调用、只认当前 30 秒窗口（要求 NTP 对齐）；代价是每轮都要有人在私聊里回一条 |
+| 回合身份快照 | 守卫读的是回合开始时的发言人；若读实时发言人，排队期间插话的访客就能被当成拥有者 |
+| 产物只扫会话自己的目录 | 共用 `QQ_msg` 根时「谁写的新文件」分不出来，共用必然串会话，所以开关打开就独占一个会话目录 |
+| 中间发言先出声、结论再引用 | 长任务里用户先收到「在做」，最终答案才带引用；两者走同一发送队列，顺序不会乱 |
 
 ## 5. 已知边界
 

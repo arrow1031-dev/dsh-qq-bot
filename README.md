@@ -1,6 +1,6 @@
 # dsh-qq-bot —— 把 QQ 接到 DSH Agent
 
-> **当前版本 0.11.x**：要求 **DSH 0.2.0-rc.2 或更新的 0.2.x 版本**（工具走 `ctx.get('tools')` 注入契约；DSH 0.2.1 系列 rc.2 / rc.3 已实测适配）。
+> **当前版本 0.12.x**：要求 **DSH 0.2.0-rc.2 或更新的 0.2.x 版本**（工具走 `ctx.get('tools')` 注入契约；DSH 0.2.1 系列 rc.2 / rc.3 已实测适配）。
 >
 > **⚠️ 设置页入口变了**：不再是「设置 → QQ 机器人」，改为在**首页侧边栏打开 插件 → 已安装 → dsh-qq-bot**。
 > 配置项与落点（profile 的 `cordis.patch.yml`）都没变，**现有配置无需迁移**。
@@ -82,7 +82,7 @@ DSH Agent（默认模型 + preset 人格 + 工具）
 | 流程授权闸门 | `node test/test-flow-gate.mjs` | 16/16 |
 | 流程授权接线（守卫 + 遮蔽，一次调用一个码） | `node test/test-flow-wiring.mjs` | 20/20 |
 | 中间发言（哪句现在发、哪句留给结论） | `node test/test-interim.mjs` | 14/14 |
-| 一键全量 | `node test/run-all.mjs` | **28/28 套件 · 1018 项** |
+| 一键全量 | `node test/run-all.mjs` | **28/28 套件全绿** |
 `test-plugin.mjs` 用假 ctx 加载真正的 `lib/index.js` + 真适配器 + 零依赖 OneBot 模拟器，跑通完整链路（无需 DSH / QQ / 网络）。
 
 ## 二、快速开始
@@ -137,7 +137,7 @@ dsh plugin --profile web add ./dsh-qq-bot-<版本号>.tgz
 
 `dsh plugin` 本质是 pnpm 的前置封装：装完包后，它会**自动把声明了 `dsh.bundle.patch` 的依赖加入 profile 的层栈**（本包的 package.json 已声明），并连同唯一的运行时依赖 `@deepseek-ai/schemastery` 一起装上。装完**重启 DSH（桌面版重启应用 / CLI 重启 `dsh web`）**生效。
 
-> **版本要求**：0.11.x 要求 DSH ≥ 0.2.0-rc.2；DSH 0.2.1-rc.3 已实测（见下文「DSH 0.2 兼容」）。
+> **版本要求**：0.12.x 要求 DSH ≥ 0.2.0-rc.2；DSH 0.2.1-rc.3 已实测（见下文「DSH 0.2 兼容」）。
 
 > **升级注意**：`dsh plugin add` 走 pnpm，按 tarball **完整性哈希**缓存——改了代码要打成**新版本号文件名**再装（0.8.0 → 0.8.1），沿用旧名会被判「已最新」跳过。
 > `lib/client.js` 是浏览器侧代码，装完重启后还要**刷新浏览器页面**才加载新 bundle。
@@ -648,7 +648,7 @@ npm install
 装好之后裸克隆即可运行：需要 DSH 运行时才能成立的少数断言（动态工具注册、qqgroup 工具路径）
 会自动跳过，而不是判失败；想看全，把 `DSH_PROFILE_MODULES` 指向一个装了 DSH 运行时的 profile 的
 `node_modules`。
-整套 **1018 项**（28 个套件）：
+整套 **28 个套件**（逐项数见下）：
 
 ```sh
 npm test
@@ -688,7 +688,7 @@ node test/test-flow-commands.mjs  # /auth 与 /flow 解析（34 项）
 node test/test-flow-gate.mjs  # 工具闸门（放行一次/别人的授权/过期，16 项）
 node test/test-flow-wiring.mjs # 闸门接线：一次调用只吃一个码 / 关着原样放行（20 项）
 node test/test-interim.mjs    # 中间发言：最后一条留给结论、锚点丢了不重播（14 项）
-node test/run-all.mjs         # 一键全量（27 套件）
+node test/run-all.mjs         # 一键全量（28 套件）
 ```
 
 也可以手动拿假 OneBot 试（端口正好是 NapCat 默认值）：
@@ -755,7 +755,7 @@ AstrBot 是 OneBot 的**消费方**（内置 aiocqhttp 反向 WS 服务端），
 | `test/test-qr.mjs` | 二维码编码器（固定矩阵哈希守回归，18 项） |
 | `test/test-flow-auth.mjs` `test-flow-store.mjs` `test-flow-commands.mjs` `test-flow-gate.mjs` `test-flow-wiring.mjs` | 流程授权链路（27 + 22 + 42 + 16 + 20 项） |
 | `test/test-websearch.mjs` | 多引擎搜索结果解析（5 项） |
-| `test/run-all.mjs` | 一键全量（27 套件） |
+| `test/run-all.mjs` | 一键全量（28 套件） |
 | `CONTRIBUTING.md` / `CODE_OF_CONDUCT.md` / `SECURITY.md` | 贡献流程、行为准则、安全报告 |
 | `.github/` | issue / PR 模板、CODEOWNERS |
 | `examples/dynamic-package-host.js` | 同一个桥接的「动态 Cordis Package」版本：不想装包、只想在当前 DSH 进程里临时跑时用 |
@@ -814,7 +814,7 @@ MIT，见 [LICENSE](LICENSE)。维护者与贡献者见顶部（维护 [@arrow10
 | --- | --- |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | **改动指南**：分层图、模块职责、关键数据流、设计取舍、已知边界 |
 | [AI-DISCLOSURE.md](AI-DISCLOSURE.md) | AI 生成方式、人类决策点、验证到什么程度、**尚未验证的清单**、第三方归属、安全免责 |
-| [CHANGELOG.md](CHANGELOG.md) | 0.1.0 → 0.11.0 的完整演进 |
+| [CHANGELOG.md](CHANGELOG.md) | 0.1.0 → 0.12.1 的完整演进 |
 
 ### 致谢
 
