@@ -228,7 +228,7 @@ export async function startMockOneBot(options = {}) {
       const m = history.find((x) => Number(x.message_id) === id)
         ?? extraMessages.find((x) => Number(x.message_id) === id);
       if (m === undefined) return { retcode: 100, message: 'message not found' };
-      return { message_id: m.message_id, time: m.time, user_id: m.user_id, message: m.message, raw_message: m.raw_message, sender: m.sender };
+      return { retcode: 0, message_id: m.message_id, time: m.time, user_id: m.user_id, group_id: m.group_id ?? null, message_type: m.message_type ?? null, message: m.message, raw_message: m.raw_message, sender: m.sender };
     },
     get_group_msg_history(params) {
       const count = Math.max(1, Number(params.count ?? 20));

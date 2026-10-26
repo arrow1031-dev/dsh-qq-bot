@@ -235,6 +235,8 @@ try {
   check('未知指令 -> 交给模型', r === 'REPLY' && mutations() === beforeUnknown, r);
 
   console.log('\n5. /recall 靠 reply 透传');
+  // 撤回前插件会用 get_msg 核对消息归属，先在假 OneBot 里把这条消息登记进群 44444。
+  mock.extraMessages.push({ message_id: 98765, time: 0, user_id: 55555, group_id: 33333, message: [], raw_message: '', sender: {} });
   const beforeRecall = actionsOf('delete_msg').length;
   r = await say(33333, 44444, '/recall', { replyTo: 98765 });
   check('回复某条消息即可撤回（无需手写 id）', done(r) && r.includes('98765'), r);
