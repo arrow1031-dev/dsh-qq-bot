@@ -55,6 +55,12 @@ DSH Agent（默认每个 QQ 会话一个）
 | `lib/imagegen.js` | 生图：OpenAI 兼容 `/images/generations`，含重试与任务轮询 | `generateImage` `parseImagePayload` | `index.js`（qq_draw） |
 | `lib/proactive.js` | 主动发言纯逻辑：时间窗、消息清洗、提示词、决策解析、频率闸、模型解析（含可选两段式） | `parseClock` `buildPrompt` `parseDecision` `allowSend` `resolveModel` `resolveStageModels` `buildSpeakPrompt` `runSpeakStage` | `index.js`（模型请求走 `ctx.llm.stream()`，经 DSH 已配置渠道，0.11 起） |
 | `lib/history-auth.js` | 历史消息的会话定向与鉴权（纯逻辑） | `resolveHistoryTarget` `judgeHistoryAccess` `buildHistoryRequest` | `tools.js`（qq_history） |
+| `lib/totp.js` | （0.12.0 新增模块） | — | — |
+| `lib/totp-cli.mjs` | （0.12.0 新增模块） | — | — |
+| `lib/qr.js` | （0.12.0 新增模块） | — | — |
+| `lib/flow-auth.js` | （0.12.0 新增模块） | — | — |
+| `lib/flow-store.js` | （0.12.0 新增模块） | — | — |
+| `lib/flow-commands.js` | （0.12.0 新增模块） | — | — |
 | `lib/compat.js` | DSH 版本兼容自检（范围只维护两个常量） | `SUPPORT_FLOOR` `SUPPORT_CEILING` `compatibilityInfo` | `index.js` |
 | `lib/bridge/ws.mjs` | 手写 RFC 6455：帧编解码、正向/反向 WS、链路集合、指数退避重连 | `connectForward` `startReverseServer` `createLinkSet` `decodeFrames` | 五个适配器 |
 | `lib/bridge/stdio.mjs` | stdio 帧工具：发射器、发送队列（限速）、stdin 命令循环、`postJson` | `createEmitter` `createSendQueue` `installStdin` `postJson` | 五个适配器 |
@@ -68,7 +74,7 @@ DSH Agent（默认每个 QQ 会话一个）
 
 **扩展点**（其余文件基本不用动）：加协议 → 新写 `lib/adapters/<协议>.mjs` + 在 `lib/index.js` 的 `ADAPTER_FILES` 与 `lib/config.js` 加一项；加协议动作 → 改对应适配器的映射表；加 Agent 工具 → 只改 `lib/tools.js`。
 
-**测试与发布**：`test/run-all.mjs` 汇总 **19 个套件**（5 个协议各一套，其余为插件/权限/设置/搜索/生图/历史等），每个协议都自带零依赖假协议端（OneBot 11 的是 `test/mock-onebot.mjs`，其余在各自 `test-adapter-*.mjs` 内）；`npm test` 即跑全部。进 npm 包的只有 `lib/`、`cordis.patch.yml` 与根目录文档（见 `package.json` 的 `files`），`test/`、`examples/` 只在仓库里。
+**测试与发布**：`test/run-all.mjs` 汇总 **26 个套件**（5 个协议各一套，其余为插件/权限/设置/搜索/生图/历史等），每个协议都自带零依赖假协议端（OneBot 11 的是 `test/mock-onebot.mjs`，其余在各自 `test-adapter-*.mjs` 内）；`npm test` 即跑全部。进 npm 包的只有 `lib/`、`cordis.patch.yml` 与根目录文档（见 `package.json` 的 `files`），`test/`、`examples/` 只在仓库里。
 
 ## 3. 关键数据流
 

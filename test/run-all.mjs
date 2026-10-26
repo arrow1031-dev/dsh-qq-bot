@@ -1,5 +1,5 @@
 /**
- * 汇总 runner：依次跑完 19 个测试套件（含 5 个协议适配器），单个失败不中断，末尾汇总。
+ * 汇总 runner：依次跑完 26 个测试套件（含 5 个协议适配器、6 个授权链路套件与 1 个 QR 套件），单个失败不中断，末尾汇总。
  * 用法：node test/run-all.mjs（package.json 的 test 脚本指向这里）
  */
 import { spawn } from 'node:child_process';
@@ -10,6 +10,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const suites = [
   'test-adapter.mjs', 'test-adapter-reverse.mjs', 'test-plugin.mjs', 'test-client.mjs',
   'test-admin.mjs', 'test-http.mjs', 'test-config.mjs', 'test-websearch.mjs', 'test-imagegen.mjs', 'test-session-id.mjs', 'test-compat.mjs', 'test-history.mjs', 'test-proactive.mjs', 'test-proactive-round.mjs', 'test-owner-settings.mjs',
+  'test-totp.mjs', 'test-totp-cli.mjs', 'test-qr.mjs', 'test-flow-auth.mjs', 'test-flow-store.mjs', 'test-flow-commands.mjs', 'test-flow-gate.mjs',
   'test-adapter-onebot12.mjs', 'test-adapter-milky.mjs', 'test-adapter-satori.mjs', 'test-adapter-qq-official.mjs',
 ];
 
