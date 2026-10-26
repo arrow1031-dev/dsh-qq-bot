@@ -70,10 +70,10 @@ DSH Agent（默认模型 + preset 人格 + 工具）
 | 会话 id 回退 | `node test/test-session-id.mjs` | 5/5 |
 | 运行时兼容自检 | `node test/test-compat.mjs` | 14/14 |
 | 历史消息鉴权与定向 | `node test/test-history.mjs` | 23/23 |
-| 主动发言 | `node test/test-proactive.mjs` | 77/77 |
+| 主动发言 | `node test/test-proactive.mjs` | 78/78 |
 | 主动发言回合（端到端，不动定时器） | `node test/test-proactive-round.mjs` | 21/21 |
 | 拥有者设置通道 | `node test/test-owner-settings.mjs` | 58/58 |
-| 一键全量 | `node test/run-all.mjs` | **19/19 套件 · 734 项** |
+| 一键全量 | `node test/run-all.mjs` | **19/19 套件 · 735 项** |
 `test-plugin.mjs` 用假 ctx 加载真正的 `lib/index.js` + 真适配器 + 零依赖 OneBot 模拟器，跑通完整链路（无需 DSH / QQ / 网络）。
 
 ## 二、快速开始
@@ -577,7 +577,7 @@ npm install
 装好之后裸克隆即可运行：需要 DSH 运行时才能成立的少数断言（动态工具注册、qqgroup 工具路径）
 会自动跳过，而不是判失败；想看全，把 `DSH_PROFILE_MODULES` 指向一个装了 DSH 运行时的 profile 的
 `node_modules`。
-整套 **734 项**（19 个套件）：
+整套 **735 项**（19 个套件）：
 
 ```sh
 npm test
@@ -605,7 +605,7 @@ node test/test-imagegen.mjs   # 生图引擎：重试 / 轮询 / 响应解析（
 node test/test-session-id.mjs # 会话 id 回退（5 项）
 node test/test-compat.mjs     # 运行时兼容自检（14 项）
 node test/test-history.mjs    # 历史消息鉴权与定向（23 项）
-node test/test-proactive.mjs  # 主动发言（77 项）
+node test/test-proactive.mjs  # 主动发言（78 项）
 node test/test-proactive-round.mjs  # 主动发言回合端到端（21 项）
 node test/run-all.mjs         # 一键全量（19 套件）
 ```

@@ -78,6 +78,7 @@ check('requireCjk 开启：日文放行（14 字）', validateMessage('いいよ
 check('requireCjk 开启：中英混排放行（13 字）', validateMessage('那就用 OK 呗，我先撤啦', { maxChars: 50, requireCjk: true }).ok === true);
 check('requireCjk 开启：纯 々 串放行（真验到 U+3005）', validateMessage('々'.repeat(13), { maxChars: 50, requireCjk: true }).ok === true);
 check('requireCjk 开启：扩展 B 区生僻字放行（真验到 u 标志）', validateMessage('𠀀'.repeat(13), { maxChars: 50, requireCjk: true }).ok === true);
+check('requireCjk 开启：emoji 短回应按码点算长度，不误拦', validateMessage('ok 👍👍👍👍👍', { maxChars: 50, requireCjk: true }).ok === true);
 check('requireCjk 边界：12 字符整句英文放行（门槛左）', validateMessage('abcdefghijkl', { maxChars: 50, requireCjk: true }).ok === true);
 check('requireCjk 边界：13 字符整句英文拦住（门槛右）', (() => { const r = validateMessage('abcdefghijklm', { maxChars: 50, requireCjk: true }); return r.ok === false && r.reason === 'no-cjk'; })());
 
