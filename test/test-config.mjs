@@ -31,8 +31,14 @@ check('Error 取 message / 字符串原样 / null 兜底', describeError(new Err
 
 console.log('8. staleConfigPaths：找出 schema 不认识的键（版本升级删字段后的残留）');
 check('干净配置没有废弃键', staleConfigPaths({ proactive: { enabled: true, groups: ['1'] }, onebot: { wsUrl: 'ws://a' } }).length === 0);
-check('单个废弃键能被认出', JSON.stringify(staleConfigPaths({ proactive: { judgeProvider: 'uymu' } })) === '["proactive.judgeProvider"]');
-check('整段不认识的子树只报最浅的一层', JSON.stringify(staleConfigPaths({ legacy: { a: 1, b: { c: 2 } } })) === '["legacy"]');
+check('单个废弃键能被认出（返回键名数组）',
+  JSON.stringify(staleConfigPaths({ proactive: { judgeProvider: 'uymu' } })) === '[["proactive","judgeProvider"]]');
+check('整段不认识的子树只报最浅的一层', JSON.stringify(staleConfigPaths({ legacy: { a: 1, b: { c: 2 } } })) === '[["legacy"]]');
+check('键名本身带点也不会被拆成嵌套路径',
+  JSON.stringify(staleConfigPaths({ 'onebot.wsUrl': 'x' })) === '[["onebot.wsUrl"]]');
+check('DEFAULTS 里每个键都是 schema 认识的（防默认值与 schema 漂移）',
+  staleConfigPaths(DEFAULTS).length === 0,
+  JSON.stringify(staleConfigPaths(DEFAULTS)));
 check('空对象不算废弃（只是没写过）', staleConfigPaths({ restart: {} }).length === 0);
 check('数组整体算叶子，不检查里面的键', staleConfigPaths({ proactive: { groups: ['a', 'b'] } }).length === 0);
 check('非对象入参返回空', staleConfigPaths(null).length === 0 && staleConfigPaths([1, 2]).length === 0 && staleConfigPaths('x').length === 0);

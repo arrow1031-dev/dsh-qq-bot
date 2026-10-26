@@ -858,6 +858,12 @@ try {
   check('连接配置变化 -> 重启适配器', logLines.filter((line) => line.includes('适配器已启动')).length > startsBefore);
   await sleep(700);
   check('重启后适配器重新连上假 OneBot', mock.clientCount() === 1, 'clients=' + mock.clientCount());
+  // 幽灵适配器要 2 秒后才冒头（旧进程 done 晚到 → 再排一次重启），所以这里必须多等一会儿。
+  await sleep(3200);
+  const restartsAfter = logLines.filter((line) => line.includes('适配器已启动')).length - startsBefore;
+  check('热更新只重启一个适配器，旧进程不会回来再起一个',
+    restartsAfter === 1 && mock.clientCount() === 1,
+    'starts=' + restartsAfter + ' clients=' + mock.clientCount());
 
   const startsAfterTransport = logLines.filter((line) => line.includes('适配器已启动')).length;
   liveConfig.reply.maxChars[VOLATILE_WRITE](999);
@@ -890,6 +896,84 @@ try {
   let touchedOther = false;
   const otherCtx = { get: () => ({ configuration: () => [{ entry: { options: { id: 'llm-pi-ai', name: '@deepseek-ai/dsh-llm-pi-ai' } }, override: { legacyKey: 1 } }], async edit() { touchedOther = true; } }) };
   check('不碰别的插件的配置行', (await mod.cleanupStaleConfig(otherCtx, { log: () => {} })).length === 0 && touchedOther === false);
+
+  // 精确匹配：id 以 -qq-bot 结尾但不是我们（如 my-qq-bot）的插件排在前面，也只能清自己那一行。
+  let editedEntryId = null;
+  let foreignEdited = false;
+  const shadowCtx = {
+    get: () => ({
+      configuration: () => [
+        { entry: { options: { id: 'my-qq-bot', name: 'my-qq-bot' } }, override: { ownSetting: 1 } },
+        { entry: { options: { id: 'dsh-qq-bot', name: 'dsh-qq-bot' } }, override: { proactive: { judgeModel: 'dead' } } },
+      ],
+      async edit(entry, change) {
+        editedEntryId = entry.options.id;
+        if (entry.options.id !== 'dsh-qq-bot') foreignEdited = true;
+        change({}, {});
+      },
+    }),
+  };
+  const shadowCleaned = await mod.cleanupStaleConfig(shadowCtx, { log: () => {} });
+  check('id 以 -qq-bot 结尾的别的插件不会被误清',
+    foreignEdited === false && editedEntryId === 'dsh-qq-bot' && JSON.stringify(shadowCleaned) === '["proactive.judgeModel"]',
+    JSON.stringify({ foreignEdited, editedEntryId, shadowCleaned }));
+
+  // 键名本身带点：不能被当成嵌套路径，否则会删掉合法的 onebot.wsUrl。
+  const dottedOverride = { 'onebot.wsUrl': 'literal', onebot: { wsUrl: 'ws://valid' } };
+  let dottedWritten = null;
+  const dottedCtx = {
+    get: () => ({
+      configuration: () => [{ entry: { options: { id: 'dsh-qq-bot' } }, override: dottedOverride }],
+      async edit(entry, change) { dottedWritten = change({}, {}); },
+    }),
+  };
+  const dottedCleaned = await mod.cleanupStaleConfig(dottedCtx, { log: () => {} });
+  check('键名带点时只删字面键，合法嵌套值保留',
+    JSON.stringify(dottedCleaned) === '["onebot.wsUrl"]'
+      && dottedWritten !== null && dottedWritten['onebot.wsUrl'] === undefined
+      && dottedWritten.onebot.wsUrl === 'ws://valid',
+    JSON.stringify(dottedWritten));
+
+  // 真实契约：edit 回调拿到的是「各层合并后的最终配置」，不是 profile 层的 override。
+  // 写回必须以 override 为基座，否则会把上层 patch 的内容抄进 profile 行。
+  let contractWritten = null;
+  const contractCtx = {
+    get: () => ({
+      configuration: () => [{ entry: { options: { id: 'dsh-qq-bot' } }, override: { proactive: { judgeModel: 'dead', enabled: true } } }],
+      async edit(entry, change) {
+        contractWritten = change({ proactive: { judgeModel: 'dead', enabled: true }, overlayOnly: 'from-overlay' }, {});
+      },
+    }),
+  };
+  await mod.cleanupStaleConfig(contractCtx, { log: () => {} });
+  check('写回基座是 profile 层 override，不把上层 patch 抄进来',
+    contractWritten !== null && contractWritten.overlayOnly === undefined
+      && contractWritten.proactive.enabled === true && contractWritten.proactive.judgeModel === undefined,
+    JSON.stringify(contractWritten));
+
+  // 失败路径：读清单抛错、写盘抛错都不能影响插件运行。
+  const throwReadCtx = { get: () => ({ configuration() { throw new Error('boom'); }, async edit() {} }) };
+  check('读配置清单抛错时安全返回', (await mod.cleanupStaleConfig(throwReadCtx, { log: () => {} })).length === 0);
+  const logs = [];
+  const throwEditCtx = {
+    get: () => ({
+      configuration: () => [{ entry: { options: { id: 'dsh-qq-bot' } }, override: { legacy: 1 } }],
+      async edit() { throw new Error('write failed'); },
+    }),
+  };
+  const failedClean = await mod.cleanupStaleConfig(throwEditCtx, { log: (line) => logs.push(line) });
+  check('写盘失败时安全返回并留下日志', failedClean.length === 0 && logs.some((line) => line.includes('清理废弃配置失败')));
+
+  // 旧值要进日志：降级/升级来回折腾时能照着加回去。
+  const valueLogs = [];
+  const valueCtx = {
+    get: () => ({
+      configuration: () => [{ entry: { options: { id: 'dsh-qq-bot' } }, override: { proactive: { judgeModel: 'deepseek-x' } } }],
+      async edit() {},
+    }),
+  };
+  await mod.cleanupStaleConfig(valueCtx, { log: (line) => valueLogs.push(line) });
+  check('日志里带上被删键的旧值', valueLogs.some((line) => line.includes('proactive.judgeModel=') && line.includes('deepseek-x')), JSON.stringify(valueLogs));
 
   console.log('\n8. 卸载');
   for (const d of disposers) { try { d(); } catch (error) { console.log('  disposer 抛错：' + error.message); } }
