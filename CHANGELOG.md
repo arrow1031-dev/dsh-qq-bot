@@ -9,6 +9,14 @@
 - **私聊判定读会被后到消息覆盖的 `entry.groupId`**（#24）：`owner-settings.checkCaller` 与 `qqauth` 的私聊判定改读回合快照 `turnSpeaker.groupId`；`perChatSession=false` 时不再能借群回合冒充私聊。
 - **`/recall` 不校验消息归属**（#25）：撤回前用 `get_msg` 核对 `group_id`，不是本群一律拒；`qqgroup` 的 recall 同规则。
 
+### 出站抓取只允许公网（#13 #15 #20 #21 #14）
+
+- **逐跳校验跳转**：`fetchUrlViaProxy` 之前只校验第一跳就 `redirect: 'follow'`，一个 302 就能把请求带到内网。现在统一走 `publicFetch`：每一跳都 `assertPublicHost`、最多 5 跳、响应体 8 MB 上限、显式 `accept-encoding: identity`（防压缩炸弹）。
+- **`assertPublicHost` 校验全部 A/AAAA**：以前只取一条解析结果，多记录/rebinding 可绕过。
+- **`multiEngineRequest` 直连分支补校验**（#20）：以前只有代理分支调 `assertPublicHost`，`qq_imgsearch` 的 Soutubot 直连分支可打内网。
+- **识图下载走 `publicFetch`**（#15）：图片 URL 来自消息里的 CQ 码，以前直接 `fetch` + `arrayBuffer()` 整包读入，一条消息就能打内网或撑爆内存。
+- **`qq_draw` 的 `result.url` 同样走 `publicFetch`**（#21）：生图接口返回的 url 也是外部输入。
+- **Moli 渲染抓取入口校验**（#14）：先限 scheme、拒以 `-` 开头的 URL、再 `assertPublicHost`；参数前加 `--`；去掉硬编码的 `--insecure-disable-tls-host-verification`（要跳过证书校验得显式加，不默认）。
 ### 测试
 
 - 新增 `test/test-security.mjs`（21 项）：id 净化、越界复核、跨群重算、私聊快照、撤回绑群。
