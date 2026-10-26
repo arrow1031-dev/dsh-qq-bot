@@ -56,6 +56,16 @@ check('validateMessage @人', validateMessage('@123456 你说的对', { maxChars
 check('validateMessage 自称 AI', validateMessage('作为一个AI我觉得', { maxChars: 50 }).ok === false);
 check('validateMessage 重复上一条', validateMessage('这游戏我也在玩', { maxChars: 50, recentTexts: ['这游戏我也在玩。'] }).ok === false);
 
+// requireCjk：默认关（既有行为不变）；开启后「无 CJK 且长度 > 12」判不可用——只治整句英文拒答
+const refusal = "Sorry, it looks like I can't chat about this.";
+check('requireCjk 默认关：英文正文照旧放行', validateMessage(refusal, { maxChars: 200 }).ok === true);
+check('requireCjk 开启：整句英文被判不可用', (() => { const r = validateMessage(refusal, { maxChars: 200, requireCjk: true }); return r.ok === false && r.reason === 'no-cjk'; })());
+check('requireCjk 开启：中文放行', validateMessage('明天记得带伞', { maxChars: 50, requireCjk: true }).ok === true);
+check('requireCjk 开启：中英混排放行', validateMessage('那就用 OK 呗，我先撤', { maxChars: 50, requireCjk: true }).ok === true);
+check('requireCjk 开启：日文/韩文放行', validateMessage('いいよ、またね', { maxChars: 50, requireCjk: true }).ok === true);
+check('requireCjk 开启：短 ASCII 回应放行（666 / yyds / +1）', ['666', 'yyds', '+1'].every((x) => validateMessage(x, { maxChars: 50, requireCjk: true }).ok === true));
+check('requireCjk 开启：々（U+3005）也算 CJK', validateMessage('又来々了', { maxChars: 50, requireCjk: true }).ok === true);
+
 const now = Date.now();
 check('allowSend 正常放行', allowSend({ now, sentTimes: [], lastSentAt: 0, maxPerHour: 2, maxPerDay: 4, minGapMinutes: 10 }).ok === true);
 check('allowSend 间隔不足', allowSend({ now, sentTimes: [now - 60000], lastSentAt: now - 60000, maxPerHour: 2, maxPerDay: 4, minGapMinutes: 10 }).ok === false);
