@@ -141,6 +141,19 @@ function fakeAgent(sessionId) {
       agent.status = 'running';
       messages.push({ id: message.id, role: 'user', content: message.content, source: message.source });
       const replyText = 'REPLY:' + message.content[0].text;
+      const wantsInterim = message.content[0].text.includes('[interim-test]');
+      if (wantsInterim === true) {
+        setTimeout(() => { messages.push({ id: 'asst-i1', role: 'assistant', content: [{ type: 'text', text: '我先查一下' }, { type: 'tool-call', name: 'qq_websearch' }], source: { kind: 'model' } }); }, 60);
+        setTimeout(() => { messages.push({ id: 'tool-i1', role: 'tool', content: [{ type: 'tool-result', text: 'ok' }] }); }, 120);
+        setTimeout(() => {
+          messages.push({ id: 'asst-i2', role: 'assistant', content: [{ type: 'text', text: '结论：查完了' }], source: { kind: 'model' } });
+          busy = false;
+          agent.status = 'idle';
+          const waitersInterim = pending; pending = [];
+          for (const w of waitersInterim) w();
+        }, 1100);
+        return;
+      }
       setTimeout(() => {
         messages.push({ id: 'asst-' + messages.length, role: 'assistant', content: [{ type: 'text', text: replyText }], source: { kind: 'model' } });
         busy = false;
@@ -252,7 +265,7 @@ try {
   // 按 Cordis 的做法求值配置：Config['~standard'].validate(raw)，volatile 字段变成引用。
   const validated = mod.Config['~standard'].validate({
     onebot: { wsUrl: mock.wsUrl, httpUrl: mock.httpUrl },
-    reply: { ackAfterMs: 0 },
+    reply: { ackAfterMs: 0, interimMinGapMs: 500 },
     vision: { enabled: true, provider: 'mock-provider', model: 'vision-exp' },
   });
   check('Config.validate 没有 issues', validated.issues === undefined, JSON.stringify(validated.issues));
@@ -378,6 +391,30 @@ try {
     // 0.12 起接管只在流程授权开启时发生：关着的时候必须与 0.11 完全一致（既不遮蔽也不摘除）。
     check('流程授权关着时不动工具面（0.11 行为）', touched === 0, JSON.stringify({ restricts: ownerAgent === undefined ? -1 : ownerAgent.restricts.length, registers: ownerAgent === undefined ? -1 : ownerAgent.registers.length }));
   }
+  console.log('\n3b. 中间发言：先发一句（不引用），结论照常引用回复');
+{
+  const beforeInterim = mock.sent.length;
+  await fetch(mock.httpUrl + '/__inject', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      message_type: 'group', group_id: 33333, user_id: 22222, nickname: '小明',
+      message: [{ type: 'at', data: { qq: '10000' } }, { type: 'text', data: { text: '[interim-test] 帮我查个东西' } }],
+    }),
+  });
+  const interimSends = await waitFor(() => (mock.sent.length >= beforeInterim + 2 ? mock.sent.slice(beforeInterim) : null), 15000,
+    '中间发言与最终回复都到达假 OneBot');
+  const interim = interimSends[0];
+  const finalOne = interimSends[1];
+  check('中间发言先发出', textOf(interim) === '我先查一下', JSON.stringify(textOf(interim)));
+  check('中间发言不引用（没有 reply 段）',
+    Array.isArray(interim.message) && interim.message.every((seg) => seg.type !== 'reply'), JSON.stringify(interim.message));
+  check('结论仍然引用触发消息',
+    Array.isArray(finalOne.message) && finalOne.message[0] && finalOne.message[0].type === 'reply', JSON.stringify(finalOne.message && finalOne.message[0]));
+  check('结论只发了一次（中间发言没有把结论提前念出来）',
+    interimSends.filter((m) => textOf(m).includes('结论：查完了')).length === 1,
+    JSON.stringify(interimSends.map(textOf)));
+}
+
   console.log('\n4. 群里没 @ 机器人 -> 忽略');
   const before = mock.sent.length;
   await fetch(mock.httpUrl + '/__inject', {

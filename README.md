@@ -60,7 +60,7 @@ DSH Agent（默认模型 + preset 人格 + 工具）
 | Satori 适配器 | `node test/test-adapter-satori.mjs` | 70/70 |
 | Milky 适配器 | `node test/test-adapter-milky.mjs` | 79/79 |
 | QQ 官方适配器 | `node test/test-adapter-qq-official.mjs` | 87/87 |
-| 打包后插件端到端（Host） | `node test/test-plugin.mjs` | 103/103 |
+| 打包后插件端到端（Host） | `node test/test-plugin.mjs` | 107/107 |
 | 客户端设置页 | `node test/test-client.mjs` | 84/84 |
 | 权限 · 群管理 · 访客工具闸 | `node test/test-admin.mjs` | 32/32 |
 | HTTP / 代理层 | `node test/test-http.mjs` | 17/17 |
@@ -76,12 +76,13 @@ DSH Agent（默认模型 + preset 人格 + 工具）
 | TOTP / HOTP（RFC 4226 + 6238） | `node test/test-totp.mjs` | 44/44 |
 | TOTP 命令行绑定 | `node test/test-totp-cli.mjs` | 14/14 |
 | 二维码编码器 | `node test/test-qr.mjs` | 18/18 |
-| 流程授权状态机 | `node test/test-flow-auth.mjs` | 24/24 |
-| 流程脚本存取 | `node test/test-flow-store.mjs` | 16/16 |
-| /auth 与 /flow 指令解析 | `node test/test-flow-commands.mjs` | 34/34 |
+| 流程授权状态机 | `node test/test-flow-auth.mjs` | 27/27 |
+| 流程脚本存取 | `node test/test-flow-store.mjs` | 22/22 |
+| /auth 与 /flow 指令解析 | `node test/test-flow-commands.mjs` | 42/42 |
 | 流程授权闸门 | `node test/test-flow-gate.mjs` | 16/16 |
-| 流程授权接线（守卫 + 遮蔽，一次调用一个码） | `node test/test-flow-wiring.mjs` | 14/14 |
-| 一键全量 | `node test/run-all.mjs` | **27/27 套件 · 1000 项** |
+| 流程授权接线（守卫 + 遮蔽，一次调用一个码） | `node test/test-flow-wiring.mjs` | 20/20 |
+| 中间发言（哪句现在发、哪句留给结论） | `node test/test-interim.mjs` | 14/14 |
+| 一键全量 | `node test/run-all.mjs` | **28/28 套件 · 1018 项** |
 `test-plugin.mjs` 用假 ctx 加载真正的 `lib/index.js` + 真适配器 + 零依赖 OneBot 模拟器，跑通完整链路（无需 DSH / QQ / 网络）。
 
 ## 二、快速开始
@@ -148,6 +149,8 @@ dsh plugin --profile web add ./dsh-qq-bot-<版本号>.tgz
   - **需要结合群内近期消息/图片作答时，AI 会主动调 `qq_history` 工具自取**（不再自动硬塞上下文）——识别窗口锚定触发本条回复的那条消息往前 `scopeMessages` 条，最多 `imageLimit` 张图（默认 5/3，设置页可调）。
   - **回复别人 + 正文 @bot**：同样触发（引用回复），上下文同样交给 AI 自取。
   - **bot 被点名时（@ / 回复 bot / 命令前缀 / 管理指令）**：回复统一**引用你的消息**（QQ 引用回复）。
+  - **中间发言**（`reply.interim`，默认开）：长回合里模型先说的那几句（「我先查一下」）会**单独发一条，不引用也不 @ 任何人**；
+    最终结论仍按上面的规则回复（该引用就引用）。一个回合最多 4 条、两条间隔 2.5 秒，设置页「发言与管理」里可调，填 0 即关。
 - **私聊**：默认直接回。
 - 长回复按换行切成 ≤1200 字多条发送。
 - 每个群/每个人是独立的 DSH 会话（id 形如 `qqbot-group-33333`），会落盘并出现在 Web UI 会话列表里，可以像普通会话一样打开继续聊。
@@ -205,7 +208,7 @@ dsh plugin --profile web add ./dsh-qq-bot-<版本号>.tgz
 |---|---|---|
 | **连接** | — | 连接方式（OneBot 11 正向 / 反向、OneBot 12、Satori、Milky、QQ 官方）、WS/HTTP 地址、`access_token`、各协议参数 |
 | **基本** | 准入与名单 | 群聊 / 私聊开关、@ 要求、白名单、命令前缀、拥有者与高级管理员、访客工具白名单 |
-| **基本** | 发言与管理 | 回复策略（分片长度、慢回复提示、来源前缀、@ 回复、上下文头）、群管理指令与可管理群 |
+| **基本** | 发言与管理 | 回复策略（分片长度、慢回复提示、中间发言、来源前缀、@ 回复、上下文头）、群管理指令与可管理群 |
 | **能力** | 识图与绘图 | 图片视觉（开关 / provider / model / 最多张数 / 下载超时）、生图（接口地址 / key / 模型 / 重试与轮询） |
 | **能力** | 搜索与抓取 | 联网搜索（代理 / 端点 / key）、图片反搜、`qq_webfetch` 与 moli 渲染 |
 | **能力** | 对话与人格 | 人格（开关 / 名字 / 设定 / 自定义 preset id）、主动发言（判断 / 发言两段式可选，provider / 模型都是下拉）、聊天记录读取 |
@@ -268,6 +271,9 @@ Agent 会话的工作目录**不需要任何配置**：插件读取 DSH 官方�
       maxChars: 1200
       ackAfterMs: 8000            # 慢回合先回「正在处理」；0 关闭
       ackText: '正在处理，请稍候…'
+      interim: true              # 中间发言：长回合里先说的那几句单独发（不引用、不 @）
+      interimMaxPerTurn: 4       # 每回合最多几条（0 = 关）
+      interimMinGapMs: 2500      # 两条之间最短间隔
       contextHeader: true         # 给消息加 "[QQ群 123 · 小明(22222)]" 前缀
       firstTurnHint: '（提示：这是一次 QQ 聊天。请用简体中文、简洁自然的口语作答；不要输出 Markdown 表格，代码块保持简短。）'
     auth:                         # 权限，见「五、权限与群管理」
@@ -276,7 +282,7 @@ Agent 会话的工作目录**不需要任何配置**：插件读取 DSH 官方�
       ownerPreset: ''             # 填了才把拥有者/非拥有者分成两条会话
       guestPreset: ''             # 非拥有者用的 preset（仅人格分离，非安全边界）
       guestDshTools: false        # 是否允许访客用 DSH 内部工具（默认否）
-      guestToolAllow: ['qqbot', 'qqgroup', 'qq_websearch', 'qq_webfetch', 'qq_imgsearch', 'qq_history']   # 访客仍可用的工具白名单
+      guestToolAllow: ['qqgroup', 'qq_websearch', 'qq_webfetch', 'qq_imgsearch', 'qq_history', 'moli_fetch']   # 访客仍可用的工具白名单（qqbot / qqconfig 只给拥有者）
       grantTtlMinutes: 60         # 群管理员动态授权默认时长
       grantMaxTtlMinutes: 1440    # 群管理员单次可授最长
     admin:
@@ -642,7 +648,7 @@ npm install
 装好之后裸克隆即可运行：需要 DSH 运行时才能成立的少数断言（动态工具注册、qqgroup 工具路径）
 会自动跳过，而不是判失败；想看全，把 `DSH_PROFILE_MODULES` 指向一个装了 DSH 运行时的 profile 的
 `node_modules`。
-整套 **1000 项**（27 个套件）：
+整套 **1018 项**（28 个套件）：
 
 ```sh
 npm test
@@ -681,6 +687,7 @@ node test/test-flow-store.mjs # 流程脚本存取（路径穿越/覆盖保护/s
 node test/test-flow-commands.mjs  # /auth 与 /flow 解析（34 项）
 node test/test-flow-gate.mjs  # 工具闸门（放行一次/别人的授权/过期，16 项）
 node test/test-flow-wiring.mjs # 闸门接线：一次调用只吃一个码 / 关着原样放行（20 项）
+node test/test-interim.mjs    # 中间发言：最后一条留给结论、锚点丢了不重播（14 项）
 node test/run-all.mjs         # 一键全量（27 套件）
 ```
 
@@ -730,6 +737,7 @@ AstrBot 是 OneBot 的**消费方**（内置 aiocqhttp 反向 WS 服务端），
 | `lib/qr.js` | 自研二维码编码器（字节模式、纠错 M、v1–v9），浏览器版是同算法副本 |
 | `lib/flow-auth.js` | 流程授权状态机 + 闸门（申请 / 验码 / 一次性 grant / 连错锁定） |
 | `lib/flow-store.js` | 流程脚本存取（手写 `<名字>.js` 即可，元数据与 sha256 可选） |
+| `lib/interim.js` | 中间发言挑选：哪段 assistant 文字可以现在发、哪段留给最终结论 |
 | `lib/flow-commands.js` | `/auth` `/flow` 解析、拦截判定、打包入参归一化、帮助文案 |
 | `lib/client.js` | 客户端半边（手写 bundle）：在插件面板里给 `dsh-qq-bot` 挂设置页（命名空间 = 条目 id） |
 | `lib/onebot-adapter.mjs` | OneBot 11 传输适配器。零依赖（Node 22 内置 `WebSocket`/`fetch`），正向/反向 WS + HTTP，自动重连、发送限速 |
@@ -738,6 +746,7 @@ AstrBot 是 OneBot 的**消费方**（内置 aiocqhttp 反向 WS 服务端），
 | `test/test-adapter.mjs` | 正向 WS 适配器回归（19 项） |
 | `test/test-adapter-reverse.mjs` | 反向 WS 适配器回归（12 项） |
 | `test/test-plugin.mjs` | Host 插件端到端（103 项，假 ctx + 真适配器 + Config 契约 + 配置热更新） |
+| `test/test-interim.mjs` | 中间发言（14 项：最后一条留给结论、锚点丢失不重播、id 稳定用于去重） |
 | `test/test-client.mjs` | 客户端设置页（84 项，模拟模块加载器 + 最小 React 渲染 + 四档标签/二级分类 + 只写密钥护栏 + 命名空间回退） |
 | `test/test-admin.mjs` | 权限·群管理·访客工具闸专项（32 项；dsh-tools 可解析时另含工具路径断言） |
 | `test/test-http.mjs` | HTTP / 代理隧道（17 项） |
