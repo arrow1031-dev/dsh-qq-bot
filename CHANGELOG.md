@@ -17,6 +17,12 @@
 - **识图下载走 `publicFetch`**（#15）：图片 URL 来自消息里的 CQ 码，以前直接 `fetch` + `arrayBuffer()` 整包读入，一条消息就能打内网或撑爆内存。
 - **`qq_draw` 的 `result.url` 同样走 `publicFetch`**（#21）：生图接口返回的 url 也是外部输入。
 - **Moli 渲染抓取入口校验**（#14）：先限 scheme、拒以 `-` 开头的 URL、再 `assertPublicHost`；参数前加 `--`；去掉硬编码的 `--insecure-disable-tls-host-verification`（要跳过证书校验得显式加，不默认）。
+### 反向 WS：默认只监听回环 + 帧/缓冲上限（#19 #16）
+
+- **没配 `access_token` 时强制只监听 `127.0.0.1`**（`resolveListenAddress`）：反向端口上的帧能直接冒充任意 QQ 号——身份完全来自 `frame.user_id`。以前默认 `0.0.0.0:6199` + 空 token，等于「任何能连上端口的人 = 拥有者」。要公网监听必须先配 token。
+- **单连接缓冲 / 单帧 / 分片数上限**（16 MB / 8 MB / 64 片）：以前可以声明一个巨大帧慢慢灌，把整条链路饿死并吃满内存（`Buffer.concat` 还是 O(n²)）。
+- **并发链路上限 4 条**：`linkSet` 以前只加不删、`active()` 按插入序取第一条，先连者能抢走全部出站消息（含别的会话的私聊回复）。
+- **token 比较改 `timingSafeEqual`**：空 token 依旧不放行（`tokenEquals('','')` 恒 false）。
 ### 测试
 
 - 新增 `test/test-security.mjs`（21 项）：id 净化、越界复核、跨群重算、私聊快照、撤回绑群。
