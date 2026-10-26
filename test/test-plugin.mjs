@@ -107,7 +107,16 @@ function fakeAgent(sessionId) {
   const agent = {
     id: sessionId,
     guards: [],
-    ctx: { tools: { guard(fn) { agent.guards.push(fn); return () => { const i = agent.guards.indexOf(fn); if (i >= 0) agent.guards.splice(i, 1); }; } } },
+    restricts: [],
+    registers: [],
+    ctx: {
+      tools: {
+        guard(fn) { agent.guards.push(fn); return () => { const i = agent.guards.indexOf(fn); if (i >= 0) agent.guards.splice(i, 1); }; },
+        get() { return undefined; },
+        restrict(filter) { agent.restricts.push(filter); return () => {}; },
+        register(definition) { agent.registers.push(definition); return () => {}; },
+      },
+    },
     status: 'idle',
     session: {
       get seq() { return messages.length; },
@@ -305,7 +314,8 @@ try {
   if (hasDshTools !== true) {
     check('（跳过）工具注册需 @deepseek-ai/dsh-tools；路由/回复断言不受影响', true);
   } else {
-    check('注册了 qqbot + qqgroup + qq_websearch + qq_webfetch + qq_imgsearch + qq_history 六个工具', registeredTools.length === 6, String(registeredTools.length));
+    check('注册了 qqbot + qqgroup + qq_websearch + qq_webfetch + qq_imgsearch + qq_history + qqauth 七个工具', registeredTools.length === 7, String(registeredTools.length));
+    check('工具名含 qqbot / qqgroup / qq_websearch / qq_history / qqauth', (() => { const names = registeredTools.map((t) => t.name); return names.includes('qqauth'); })());
     check('工具名分别是 qqbot / qqgroup / qq_websearch / qq_history',
       (() => { const names = registeredTools.map((t) => t.name); return names.includes('qqbot') && names.includes('qqgroup') && names.includes('qq_websearch') && names.includes('qq_history'); })(),
       JSON.stringify(registeredTools.map((t) => t.name)));
@@ -340,6 +350,11 @@ try {
     JSON.stringify(createdSessions.map((s) => s.sessionId)));
   check('会话传了 workspaceId（自动归入 QQ_msg 分组）', typeof createdSessions[0].workspaceId === 'string' && createdSessions[0].workspaceId.startsWith('ws-'), JSON.stringify(createdSessions[0]));
 
+  {
+    const ownerAgent = agents.get('qqbot-group-33333');
+    const touched = ownerAgent === undefined ? 0 : (ownerAgent.restricts.length + ownerAgent.registers.length);
+    check('会话创建时对高危编排工具做过 deny / 遮蔽（不再静默失败）', touched > 0, JSON.stringify({ restricts: ownerAgent === undefined ? -1 : ownerAgent.restricts.length, registers: ownerAgent === undefined ? -1 : ownerAgent.registers.length }));
+  }
   console.log('\n4. 群里没 @ 机器人 -> 忽略');
   const before = mock.sent.length;
   await fetch(mock.httpUrl + '/__inject', {
