@@ -314,14 +314,15 @@ try {
   check('二级标签为 识图与绘图 / 搜索与抓取 / 对话与人格',
     subLabels.join(',') === '识图与绘图,搜索与抓取,对话与人格', JSON.stringify(subLabels));
 
-  const clickSubTab = (label) => {
-    const btn = collectButtons(capTree, [])
+  const clickSubTabIn = (root, label) => {
+    const btn = collectButtons(root, [])
       .find((b) => b.props.role === 'tab' && b.props['data-subtab'] !== undefined && childText(b) === label);
     if (!btn) return null;
     btn.props.onClick();
     reactRuntime.__beginRender();
     return registered.component(props);
   };
+  const clickSubTab = (label) => clickSubTabIn(capTree, label);
 
   const capRetrievalJoined = textsOf(clickSubTab('搜索与抓取'));
   check('搜索与抓取页含联网搜索与图片反搜',
@@ -353,22 +354,23 @@ try {
   check('切二级标签后底部保存/重新读取仍常驻',
     findByTextEarly(clickSubTab('搜索与抓取'), '保存') !== null);
 
-  // 切到「高级」：会话与排错项
+  // 切到「高级」：0.12 起分两个二级标签（流程授权 / 会话与排错）
   const advTree = clickTab('高级');
-  const advTexts = [];
-  const collectAdv = (node) => {
-    if (node === null || node === undefined) return;
-    if (typeof node === 'string' || typeof node === 'number') { advTexts.push(String(node)); return; }
-    if (Array.isArray(node)) { for (const item of node) collectAdv(item); return; }
-    if (typeof node === 'object') { for (const child of node.children || []) collectAdv(child); }
-  };
-  collectAdv(advTree);
-  const advJoined = advTexts.join(' | ');
+  const advSubTabs = collectButtons(advTree, [])
+    .filter((b) => b.props.role === 'tab' && b.props['data-subtab'] !== undefined)
+    .map((b) => childText(b));
+  check('高级页有两个二级标签（流程授权 / 会话与排错）',
+    JSON.stringify(advSubTabs) === JSON.stringify(['流程授权', '会话与排错']), JSON.stringify(advSubTabs));
+
+  const advFlowJoined = textsOf(advTree);
+  check('流程授权页含闸门开关与绑定二维码区',
+    advFlowJoined.includes('流程授权（子代理 / 队友 / 工作流先要私聊动态码）')
+    && advFlowJoined.includes('绑定二维码'), advFlowJoined.slice(0, 240));
+
+  const advJoined = textsOf(clickSubTabIn(advTree, '会话与排错'));
   check('高级页含会话命名与排错项',
     advJoined.includes('固定新建会话名') && advJoined.includes('日志打印每一帧'), advJoined.slice(0, 120));
   check('高级页不显示能力组字段（生图）', !advJoined.includes('生图（qq_draw）'), advJoined.slice(0, 120));
-  check('高级页没有二级标签（该组不再细分）',
-    collectButtons(advTree, []).filter((b) => b.props.role === 'tab' && b.props['data-subtab'] !== undefined).length === 0);
   check('连接页没有二级标签',
     collectButtons(tree, []).filter((b) => b.props.role === 'tab' && b.props['data-subtab'] !== undefined).length === 0);
 
