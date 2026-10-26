@@ -867,7 +867,31 @@ try {
     logLines.filter((line) => line.includes('适配器已启动')).length === startsAfterTransport,
     String(logLines.filter((line) => line.includes('适配器已启动')).length - startsAfterTransport));
 
-  console.log('\n7. 卸载');
+  console.log('\n7. 废弃配置清理（升级删字段后残留在 patch 里的旧键）');
+  const staleOverride = { proactive: { enabled: true, judgeProvider: 'uymu', judgeModel: 'judge-m' }, onebot: { wsUrl: 'ws://x' }, agentPreset: 'standard' };
+  let editedConfig = null;
+  const editorCtx = {
+    get(name) {
+      if (name !== 'configEditor') return undefined;
+      return {
+        configuration: () => [{ entry: { options: { id: 'dsh-qq-bot', name: 'dsh-qq-bot' } }, inherited: {}, override: staleOverride }],
+        async edit(entry, change) { editedConfig = change(staleOverride, {}); },
+      };
+    },
+  };
+  const cleanedPaths = await mod.cleanupStaleConfig(editorCtx, { log: () => {} });
+  check('认出并摘掉两个废弃键', JSON.stringify(cleanedPaths) === '["proactive.judgeProvider","proactive.judgeModel"]', JSON.stringify(cleanedPaths));
+  check('写回的配置保留正常字段、去掉废弃键',
+    editedConfig !== null && editedConfig.proactive.enabled === true && editedConfig.proactive.judgeProvider === undefined
+      && editedConfig.proactive.judgeModel === undefined && editedConfig.onebot.wsUrl === 'ws://x' && editedConfig.agentPreset === 'standard');
+  let wroteAgain = false;
+  const cleanCtx = { get: () => ({ configuration: () => [{ entry: { options: { id: 'dsh-qq-bot' } }, override: { proactive: { enabled: true } } }], async edit() { wroteAgain = true; } }) };
+  check('没有废弃键时不写盘', (await mod.cleanupStaleConfig(cleanCtx, { log: () => {} })).length === 0 && wroteAgain === false);
+  let touchedOther = false;
+  const otherCtx = { get: () => ({ configuration: () => [{ entry: { options: { id: 'llm-pi-ai', name: '@deepseek-ai/dsh-llm-pi-ai' } }, override: { legacyKey: 1 } }], async edit() { touchedOther = true; } }) };
+  check('不碰别的插件的配置行', (await mod.cleanupStaleConfig(otherCtx, { log: () => {} })).length === 0 && touchedOther === false);
+
+  console.log('\n8. 卸载');
   for (const d of disposers) { try { d(); } catch (error) { console.log('  disposer 抛错：' + error.message); } }
   await sleep(600);
   check('卸载后适配器进程已终止', mock.clientCount() === 0, 'clients=' + mock.clientCount());

@@ -60,11 +60,11 @@ DSH Agent（默认模型 + preset 人格 + 工具）
 | Satori 适配器 | `node test/test-adapter-satori.mjs` | 70/70 |
 | Milky 适配器 | `node test/test-adapter-milky.mjs` | 79/79 |
 | QQ 官方适配器 | `node test/test-adapter-qq-official.mjs` | 87/87 |
-| 打包后插件端到端（Host） | `node test/test-plugin.mjs` | 76/76 |
+| 打包后插件端到端（Host） | `node test/test-plugin.mjs` | 80/80 |
 | 客户端设置页 | `node test/test-client.mjs` | 82/82 |
 | 权限 · 群管理 · 访客工具闸 | `node test/test-admin.mjs` | 32/32 |
 | HTTP / 代理层 | `node test/test-http.mjs` | 17/17 |
-| 配置合并与还原 | `node test/test-config.mjs` | 11/11 |
+| 配置合并与还原 | `node test/test-config.mjs` | 17/17 |
 | 多引擎搜索结果解析 | `node test/test-websearch.mjs` | 5/5 |
 | 生图引擎 | `node test/test-imagegen.mjs` | 16/16 |
 | 会话 id 回退 | `node test/test-session-id.mjs` | 5/5 |
@@ -73,7 +73,7 @@ DSH Agent（默认模型 + preset 人格 + 工具）
 | 主动发言 | `node test/test-proactive.mjs` | 78/78 |
 | 主动发言回合（端到端，不动定时器） | `node test/test-proactive-round.mjs` | 21/21 |
 | 拥有者设置通道 | `node test/test-owner-settings.mjs` | 58/58 |
-| 一键全量 | `node test/run-all.mjs` | **19/19 套件 · 735 项** |
+| 一键全量 | `node test/run-all.mjs` | **19/19 套件 · 745 项** |
 `test-plugin.mjs` 用假 ctx 加载真正的 `lib/index.js` + 真适配器 + 零依赖 OneBot 模拟器，跑通完整链路（无需 DSH / QQ / 网络）。
 
 ## 二、快速开始
@@ -577,7 +577,7 @@ npm install
 装好之后裸克隆即可运行：需要 DSH 运行时才能成立的少数断言（动态工具注册、qqgroup 工具路径）
 会自动跳过，而不是判失败；想看全，把 `DSH_PROFILE_MODULES` 指向一个装了 DSH 运行时的 profile 的
 `node_modules`。
-整套 **735 项**（19 个套件）：
+整套 **745 项**（19 个套件）：
 
 ```sh
 npm test
@@ -595,11 +595,11 @@ node test/test-adapter-milky.mjs        # Milky（79 项）
 node test/test-adapter-qq-official.mjs  # QQ 官方（87 项）
 
 # 插件本体（假 ctx + 真适配器 + 假协议端）
-node test/test-plugin.mjs     # Host 半边（76 项，含 Config 契约与热更新）
+node test/test-plugin.mjs     # Host 半边（80 项，含 Config 契约与热更新）
 node test/test-client.mjs     # 客户端设置页（80 项）
 node test/test-admin.mjs      # 权限·群管理·访客工具闸（32 项）
 node test/test-http.mjs       # HTTP / 代理隧道（17 项）
-node test/test-config.mjs     # 配置合并与还原（11 项）
+node test/test-config.mjs     # 配置合并与还原（17 项）
 node test/test-websearch.mjs  # 多引擎搜索结果解析（5 项）
 node test/test-imagegen.mjs   # 生图引擎：重试 / 轮询 / 响应解析（16 项）
 node test/test-session-id.mjs # 会话 id 回退（5 项）
@@ -657,7 +657,7 @@ AstrBot 是 OneBot 的**消费方**（内置 aiocqhttp 反向 WS 服务端），
 | `test/mock-onebot.mjs` | 零依赖 OneBot 11 模拟器（手写 RFC 6455 帧编解码） |
 | `test/test-adapter.mjs` | 正向 WS 适配器回归（19 项） |
 | `test/test-adapter-reverse.mjs` | 反向 WS 适配器回归（12 项） |
-| `test/test-plugin.mjs` | Host 插件端到端（76 项，假 ctx + 真适配器 + Config 契约 + 配置热更新） |
+| `test/test-plugin.mjs` | Host 插件端到端（80 项，假 ctx + 真适配器 + Config 契约 + 配置热更新） |
 | `test/test-client.mjs` | 客户端设置页（80 项，模拟模块加载器 + 最小 React 渲染 + 四档标签/二级分类 + 只写密钥护栏 + 命名空间回退） |
 | `test/test-admin.mjs` | 权限·群管理·访客工具闸专项（32 项；dsh-tools 可解析时另含工具路径断言） |
 | `test/test-http.mjs` | HTTP / 代理隧道（17 项） |
