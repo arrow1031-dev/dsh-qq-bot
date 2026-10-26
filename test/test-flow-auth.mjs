@@ -117,5 +117,42 @@ console.log('\n8. 恢复码同样受待授权申请时效约束');
   check('同一条恢复码不能连用两次（pending 已消费）', again.ok === false, JSON.stringify(again));
 }
 
+console.log('\n9. 授权绑定工具：申请时写什么，就只能跑什么');
+{
+  const conf3 = { enabled: true, totpSecret: secret, gatedTools: ['subagent', 'workflow'], grantTtlSeconds: 300 };
+  let t3 = clock;
+  const a3 = createFlowAuth({ config: () => conf3, now: () => t3 });
+  a3.requestAuth('888', 'subagent');
+  const g3 = a3.consumeToken('888', codeAt());
+  check('用途是受闸门工具时，grant 绑定了工具名', g3.ok === true);
+  const wrong = a3.takeGrant(g3.grantId, '888', 'workflow');
+  check('拿它去跑另一个工具被拒（wrong-tool）', wrong.ok === false && wrong.reason === 'wrong-tool', JSON.stringify(wrong));
+  const right = a3.takeGrant(g3.grantId, '888', 'subagent');
+  check('拿它跑申请的那个工具放行', right.ok === true);
+  // 用途不是工具名（自由文本）时不绑定，任何受闸门工具都能用一次
+  t3 += 31 * 1000;   // 跨过 30 秒步长，否则同一个码会被判重放
+  a3.requestAuth('888', 'just checking');
+  const g4 = a3.consumeToken('888', totp(secret, { timeMs: t3 }));
+  check('自由文本用途不绑定工具', g4.ok === true && a3.takeGrant(g4.grantId, '888', 'workflow').ok === true);
+}
+console.log('\n10. reset 与过期回收');
+{
+  const conf4 = { enabled: true, totpSecret: secret, gatedTools: ['subagent'], grantTtlSeconds: 30 };
+  let t4 = clock;
+  const a4 = createFlowAuth({ config: () => conf4, now: () => t4 });
+  a4.requestAuth('999', 'subagent');
+  const g5 = a4.consumeToken('999', codeAt());
+  check('拿得到 grant', g5.ok === true);
+  a4.reset('999');
+  check('reset(qq) 能按 qq 把 grant 清掉（以前按 grantId 找，删不掉）', a4.status().grants === 0, JSON.stringify(a4.status()));
+  // 过期回收：申请并消费很多次、都不使用，grant 数量不应持续增长
+  for (let i = 0; i < 5; i += 1) {
+    t4 += 31 * 1000;   // 每次跨过 30 秒 TTL
+    a4.requestAuth('999', 'subagent');
+    a4.consumeToken('999', codeAt());
+  }
+  check('过期的 grant 会被顺手清掉（数量不超过 2）', a4.status().grants <= 2, JSON.stringify(a4.status()));
+}
+
 console.log('\n' + pass + ' 通过 / ' + fail + ' 失败');
 process.exit(fail === 0 ? 0 : 1);

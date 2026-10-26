@@ -72,6 +72,17 @@ check('剥零宽对普通文本无副作用', stripInvisible('/flow ls') === '/f
 check('流程层英文 reason 有中文翻译', flowReasonZh('sha-mismatch') !== 'sha-mismatch' && flowReasonZh('bad-name') !== 'bad-name');
 check('认不出的 reason 不返回空', flowReasonZh('weird') === 'weird' && flowReasonZh('') === '未知原因');
 
+console.log('\n7. 全量 Default_Ignorable（第三轮：手维护区间漏了这些）');
+check('双向隔离符 U+2066–2069 也拦得住',
+  ['\u2066', '\u2067', '\u2068', '\u2069'].every((ch) => flowInterceptKind({ isGroup: false, isOwner: true, text: ch + '/auth 123456' }) === 'auth'));
+check('U+061C（阿拉伯字母标记）也拦得住',
+  flowInterceptKind({ isGroup: false, isOwner: true, text: '\u061c/auth 123456' }) === 'auth');
+check('U+E0020（标签字符）也拦得住',
+  flowInterceptKind({ isGroup: false, isOwner: true, text: '\u{e0020}/auth 123456' }) === 'auth');
+check('这些剥完之后也能解析',
+  ['\u2066', '\u061c', '\u{e0020}'].every((ch) => parseAuthCommand(ch + '/auth 123456') !== null));
+check('\\p{Cf} 全量剥不误伤正常文本', stripInvisible('/auth 123456') === '/auth 123456');
+
 console.log('');
 if (fail === 0) { console.log(pass + '/' + (pass + fail) + ' 项通过'); console.log('指令解析自测通过'); }
 else { console.log(pass + ' 通过 / ' + fail + ' 失败'); process.exit(1); }
