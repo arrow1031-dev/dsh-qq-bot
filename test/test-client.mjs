@@ -132,7 +132,7 @@ try {
   plugin.apply(slotsCtx);
   check('注入到 plugins.bundle.config（插件详情页配置区）', injectName === 'plugins.bundle.config', String(injectName));
   check('注册项 name=plugins.bundle.config', registered && registered.options.name === 'plugins.bundle.config');
-  check("注册项 key='dsh-qq-bot'（与包名一致，插件页按它派发）", registered && registered.options.key === 'dsh-qq-bot', String(registered && registered.options.key));
+  check('注册项 key 与包名一致（插件页按 pkg.name 派发）', registered && registered.options.key === PKG_ID, String(registered && registered.options.key));
   check('不再注册旧的 settings.section 入口', injectName !== 'settings.section', String(injectName));
   check('提供了组件', registered && typeof registered.component === 'function');
 
