@@ -70,9 +70,10 @@ DSH Agent（默认模型 + preset 人格 + 工具）
 | 会话 id 回退 | `node test/test-session-id.mjs` | 5/5 |
 | 运行时兼容自检 | `node test/test-compat.mjs` | 14/14 |
 | 历史消息鉴权与定向 | `node test/test-history.mjs` | 23/23 |
-| 主动发言 | `node test/test-proactive.mjs` | 65/65 |
+| 主动发言 | `node test/test-proactive.mjs` | 74/74 |
+| 主动发言回合（端到端，不动定时器） | `node test/test-proactive-round.mjs` | 7/7 |
 | 拥有者设置通道 | `node test/test-owner-settings.mjs` | 58/58 |
-| 一键全量 | `node test/run-all.mjs` | **18/18 套件 · 701 项** |
+| 一键全量 | `node test/run-all.mjs` | **19/19 套件 · 717 项** |
 `test-plugin.mjs` 用假 ctx 加载真正的 `lib/index.js` + 真适配器 + 零依赖 OneBot 模拟器，跑通完整链路（无需 DSH / QQ / 网络）。
 
 ## 二、快速开始
@@ -317,6 +318,7 @@ Agent 会话的工作目录**不需要任何配置**：插件读取 DSH 官方�
       speakProvider: ''           # 发言阶段 provider（留空 = 与判断阶段相同）
       speakModel: ''              # 发言阶段模型（留空 = 单段模式；填了才启用两段式）
       speakFallback: true         # 两段式下发言失败时，回退用判断模型给的正文
+      requireCjk: false           # 发送前兜底：没有中文（且长于 12 字）就丢掉（默认关；中文群建议开）
       maxChars: 120               # 单条最大字数
       interests: ''               # 话题偏好（可空；接什么仍由模型决定）
       dryRun: false               # 演练：只记日志不发送
@@ -603,8 +605,9 @@ node test/test-imagegen.mjs   # 生图引擎：重试 / 轮询 / 响应解析（
 node test/test-session-id.mjs # 会话 id 回退（5 项）
 node test/test-compat.mjs     # 运行时兼容自检（14 项）
 node test/test-history.mjs    # 历史消息鉴权与定向（23 项）
-node test/test-proactive.mjs  # 主动发言（65 项）
-node test/run-all.mjs         # 一键全量（18 套件）
+node test/test-proactive.mjs  # 主动发言（74 项）
+node test/test-proactive-round.mjs  # 主动发言回合端到端（7 项）
+node test/run-all.mjs         # 一键全量（19 套件）
 ```
 
 也可以手动拿假 OneBot 试（端口正好是 NapCat 默认值）：
@@ -772,6 +775,8 @@ AI 生成内容声明见 [AI-DISCLOSURE.md](AI-DISCLOSURE.md)，**使用前请�
   判断挑便宜快的、发言挑文风更合口味的，不用逼一个模型既守 JSON 又要有文采。发言阶段报错或写不出可用正文时，
   `speakFallback`（默认开）回退到判断模型给的句子，不会因为第二段挂了就不说话；两项都不填时行为与以前完全一致。
   注意**判断阶段仍在写正文**（那句 `message` 就是回退素材），精简 judge 提示词时别把它删了，否则回退会静默失效。
+- **发送前兜底 `requireCjk`（默认关，单段 / 两段都生效）**：正文没有 CJK 字符、且长度超过 12 时判不可用。它治的不是「拒绝语」这个语义，而是「中文群里整句英文」这个结构性异常——模型偶尔会掉回英文拒答模板（形如「Sorry, it looks like I can not chat about this.」）。
+  长度阈值 12 是代码里的常量（`CJK_MIN_LENGTH`）不是配置：正常 ASCII 短回应（666 / 233 / OK / lol / yyds）基本 ≤ 10，整句英文拒绝语基本 ≥ 20，12 是安全中点。CJK 判据用 Unicode 属性转义（Han / Hiragana / Katakana / Hangul），`々` 与扩展 B 区生僻字都算中文。
 - 模型返回 `speak=false` 就安静待着；不会 `@` 人、不发链接；`dryRun: true` 只记日志，方便先观察。
 - **提示词两道防编造约束**：判断阶段的 `topic` 只能来自聊天记录里出现过的事（没得接就 `false`），发言阶段只用记录里的信息、不编造具体事实。
   这条是生产上真发出去一条「自编经历」之后补的——模型编造是概率性的，约束只压概率，消不掉。
