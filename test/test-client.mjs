@@ -121,7 +121,7 @@ try {
   };
   const mutateCalls = [];
   const fakeSettingsApi = {
-    async describe() { return { ok: true, value: { writable: true, hasDocument: true, namespaces: [{ ns: 'dsh-qq-bot', value: SETTINGS_VALUE, revision: 7, secrets: [{ path: ['onebot', 'accessToken'], set: true }] }] } }; },
+    async describe() { return { ok: true, value: { writable: true, hasDocument: true, namespaces: [{ ns: 'dsh-qq-bot', value: SETTINGS_VALUE, revision: 7, secrets: [{ path: ['onebot', 'accessToken'], set: true }, { path: ['flowAuth', 'totpSecret'], set: true }] }] } }; },
     async mutate(ns, ops, revision) { mutateCalls.push({ ns, ops, revision }); return { ok: true, value: { ns, revision: 8 } }; },
   };
   slotsCtx.get = (name) => (name === 'remote.settings' ? fakeSettingsApi : undefined);
@@ -363,6 +363,11 @@ try {
     JSON.stringify(advSubTabs) === JSON.stringify(['流程授权', '会话与排错']), JSON.stringify(advSubTabs));
 
   const advFlowJoined = textsOf(advTree);
+  // 密钥是 role(secret)，远程读会脱敏成空串：这时必须靠 isSecret 判断「配过没有」，
+  // 否则页面会说「还没有可用密钥」并给出「生成密钥」按钮，一点就覆盖线上密钥。
+  check('已配密钥（被脱敏）时不再显示「还没有可用密钥」',
+    advFlowJoined.includes('密钥已经配置好了') && advFlowJoined.includes('还没有可用密钥') === false,
+    advFlowJoined.slice(0, 200));
   check('流程授权页含闸门开关与绑定二维码区',
     advFlowJoined.includes('流程授权（子代理 / 队友 / 工作流先要私聊动态码）')
     && advFlowJoined.includes('绑定二维码'), advFlowJoined.slice(0, 240));
@@ -440,7 +445,7 @@ try {
   clickTab('基本');
 
   console.log('\n5. 密钥字段是只写的（不会把 access_token 清空）');
-  check('loadConfig 带回了 secrets 位置', loaded.secrets && loaded.secrets.length === 1 && loaded.secrets[0].path.join('.') === 'onebot.accessToken',
+  check('loadConfig 带回了 secrets 位置', loaded.secrets && loaded.secrets.length === 2 && loaded.secrets[0].path.join('.') === 'onebot.accessToken',
     JSON.stringify(loaded.secrets));
   check('页面提示「已设置；留空则保持不变」', joined.includes('已设置；留空则保持不变'));
 

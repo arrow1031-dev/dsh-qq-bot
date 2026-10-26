@@ -98,5 +98,24 @@ check('审计里有 ok/fail 与 grantId', audits.some((a) => a.action === 'grant
 check('审计里不含正确的动态码明文', !auditText.includes(codeAt()));
 check('审计结构固定（at/qq/action/ok/reason/grantId）', audits.every((a) => ['at', 'qq', 'action', 'ok', 'reason', 'grantId'].every((k) => k in a)));
 
+
+console.log('\n8. 恢复码同样受待授权申请时效约束');
+{
+  const salt = 'cafe';
+  const codes = ['ABCDEFGH', 'IJKLMNOP'];
+  const conf2 = { enabled: true, totpSecret: generateSecret(20), grantTtlSeconds: 30, maxAttempts: 5, lockoutMinutes: 15, recoveryHashes: codes.map((c) => hashBackupCode(c, salt)), recoverySalt: salt };
+  let t2 = 1700000000000;
+  const a2 = createFlowAuth({ config: () => conf2, now: () => t2 });
+  a2.requestAuth('777', 'x');
+  t2 += 10 * 60 * 1000;   // 十分钟后才回恢复码：申请早该过期了
+  const late = a2.consumeRecoveryCode('777', codes[0]);
+  check('十分钟前的申请不能用恢复码兑现', late.ok === false && late.reason === 'no-pending', JSON.stringify(late));
+  a2.requestAuth('777', 'y');
+  const fresh = a2.consumeRecoveryCode('777', codes[0]);
+  check('重新申请后恢复码立刻可用', fresh.ok === true);
+  const again = a2.consumeRecoveryCode('777', codes[0]);
+  check('同一条恢复码不能连用两次（pending 已消费）', again.ok === false, JSON.stringify(again));
+}
+
 console.log('\n' + pass + ' 通过 / ' + fail + ' 失败');
 process.exit(fail === 0 ? 0 : 1);

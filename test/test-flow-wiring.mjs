@@ -193,6 +193,24 @@ console.log('\n6. 同一回合的第二个 gated 工具仍要自己的码（记�
   try { await w.registry.subagent_fork.execute({}, { name: 'subagent_fork', agent: null }); } catch (error) { secondThrew = String(error.message); }
   check('换一个 gated 工具仍被拦（记账按工具，不是全局通行证）', secondThrew.includes('授权'), secondThrew);
 }
+
+console.log('\n7. 群里的尝试不能把私聊的授权烧掉');
+{
+  const w = makeWorld(true);
+  w.auth.requestAuth(OWNER, 'x');
+  const granted = w.auth.consumeToken(OWNER, totp(w.secret, { timeMs: w.clock.now }));
+  w.gate.remember(OWNER, granted.grantId);
+  // 每个会话各装一个守卫：这里只看「刚建的这个会话」的守卫（真机上也只有这一个在跑）。
+  const g0 = w.guards.length;
+  await ownerEntry(w, 'group-123', OWNER);
+  const groupVerdict = w.guards[g0]({ name: 'subagent', agent: null });
+  check('群里调用被拒，并提示只能在拥有者私聊', typeof groupVerdict === 'string' && groupVerdict.includes('拥有者私聊'), String(groupVerdict));
+  const g1 = w.guards.length;
+  await ownerEntry(w, 'private-' + OWNER, OWNER);
+  const privateVerdict = w.guards[g1]({ name: 'subagent', agent: null });
+  check('私聊这边码还在（没被群里的尝试花掉）', privateVerdict === undefined, JSON.stringify(privateVerdict));
+}
+
 console.log('\n' + total + '/' + total + ' 项通过');
 if (failures > 0) {
   console.log(failures + ' 项失败');

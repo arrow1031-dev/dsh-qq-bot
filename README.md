@@ -61,7 +61,7 @@ DSH Agent（默认模型 + preset 人格 + 工具）
 | Milky 适配器 | `node test/test-adapter-milky.mjs` | 79/79 |
 | QQ 官方适配器 | `node test/test-adapter-qq-official.mjs` | 87/87 |
 | 打包后插件端到端（Host） | `node test/test-plugin.mjs` | 103/103 |
-| 客户端设置页 | `node test/test-client.mjs` | 83/83 |
+| 客户端设置页 | `node test/test-client.mjs` | 84/84 |
 | 权限 · 群管理 · 访客工具闸 | `node test/test-admin.mjs` | 32/32 |
 | HTTP / 代理层 | `node test/test-http.mjs` | 17/17 |
 | 配置合并与还原 | `node test/test-config.mjs` | 24/24 |
@@ -81,7 +81,7 @@ DSH Agent（默认模型 + preset 人格 + 工具）
 | /auth 与 /flow 指令解析 | `node test/test-flow-commands.mjs` | 34/34 |
 | 流程授权闸门 | `node test/test-flow-gate.mjs` | 16/16 |
 | 流程授权接线（守卫 + 遮蔽，一次调用一个码） | `node test/test-flow-wiring.mjs` | 14/14 |
-| 一键全量 | `node test/run-all.mjs` | **27/27 套件 · 992 项** |
+| 一键全量 | `node test/run-all.mjs` | **27/27 套件 · 1000 项** |
 `test-plugin.mjs` 用假 ctx 加载真正的 `lib/index.js` + 真适配器 + 零依赖 OneBot 模拟器，跑通完整链路（无需 DSH / QQ / 网络）。
 
 ## 二、快速开始
@@ -642,7 +642,7 @@ npm install
 装好之后裸克隆即可运行：需要 DSH 运行时才能成立的少数断言（动态工具注册、qqgroup 工具路径）
 会自动跳过，而不是判失败；想看全，把 `DSH_PROFILE_MODULES` 指向一个装了 DSH 运行时的 profile 的
 `node_modules`。
-整套 **992 项**（27 个套件）：
+整套 **1000 项**（27 个套件）：
 
 ```sh
 npm test
@@ -661,7 +661,7 @@ node test/test-adapter-qq-official.mjs  # QQ 官方（87 项）
 
 # 插件本体（假 ctx + 真适配器 + 假协议端）
 node test/test-plugin.mjs     # Host 半边（103 项，含 Config 契约与热更新、9 个工具）
-node test/test-client.mjs     # 客户端设置页（83 项）
+node test/test-client.mjs     # 客户端设置页（84 项）
 node test/test-admin.mjs      # 权限·群管理·访客工具闸（32 项）
 node test/test-http.mjs       # HTTP / 代理隧道（17 项）
 node test/test-config.mjs     # 配置合并与还原（24 项）
@@ -676,11 +676,11 @@ node test/test-owner-settings.mjs  # 拥有者设置通道（58 项）
 node test/test-totp.mjs       # TOTP / HOTP（RFC 4226 + 6238 向量，44 项）
 node test/test-totp-cli.mjs   # 终端绑定（secret / otpauth URI / 二维码，14 项）
 node test/test-qr.mjs         # 二维码编码器（版本/掩码/固定矩阵，18 项）
-node test/test-flow-auth.mjs  # 授权状态机（授权/重放/锁定/过期，24 项）
+node test/test-flow-auth.mjs  # 授权状态机（授权/重放/锁定/过期，27 项）
 node test/test-flow-store.mjs # 流程脚本存取（路径穿越/覆盖保护/sha 校验，16 项）
 node test/test-flow-commands.mjs  # /auth 与 /flow 解析（34 项）
 node test/test-flow-gate.mjs  # 工具闸门（放行一次/别人的授权/过期，16 项）
-node test/test-flow-wiring.mjs # 闸门接线：一次调用只吃一个码 / 关着原样放行（18 项）
+node test/test-flow-wiring.mjs # 闸门接线：一次调用只吃一个码 / 关着原样放行（20 项）
 node test/run-all.mjs         # 一键全量（27 套件）
 ```
 
@@ -738,13 +738,13 @@ AstrBot 是 OneBot 的**消费方**（内置 aiocqhttp 反向 WS 服务端），
 | `test/test-adapter.mjs` | 正向 WS 适配器回归（19 项） |
 | `test/test-adapter-reverse.mjs` | 反向 WS 适配器回归（12 项） |
 | `test/test-plugin.mjs` | Host 插件端到端（103 项，假 ctx + 真适配器 + Config 契约 + 配置热更新） |
-| `test/test-client.mjs` | 客户端设置页（83 项，模拟模块加载器 + 最小 React 渲染 + 四档标签/二级分类 + 只写密钥护栏 + 命名空间回退） |
+| `test/test-client.mjs` | 客户端设置页（84 项，模拟模块加载器 + 最小 React 渲染 + 四档标签/二级分类 + 只写密钥护栏 + 命名空间回退） |
 | `test/test-admin.mjs` | 权限·群管理·访客工具闸专项（32 项；dsh-tools 可解析时另含工具路径断言） |
 | `test/test-http.mjs` | HTTP / 代理隧道（17 项） |
 | `test/test-config.mjs` | 配置合并、volatile 还原与废弃键清理（23 项） |
 | `test/test-totp.mjs` | TOTP / HOTP 官方向量与 fail-closed（44 项） |
 | `test/test-qr.mjs` | 二维码编码器（固定矩阵哈希守回归，18 项） |
-| `test/test-flow-auth.mjs` `test-flow-store.mjs` `test-flow-commands.mjs` `test-flow-gate.mjs` `test-flow-wiring.mjs` | 流程授权链路（24 + 20 + 42 + 16 + 18 项） |
+| `test/test-flow-auth.mjs` `test-flow-store.mjs` `test-flow-commands.mjs` `test-flow-gate.mjs` `test-flow-wiring.mjs` | 流程授权链路（27 + 22 + 42 + 16 + 20 项） |
 | `test/test-websearch.mjs` | 多引擎搜索结果解析（5 项） |
 | `test/run-all.mjs` | 一键全量（27 套件） |
 | `CONTRIBUTING.md` / `CODE_OF_CONDUCT.md` / `SECURITY.md` | 贡献流程、行为准则、安全报告 |

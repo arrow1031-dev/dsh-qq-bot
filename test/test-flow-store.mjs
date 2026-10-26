@@ -70,6 +70,12 @@ store.save('pinned-two', '第一版', {});
 fs.writeFileSync(path.join(root, 'pinned-two.js'), '第二版', 'utf8');
 check('钉住 sha 的脚本被手改 → sha-mismatch', store.read('pinned-two').reason === 'sha-mismatch');
 
+console.log('\n8. 脚本位置变成目录时，删除必须报失败（不能嘴上说删了）');
+fs.mkdirSync(path.join(root, 'dirscript.js'), { recursive: true });
+const dirRemove = store.remove('dirscript');
+check('删不掉就返回 not-removed', dirRemove.ok === false && dirRemove.reason === 'not-removed', JSON.stringify(dirRemove));
+check('目录确实还在（没被当成已删除）', fs.existsSync(path.join(root, 'dirscript.js')) === true);
+
 fs.rmSync(root, { recursive: true, force: true });
 console.log('\n' + pass + ' 通过 / ' + fail + ' 失败');
 process.exit(fail === 0 ? 0 : 1);
