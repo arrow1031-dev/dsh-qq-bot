@@ -56,15 +56,18 @@ check('validateMessage @人', validateMessage('@123456 你说的对', { maxChars
 check('validateMessage 自称 AI', validateMessage('作为一个AI我觉得', { maxChars: 50 }).ok === false);
 check('validateMessage 重复上一条', validateMessage('这游戏我也在玩', { maxChars: 50, recentTexts: ['这游戏我也在玩。'] }).ok === false);
 
-// requireCjk：默认关（既有行为不变）；开启后「无 CJK 且长度 > 12」判不可用——只治整句英文拒答
+// requireCjk：默认关（既有行为不变）；开启后「无 CJK 且长度 > 12」判不可用
+// 注意所有正例都必须 > 12 字符：长度门槛在判据最前面，短串会被短路掉、根本走不到 CJK 检测
 const refusal = "Sorry, it looks like I can't chat about this.";
 check('requireCjk 默认关：英文正文照旧放行', validateMessage(refusal, { maxChars: 200 }).ok === true);
 check('requireCjk 开启：整句英文被判不可用', (() => { const r = validateMessage(refusal, { maxChars: 200, requireCjk: true }); return r.ok === false && r.reason === 'no-cjk'; })());
-check('requireCjk 开启：中文放行', validateMessage('明天记得带伞', { maxChars: 50, requireCjk: true }).ok === true);
-check('requireCjk 开启：中英混排放行', validateMessage('那就用 OK 呗，我先撤', { maxChars: 50, requireCjk: true }).ok === true);
-check('requireCjk 开启：日文/韩文放行', validateMessage('いいよ、またね', { maxChars: 50, requireCjk: true }).ok === true);
-check('requireCjk 开启：短 ASCII 回应放行（666 / yyds / +1）', ['666', 'yyds', '+1'].every((x) => validateMessage(x, { maxChars: 50, requireCjk: true }).ok === true));
-check('requireCjk 开启：々（U+3005）也算 CJK', validateMessage('又来々了', { maxChars: 50, requireCjk: true }).ok === true);
+check('requireCjk 开启：中文放行（14 字，过长度门槛）', validateMessage('明天记得带伞，别又忘了带钥匙', { maxChars: 50, requireCjk: true }).ok === true);
+check('requireCjk 开启：日文放行（14 字）', validateMessage('いいよ、またね、気をつけてね', { maxChars: 50, requireCjk: true }).ok === true);
+check('requireCjk 开启：中英混排放行（13 字）', validateMessage('那就用 OK 呗，我先撤啦', { maxChars: 50, requireCjk: true }).ok === true);
+check('requireCjk 开启：纯 々 串放行（真验到 U+3005）', validateMessage('々'.repeat(13), { maxChars: 50, requireCjk: true }).ok === true);
+check('requireCjk 开启：扩展 B 区生僻字放行（真验到 u 标志）', validateMessage('𠀀'.repeat(7), { maxChars: 50, requireCjk: true }).ok === true);
+check('requireCjk 边界：12 字符整句英文放行（门槛左）', validateMessage('abcdefghijkl', { maxChars: 50, requireCjk: true }).ok === true);
+check('requireCjk 边界：13 字符整句英文拦住（门槛右）', (() => { const r = validateMessage('abcdefghijklm', { maxChars: 50, requireCjk: true }); return r.ok === false && r.reason === 'no-cjk'; })());
 
 const now = Date.now();
 check('allowSend 正常放行', allowSend({ now, sentTimes: [], lastSentAt: 0, maxPerHour: 2, maxPerDay: 4, minGapMinutes: 10 }).ok === true);

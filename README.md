@@ -70,9 +70,9 @@ DSH Agent（默认模型 + preset 人格 + 工具）
 | 会话 id 回退 | `node test/test-session-id.mjs` | 5/5 |
 | 运行时兼容自检 | `node test/test-compat.mjs` | 14/14 |
 | 历史消息鉴权与定向 | `node test/test-history.mjs` | 23/23 |
-| 主动发言 | `node test/test-proactive.mjs` | 72/72 |
+| 主动发言 | `node test/test-proactive.mjs` | 74/74 |
 | 拥有者设置通道 | `node test/test-owner-settings.mjs` | 58/58 |
-| 一键全量 | `node test/run-all.mjs` | **18/18 套件 · 708 项** |
+| 一键全量 | `node test/run-all.mjs` | **18/18 套件 · 710 项** |
 `test-plugin.mjs` 用假 ctx 加载真正的 `lib/index.js` + 真适配器 + 零依赖 OneBot 模拟器，跑通完整链路（无需 DSH / QQ / 网络）。
 
 ## 二、快速开始
@@ -604,7 +604,7 @@ node test/test-imagegen.mjs   # 生图引擎：重试 / 轮询 / 响应解析（
 node test/test-session-id.mjs # 会话 id 回退（5 项）
 node test/test-compat.mjs     # 运行时兼容自检（14 项）
 node test/test-history.mjs    # 历史消息鉴权与定向（23 项）
-node test/test-proactive.mjs  # 主动发言（72 项）
+node test/test-proactive.mjs  # 主动发言（74 项）
 node test/run-all.mjs         # 一键全量（18 套件）
 ```
 
