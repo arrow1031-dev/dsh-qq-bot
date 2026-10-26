@@ -55,6 +55,9 @@ console.log('9. staleConfigPaths 的两个边界（评审提出，曾会破坏�
     const wrapped = { [tag]: true, value: 1 };
     return staleConfigPaths({ auth: wrapped }).length === 0;
   })());
+  check('DSH 的 !!js 表达式包装键（__jsExpr）不算废弃子键',
+    staleConfigPaths({ flowAuth: { __jsExpr: 'x', enabled: true }, legacy: { __jsExpr: 'y' } }).length === 1,
+    JSON.stringify(staleConfigPaths({ flowAuth: { __jsExpr: 'x', enabled: true }, legacy: { __jsExpr: 'y' } })));
   check('未知键的值是 null 也算残留（以前永远清不掉）',
     JSON.stringify(staleConfigPaths({ legacy: null })) === '[["legacy"]]');
   const cleanDefaults = staleConfigPaths(DEFAULTS);

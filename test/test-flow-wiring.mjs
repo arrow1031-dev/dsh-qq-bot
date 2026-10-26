@@ -55,6 +55,7 @@ function makeWorld(flowEnabled) {
     restrict: (filter) => { restricted.push(filter); return () => {}; },
   };
   registry.subagent = { name: 'subagent', execute: async () => { nativeCalls += 1; return { native: true }; } };
+  registry.subagent_fork = { name: 'subagent_fork', execute: async () => { nativeCalls += 1; return { fork: true }; } };
 
   const state = { convos: new Map(), stats: { guestBlocked: 0, flowBlocked: 0 } };
   const cfg = {
@@ -105,22 +106,28 @@ async function ownerEntry(world, key, qq) {
   return entry;
 }
 
-console.log('1. 开关关着：工具面一个字节都不动（0.11 行为）');
+console.log('1. 开关关着：行为与 0.11 一致（遮蔽装上了，但原样放行）');
 {
   const w = makeWorld(false);
-  await ownerEntry(w, 'private-' + OWNER, OWNER);
-  const touched = w.restricted.length + (w.registry.subagent.execute.toString().includes('flowGate') ? 1 : 0);
-  check('关着时既不遮蔽也不摘除编排工具', touched === 0, 'restricted=' + w.restricted.length);
-  w.auth.requestAuth(OWNER, 'x');
+  const entryOff = await ownerEntry(w, 'private-' + OWNER, OWNER);
+  check('没有摘除任何编排工具', w.restricted.length === 0, 'restricted=' + w.restricted.length);
+  // 关着时「身份不对也必须放行」才是 0.11 的行为：接管只允许发生在开关打开时。
+  entryOff.turnSpeaker = { userId: '999999', groupId: null, tier: 'guest', owner: false, sources: [] };
+  let threwOff = ''; let outOff = null;
+  try { outOff = await w.registry.subagent.execute({}, { name: 'subagent', agent: null }); } catch (error) { threwOff = String(error.message); }
+  check('关着时访客也照常能用（不看身份、不拦）', threwOff === '' && outOff !== null && outOff.native === true, threwOff);
+  check('关着时不消耗授权、也不标产物', w.auth.status().pending === 0 && entryOff.flowArmedAt === undefined);
   check('关着时 requestAuth 直接拒绝（不建 pending）', w.auth.requestAuth(OWNER, 'x').ok === false);
 }
 
 console.log('\n2. 开关打开：拥有者私聊 → 同名遮蔽成带闸门的 wrapper');
 const world = makeWorld(true);
 const entry = await ownerEntry(world, 'private-' + OWNER, OWNER);
-check('subagent 被同名遮蔽（注册了 wrapper）',
-  world.registry.subagent.execute.toString().includes('flowGate'), 'not shadowed');
-check('没有把 subagent 摘掉', world.restricted.every((f) => !(Array.isArray(f.deny) && f.deny.includes('subagent'))));
+// 行为断言（不看源码字符串）：开关打开、没有授权时 wrapper 必须拒绝。
+let threwShadow = '';
+try { await world.registry.subagent.execute({}, { name: 'subagent', agent: null }); } catch (error) { threwShadow = String(error.message); }
+check('开关打开且没授权时 wrapper 拒绝', threwShadow !== '' && threwShadow.includes('授权'), threwShadow);
+check('没有把 subagent 摘掉（工具仍在表里）', world.restricted.every((f) => !(Array.isArray(f.deny) && f.deny.includes('subagent'))));
 
 console.log('\n3. 一次调用只吃一个 grant（guard + wrapper 不能各问一次）');
 {
@@ -169,6 +176,23 @@ console.log('\n5. 工具执行失败：撤掉产物标记');
   check('失败后不留 flowArmedAt（不会白打包半成品）', e.flowArmedAt === undefined, String(e.flowArmedAt));
 }
 
+
+console.log('\n6. 同一回合的第二个 gated 工具仍要自己的码（记账不能跨工具复用）');
+{
+  const w = makeWorld(true);
+  await ownerEntry(w, 'private-' + OWNER, OWNER);
+  w.auth.requestAuth(OWNER, 'a');
+  const granted = w.auth.consumeToken(OWNER, totp(w.secret, { timeMs: w.clock.now }));
+  w.gate.remember(OWNER, granted.grantId);
+  const exec = { name: 'subagent', agent: null };
+  w.runGuards(exec);
+  let firstThrew = '';
+  try { await w.registry.subagent.execute({}, exec); } catch (error) { firstThrew = String(error.message); }
+  check('第一个工具靠这条 grant 跑通', firstThrew === '', firstThrew);
+  let secondThrew = '';
+  try { await w.registry.subagent_fork.execute({}, { name: 'subagent_fork', agent: null }); } catch (error) { secondThrew = String(error.message); }
+  check('换一个 gated 工具仍被拦（记账按工具，不是全局通行证）', secondThrew.includes('授权'), secondThrew);
+}
 console.log('\n' + total + '/' + total + ' 项通过');
 if (failures > 0) {
   console.log(failures + ' 项失败');

@@ -6,7 +6,7 @@
  *
  * 只测「消息是不是这两条指令、参数是什么」；鉴权与放行不在这里（见 test-flow-auth / test-flow-gate）。
  */
-import { parseAuthCommand, parseFlowCommand, flowInterceptKind, artifactInputLines, FLOW_HELP } from '../lib/flow-commands.js';
+import { parseAuthCommand, parseFlowCommand, flowInterceptKind, artifactInputLines, flowReasonZh, stripInvisible, FLOW_HELP } from '../lib/flow-commands.js';
 
 let pass = 0;
 let fail = 0;
@@ -59,6 +59,19 @@ check('以 - 开头的名字也不会被当成选项', artifactInputLines(['-T']
 check('已带 ./ 的不重复加', artifactInputLines(['./x'])[0] === './x');
 check('含换行的名字被丢弃（不能往 stdin 注入多行）', artifactInputLines(['ok.txt', 'bad\n-x']).length === 1);
 check('空值/非数组不炸', artifactInputLines(undefined).length === 0 && artifactInputLines(['', null]).length === 0);
+console.log('\n6. 零宽与报错文案（第二轮评审补的回归）');
+check('拦截判定认得出前置零宽字符', flowInterceptKind({ isGroup: false, isOwner: true, text: '\u200b/auth 123456' }) === 'auth');
+check('剥完之后能正常解析（否则消息被拦下来又静默丢掉）',
+  (() => { const t = stripInvisible('\u200b/auth 123456'); return t === '/auth 123456' && parseAuthCommand(t) !== null; })());
+check('软连字符 / 蒙古文分隔符 / 韩文填充符 / 变体选择符也拦得住',
+  ['\u00ad', '\u180e', '\u3164', '\u115f', '\ufe0f'].every((ch) => flowInterceptKind({ isGroup: false, isOwner: true, text: ch + '/auth 123456' }) === 'auth'));
+check('拦得住的这些也能解析（消息不会静默蒸发）',
+  ['\u00ad', '\u180e', '\u3164', '\u115f'].every((ch) => parseAuthCommand(ch + '/auth 123456') !== null));
+check('解析函数自己就剥（调用点传原文也不会丢）', parseAuthCommand('\u200b/auth 123456') !== null);
+check('剥零宽对普通文本无副作用', stripInvisible('/flow ls') === '/flow ls');
+check('流程层英文 reason 有中文翻译', flowReasonZh('sha-mismatch') !== 'sha-mismatch' && flowReasonZh('bad-name') !== 'bad-name');
+check('认不出的 reason 不返回空', flowReasonZh('weird') === 'weird' && flowReasonZh('') === '未知原因');
+
 console.log('');
 if (fail === 0) { console.log(pass + '/' + (pass + fail) + ' 项通过'); console.log('指令解析自测通过'); }
 else { console.log(pass + ' 通过 / ' + fail + ' 失败'); process.exit(1); }

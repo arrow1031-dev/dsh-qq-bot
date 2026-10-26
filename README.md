@@ -64,7 +64,7 @@ DSH Agent（默认模型 + preset 人格 + 工具）
 | 客户端设置页 | `node test/test-client.mjs` | 83/83 |
 | 权限 · 群管理 · 访客工具闸 | `node test/test-admin.mjs` | 32/32 |
 | HTTP / 代理层 | `node test/test-http.mjs` | 17/17 |
-| 配置合并与还原 | `node test/test-config.mjs` | 23/23 |
+| 配置合并与还原 | `node test/test-config.mjs` | 24/24 |
 | 多引擎搜索结果解析 | `node test/test-websearch.mjs` | 5/5 |
 | 生图引擎 | `node test/test-imagegen.mjs` | 16/16 |
 | 会话 id 回退 | `node test/test-session-id.mjs` | 5/5 |
@@ -81,7 +81,7 @@ DSH Agent（默认模型 + preset 人格 + 工具）
 | /auth 与 /flow 指令解析 | `node test/test-flow-commands.mjs` | 34/34 |
 | 流程授权闸门 | `node test/test-flow-gate.mjs` | 16/16 |
 | 流程授权接线（守卫 + 遮蔽，一次调用一个码） | `node test/test-flow-wiring.mjs` | 14/14 |
-| 一键全量 | `node test/run-all.mjs` | **27/27 套件 · 975 项** |
+| 一键全量 | `node test/run-all.mjs` | **27/27 套件 · 992 项** |
 `test-plugin.mjs` 用假 ctx 加载真正的 `lib/index.js` + 真适配器 + 零依赖 OneBot 模拟器，跑通完整链路（无需 DSH / QQ / 网络）。
 
 ## 二、快速开始
@@ -410,10 +410,11 @@ Agent 会话的工作目录**不需要任何配置**：插件读取 DSH 官方�
    （也可以把 secret 粘进 **TOTP 密钥** 手输，或用 Google Authenticator / Aegis / 1Password 手输）。算码全在你设备上，插件只存这个 seed；密钥不经 QQ、不写日志。
 3. 之后任何被拦下的调用，机器人会私聊发一条授权请求，你回 `/auth 123456`；
 4. 通过后机器人**撤回自己那条请求**，并提醒你把动态码那条也撤回（QQ 只允许撤回自己发的消息，它撤不了你的）；
-（动态码只认当前 30 秒步长，服务器必须开 NTP）5. 授权窗口 `flowAuth.grantTtlSeconds`（**默认 30 秒，最小 30 秒**）内 **1 次有效**，用掉即弃；用掉的瞬间被拦下的那一轮会接着跑；
+   （动态码只认当前 30 秒步长，服务器必须开 NTP）
+5. 授权窗口 `flowAuth.grantTtlSeconds`（**默认 30 秒，最小 30 秒**）内 **1 次有效**，用掉即弃；用掉的瞬间被拦下的那一轮会接着跑；
 6. 这一轮跑完，插件把会话工作区里**本轮新增/改动**的文件打包送回：默认发私聊，`flow.deliver=group:<群号>` 可丢到群，`none` 只回文字结论。
 
-> QQ 会话里**不暴露**原生编排工具（`subagent` / `spawn_teammate` / `workflow`）：拥有者私聊是插件用同名遮蔽接管的（要过一次性授权），其它会话直接从工具表里摘掉；
+> QQ 会话里的原生编排工具（`subagent` / `subagent_fork` / `spawn_teammate` / `workflow`）由插件同名遮蔽接管：开关关着时原样放行（与 0.11 一致），打开后拥有者私聊要过一次动态码，其它会话调用直接拿到「只能在拥有者私聊里驱动」的拒绝；
 > DSH 里正常建的会话不受影响。
 
 没有万能码，也没有测试后门：密钥缺失、格式不对、码不匹配一律拒绝；同一个 30 秒窗口的码只能用一次；连续错 5 次锁 15 分钟（可改）。
@@ -447,7 +448,7 @@ Agent 会话的工作目录**不需要任何配置**：插件读取 DSH 官方�
 
 - 注册在 `agent.ctx` 上 → 只作用于该会话的 agent
 - 每次工具执行时才求值 → 拥有者/访客交替说话**不需要增删限制**
-- 用**白名单**（`auth.guestToolAllow`，默认 `qqbot,qqgroup,qq_websearch,qq_webfetch,qq_imgsearch,qq_history`）→ `run_code`（PTC 保留传输）这类"不在全局层"的特殊工具也会被自动挡住；访客联网统一走 `qq_websearch`（搜索）与 `qq_webfetch`（抓网页），DSH 自带的 `web_fetch` 已从默认白名单移除
+- 用**白名单**（`auth.guestToolAllow`，默认 `qqbot,qqconfig,qqgroup,qq_websearch,qq_webfetch,qq_imgsearch,qq_history,moli_fetch`）→ `run_code`（PTC 保留传输）这类"不在全局层"的特殊工具也会被自动挡住；访客联网统一走 `qq_websearch`（搜索）与 `qq_webfetch`（抓网页），DSH 自带的 `web_fetch` 已从默认白名单移除
 - 被拦时返回拒绝原因，模型会把它转达给用户（最多多一次"被拒绝的调用"往返）
 
 因此它同时满足：**0 额外 token**（不注入提示词、不改工具表、不记 `request/header`）、**单会话单历史**、**不改 DSH 本身**。
@@ -582,7 +583,7 @@ Agent 会话的工作目录**不需要任何配置**：插件读取 DSH 官方�
 - `{action:'request', purpose?}` —— 申请一次授权：机器人私聊发一条提示，主人回 `/auth 6位动态码` 之后，被拦下的那一轮自动续跑。
 - `{action:'status'}` —— 看当前状态：开关、是否已绑定、待授权请求、未用授权（不打印密钥）。
 
-被闸门拦下的工具调用会收到可读文案（要哪个工具、还剩多久），模型按提示走 `request` 即可；
+被闸门拦下的工具调用会收到可读文案（写清拒绝原因，例如「还没有授权」「这个工具不在流程授权名单里」），模型按提示走 `request` 即可；
 授权一次只管一次调用、默认 30 秒内有效，用掉即弃。
 
 ### 人格（人设）也在设置里换
@@ -641,7 +642,7 @@ npm install
 装好之后裸克隆即可运行：需要 DSH 运行时才能成立的少数断言（动态工具注册、qqgroup 工具路径）
 会自动跳过，而不是判失败；想看全，把 `DSH_PROFILE_MODULES` 指向一个装了 DSH 运行时的 profile 的
 `node_modules`。
-整套 **975 项**（27 个套件）：
+整套 **992 项**（27 个套件）：
 
 ```sh
 npm test
@@ -663,7 +664,7 @@ node test/test-plugin.mjs     # Host 半边（103 项，含 Config 契约与热�
 node test/test-client.mjs     # 客户端设置页（83 项）
 node test/test-admin.mjs      # 权限·群管理·访客工具闸（32 项）
 node test/test-http.mjs       # HTTP / 代理隧道（17 项）
-node test/test-config.mjs     # 配置合并与还原（23 项）
+node test/test-config.mjs     # 配置合并与还原（24 项）
 node test/test-websearch.mjs  # 多引擎搜索结果解析（5 项）
 node test/test-imagegen.mjs   # 生图引擎：重试 / 轮询 / 响应解析（16 项）
 node test/test-session-id.mjs # 会话 id 回退（5 项）
@@ -679,7 +680,7 @@ node test/test-flow-auth.mjs  # 授权状态机（授权/重放/锁定/过期，
 node test/test-flow-store.mjs # 流程脚本存取（路径穿越/覆盖保护/sha 校验，16 项）
 node test/test-flow-commands.mjs  # /auth 与 /flow 解析（34 项）
 node test/test-flow-gate.mjs  # 工具闸门（放行一次/别人的授权/过期，16 项）
-node test/test-flow-wiring.mjs # 闸门接线：守卫+遮蔽只吃一个码 / 关着不动工具面（14 项）
+node test/test-flow-wiring.mjs # 闸门接线：一次调用只吃一个码 / 关着原样放行（18 项）
 node test/run-all.mjs         # 一键全量（27 套件）
 ```
 
@@ -724,7 +725,13 @@ AstrBot 是 OneBot 的**消费方**（内置 aiocqhttp 反向 WS 服务端），
 | `lib/websearch.js` | Tavily / DuckDuckGo / Yandex / Bing / Wikipedia 组合搜索 |
 | `lib/imgsearch.js` | 图床（zixiaoyun / scdn / uguu）+ TraceMoe / IQDB / SauceNAO / Soutubot 等反搜 |
 | `lib/moli.js` | dsh-moli 渲染抓取探测（可选） |
-| `lib/client.js` | 客户端半边（手写 bundle）：在「设置」里加「QQ 机器人」选项卡（命名空间 = 条目 id `dsh-qq-bot`） |
+| `lib/totp.js` | 零依赖 TOTP / HOTP / base32 / 恢复码（RFC 4226 · 6238） |
+| `lib/totp-cli.mjs` | 终端绑定入口：打印 secret / otpauth URI / 终端二维码 / 恢复码 |
+| `lib/qr.js` | 自研二维码编码器（字节模式、纠错 M、v1–v9），浏览器版是同算法副本 |
+| `lib/flow-auth.js` | 流程授权状态机 + 闸门（申请 / 验码 / 一次性 grant / 连错锁定） |
+| `lib/flow-store.js` | 流程脚本存取（手写 `<名字>.js` 即可，元数据与 sha256 可选） |
+| `lib/flow-commands.js` | `/auth` `/flow` 解析、拦截判定、打包入参归一化、帮助文案 |
+| `lib/client.js` | 客户端半边（手写 bundle）：在插件面板里给 `dsh-qq-bot` 挂设置页（命名空间 = 条目 id） |
 | `lib/onebot-adapter.mjs` | OneBot 11 传输适配器。零依赖（Node 22 内置 `WebSocket`/`fetch`），正向/反向 WS + HTTP，自动重连、发送限速 |
 | `cordis.patch.yml` | bundle 补丁：把插件插入 profile 组合树 |
 | `test/mock-onebot.mjs` | 零依赖 OneBot 11 模拟器（手写 RFC 6455 帧编解码） |
@@ -737,7 +744,7 @@ AstrBot 是 OneBot 的**消费方**（内置 aiocqhttp 反向 WS 服务端），
 | `test/test-config.mjs` | 配置合并、volatile 还原与废弃键清理（23 项） |
 | `test/test-totp.mjs` | TOTP / HOTP 官方向量与 fail-closed（44 项） |
 | `test/test-qr.mjs` | 二维码编码器（固定矩阵哈希守回归，18 项） |
-| `test/test-flow-auth.mjs` `test-flow-store.mjs` `test-flow-commands.mjs` `test-flow-gate.mjs` | 流程授权链路（24 + 16 + 29 + 16 项） |
+| `test/test-flow-auth.mjs` `test-flow-store.mjs` `test-flow-commands.mjs` `test-flow-gate.mjs` `test-flow-wiring.mjs` | 流程授权链路（24 + 20 + 42 + 16 + 18 项） |
 | `test/test-websearch.mjs` | 多引擎搜索结果解析（5 项） |
 | `test/run-all.mjs` | 一键全量（27 套件） |
 | `CONTRIBUTING.md` / `CODE_OF_CONDUCT.md` / `SECURITY.md` | 贡献流程、行为准则、安全报告 |
@@ -745,7 +752,7 @@ AstrBot 是 OneBot 的**消费方**（内置 aiocqhttp 反向 WS 服务端），
 | `examples/dynamic-package-host.js` | 同一个桥接的「动态 Cordis Package」版本：不想装包、只想在当前 DSH 进程里临时跑时用 |
 | `ARCHITECTURE.md` | **改动指南**（给要 fork 的人）：文件职责、数据流、设计决策原因、分步改动指南、调试手册、术语表 |
 | `AI-DISCLOSURE.md` | AI 生成内容声明、验证情况、**尚未验证清单**、第三方归属、安全免责 |
-| `CHANGELOG.md` | 版本演进（0.1.0 → 0.11.0，含 0.8.0 合并下游分支与 0.8.1 输入框修复） |
+| `CHANGELOG.md` | 版本演进（0.1.0 → 0.12.0，含 0.8.0 合并下游分支与 0.8.1 输入框修复） |
 | `LICENSE` | MIT |
 
 ## 十二、设计说明（踩过的坑）

@@ -56,6 +56,20 @@ const evil = store.save('../escape', 'return 1;');
 check('路径穿越被拒', evil.ok === false && evil.reason === 'bad-name');
 check('root 外没有新文件', fs.readdirSync(root).every((f) => !f.includes('escape')));
 
+
+console.log('\n7. 手写的 <名字>.js（没有元数据）也能用（README 承诺的用法）');
+fs.mkdirSync(root, { recursive: true });
+fs.writeFileSync(path.join(root, 'demo.js'), '// 每日总结\n把今天群里的聊天整理成三条\n', 'utf8');
+const listed = store.list();
+const demo = listed.find((it) => it.name === 'demo') || {};
+check('list 能看到没有元数据的 .js', demo.name === 'demo' && demo.pinned === false);
+check('标题取首行注释', demo.title === '每日总结', String(demo.title));
+const readPlain = store.read('demo');
+check('read 读得到，且没有元数据不算 sha-mismatch', readPlain.ok === true && readPlain.pinned === false && readPlain.sha256 === sha256(readPlain.script));
+store.save('pinned-two', '第一版', {});
+fs.writeFileSync(path.join(root, 'pinned-two.js'), '第二版', 'utf8');
+check('钉住 sha 的脚本被手改 → sha-mismatch', store.read('pinned-two').reason === 'sha-mismatch');
+
 fs.rmSync(root, { recursive: true, force: true });
 console.log('\n' + pass + ' 通过 / ' + fail + ' 失败');
 process.exit(fail === 0 ? 0 : 1);
