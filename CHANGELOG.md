@@ -1,3 +1,28 @@
+## 0.12.2 —— 修好「网页端加载失败」与「设置面板空白」
+
+0.12.1 把包名改成 `@sputnikzaychik/dsh-qq-bot` 之后，插件里有两处身份还写死着旧名字，
+装上就会表现为网页端不可用：
+
+- 打开网页直接报 `Failed to load plugins … could not load "@sputnikzaychik/dsh-qq-bot"`；
+- 即使能打开，插件详情页的配置区也是空白，设置项一个都看不到。
+
+原因是 DSH 有两套身份：**客户端模块行**和**配置区插槽**都按 npm 包名派发，
+而**设置命名空间**按 profile 条目 id 派发。插件把前两者也写成了条目 id，改名后就对不上。
+
+### 修复
+
+- `lib/client.js`：`__ModuleLoader__.load({ id })` 改用包名（原来写死 `'dsh-qq-bot'`）。
+- `lib/client.js`：`plugins.bundle.config` 插槽的 key 改用包名（插件管理页按 `pkg.name` 渲染配置区）。
+- 设置命名空间 `NS` 保持 `'dsh-qq-bot'` 不变——**升级不需要重填配置**，白名单、密钥、绑定都在。
+- `lib/index.js`：清理已废弃配置字段时，同时认新包名与条目 id（`SELF_IDS` 精确匹配；
+  刻意不用后缀正则，避免误伤 `my-qq-bot` 这类别的插件）。
+- 测试：`test-client.mjs` 的包名原先写死成 `dsh-qq-bot`，改名后那条断言假通过；
+  现在从 `package.json` 读，改名就会立刻失败。
+
+### 兼容
+
+装过 0.12.0 / 0.12.1 的，直接升到 0.12.2 即可；功能内容与 0.12.1 相同，这一版只修客户端加载。
+
 ## 0.12.1 —— 与 0.12.0 同一批内容，外加发布链路与文档的补齐
 
 0.12.0 在清理 registry 残留时被 unpublish 过，npm 的政策是「用过的版本号永不复用」，

@@ -761,7 +761,7 @@ AstrBot 是 OneBot 的**消费方**（内置 aiocqhttp 反向 WS 服务端），
 | `examples/dynamic-package-host.js` | 同一个桥接的「动态 Cordis Package」版本：不想装包、只想在当前 DSH 进程里临时跑时用 |
 | `ARCHITECTURE.md` | **改动指南**（给要 fork 的人）：文件职责、数据流、设计决策原因、分步改动指南、调试手册、术语表 |
 | `AI-DISCLOSURE.md` | AI 生成内容声明、验证情况、**尚未验证清单**、第三方归属、安全免责 |
-| `CHANGELOG.md` | 版本演进（0.1.0 → 0.12.1，含 0.8.0 合并下游分支与 0.8.1 输入框修复） |
+| `CHANGELOG.md` | 版本演进（0.1.0 → 0.12.2，含 0.8.0 合并下游分支与 0.8.1 输入框修复） |
 | `LICENSE` | MIT |
 
 ## 十二、设计说明（踩过的坑）
@@ -814,7 +814,7 @@ MIT，见 [LICENSE](LICENSE)。维护者与贡献者见顶部（维护 [@arrow10
 | --- | --- |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | **改动指南**：分层图、模块职责、关键数据流、设计取舍、已知边界 |
 | [AI-DISCLOSURE.md](AI-DISCLOSURE.md) | AI 生成方式、人类决策点、验证到什么程度、**尚未验证的清单**、第三方归属、安全免责 |
-| [CHANGELOG.md](CHANGELOG.md) | 0.1.0 → 0.12.1 的完整演进 |
+| [CHANGELOG.md](CHANGELOG.md) | 0.1.0 → 0.12.2 的完整演进 |
 
 ### 致谢
 
