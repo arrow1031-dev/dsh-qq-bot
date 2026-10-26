@@ -4,6 +4,7 @@ import assert from 'node:assert';
 import { safeSessionId, sessionWorkdir, imageCacheDir, isInside, qqMsgRootSync } from '../lib/workspace.js';
 import { resolveTargetAuthority, createAdmin } from '../lib/admin.js';
 import { checkCaller } from '../lib/owner-settings.js';
+import { assertPublicHost, publicFetch, multiEngineRequest, MAX_FETCH_BYTES } from '../lib/http.js';
 
 let pass = 0;
 const fails = [];
@@ -114,6 +115,15 @@ await check('撤回本群消息放行', async () => {
   assert.ok(r.actions.some(([a, p]) => a === 'delete_msg' && p.message_id === 555), JSON.stringify(r.actions));
 });
 
+
+console.log('\\n6. 出站抓取只允许公网（publicFetch / multiEngineRequest）');
+await check('assertPublicHost 拒绝回环', async () => { await assert.rejects(() => assertPublicHost('127.0.0.1')); });
+await check('assertPublicHost 拒绝链路本地（云元数据）', async () => { await assert.rejects(() => assertPublicHost('169.254.169.254')); });
+await check('assertPublicHost 拒绝内网段', async () => { await assert.rejects(() => assertPublicHost('10.1.2.3')); });
+await check('publicFetch 拒绝回环', async () => { await assert.rejects(() => publicFetch('http://127.0.0.1:1/')); });
+await check('publicFetch 拒绝非 http(s)', async () => { await assert.rejects(() => publicFetch('file:///etc/passwd')); });
+await check('multiEngineRequest 直连分支拒绝内网', async () => { await assert.rejects(() => multiEngineRequest('GET', 'http://127.0.0.1:1/x', {}, null, '')); });
+await check('响应体上限是 8MB', () => assert.strictEqual(MAX_FETCH_BYTES, 8 * 1024 * 1024));
 console.log('\n' + pass + '/' + (pass + fails.length) + ' 项通过');
 if (fails.length > 0) { console.log('安全回归失败：' + fails.join('; ')); process.exit(1); }
 console.log('安全回归通过');
