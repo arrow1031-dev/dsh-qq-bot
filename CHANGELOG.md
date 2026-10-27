@@ -45,6 +45,9 @@
   代理隧道响应头加 64KB 上限（以前收到头为止无上限，且每块都全量拼接）。
 - 会话池加上限（200）并按最久未用淘汰；`state.stats` 的 `admin`/`actions`/`notices`/
   `flowBlocked` 重新出现在 `qqbot status` 里。
+- 设置页 moli 卡片「高级设置」的五项参数（`exePath`/`proxy`/`defaultTimeoutMs`/`maxChars`/
+  `insecureTls`）以前保存不了：保存只遍历顶层字段表，而它们在卡片内部的独立字段集里，
+  改完点保存会提示「没有改动」。现在两套合并后再逐项比对。
 
 ### 测试
 
