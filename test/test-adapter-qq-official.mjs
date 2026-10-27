@@ -322,7 +322,7 @@ function postWebhook(port, payload, options = {}) {
   const raw = JSON.stringify(payload);
   const headers = { 'content-type': 'application/json', 'user-agent': 'QQBot-Callback', 'x-bot-appid': options.appid ?? APPID };
   if (options.sign !== false) {
-    const timestamp = String(Math.floor(Date.now() / 1000));
+    const timestamp = String(options.timestamp ?? Math.floor(Date.now() / 1000));
     let signature = signWith(options.secret ?? SECRET, timestamp + raw);
     if (options.tamper === true) signature = (signature[0] === 'a' ? 'b' : 'a') + signature.slice(1);
     headers['x-signature-ed25519'] = signature;
@@ -407,6 +407,26 @@ try {
   check('sender 昵称/群角色来自平台字段', groupFrame.sender && groupFrame.sender.nickname === '小明' && groupFrame.sender.role === 'member', JSON.stringify(groupFrame.sender));
   check('time 由 RFC3339 转成秒', groupFrame.time === Math.floor(Date.parse('2026-10-25T10:00:00+08:00') / 1000), String(groupFrame.time));
   check('没有引用时 reply_to 为 null', groupFrame.reply_to === null, String(groupFrame.reply_to));
+
+  console.log('\n3b. 重放防护（#22）：事件 id 去重 + 时间戳新鲜度');
+  const replayEvent = JSON.parse(JSON.stringify(groupMessageEvent));
+  replayEvent.id = 'evt-replay-1';
+  replayEvent.d.id = 'ROBOT1.0_replay_1';
+  const replayMarkFirst = webhookAdapter.mark();
+  const firstReplay = await postWebhook(webhookPort, replayEvent);
+  const firstReplayFrame = await waitFrame(webhookAdapter, 'message', replayMarkFirst);
+  check('首次投递正常派发', firstReplay.status === 200 && firstReplayFrame !== null, String(firstReplay.status));
+  const replayMarkSecond = webhookAdapter.mark();
+  const secondReplay = await postWebhook(webhookPort, replayEvent);
+  await sleep(400);
+  check('重复事件仍回 ACK（平台重投不算失败）',
+    secondReplay.status === 200 && secondReplay.json !== null && secondReplay.json.op === 12, JSON.stringify(secondReplay.json));
+  check('重复事件不再派发',
+    webhookAdapter.frames.slice(replayMarkSecond).some((frame) => frame.type === 'message') === false,
+    JSON.stringify(webhookAdapter.frames.slice(replayMarkSecond).map((frame) => frame.type)));
+  const staleTs = Math.floor(Date.now() / 1000) - 3600;
+  const stale = await postWebhook(webhookPort, { op: 0, s: 9, t: 'GROUP_AT_MESSAGE_CREATE', id: 'evt-stale-1', d: groupMessageEvent.d }, { timestamp: staleTs });
+  check('时间戳超出 ±5 分钟被拒（401）', stale.status === 401, 'status=' + String(stale.status));
 
   console.log('\n4. 单聊消息事件翻译（C2C_MESSAGE_CREATE + 引用）');
   const markC2C = webhookAdapter.mark();
