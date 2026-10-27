@@ -208,7 +208,7 @@ dsh plugin --profile web remove @sputnikzaychik/dsh-qq-bot          # 卸载
 
 | 文档 | 内容 |
 | --- | --- |
-| [DEVELOPMENT.md](DEVELOPMENT.md) | 本地开发与测试（29 套件 / 1094 项）、完整配置参考、工具细节、文件清单、设计取舍、发布流程、部署备注 |
+| [DEVELOPMENT.md](DEVELOPMENT.md) | 本地开发与测试（29 套件 / 1111 项）、完整配置参考、工具细节、文件清单、设计取舍、发布流程、部署备注 |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | 分层图、模块职责、关键数据流、身份契约、已知边界 |
 | [CHANGELOG.md](CHANGELOG.md) | 0.1.0 → 0.12.3 的完整演进 |
 | [AI-DISCLOSURE.md](AI-DISCLOSURE.md) | AI 生成方式、验证到什么程度、**尚未验证清单**（用前务必读） |

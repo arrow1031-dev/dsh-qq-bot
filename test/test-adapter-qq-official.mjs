@@ -376,6 +376,24 @@ try {
   check('op13 回显 plain_token', challenge.json !== null && challenge.json.plain_token === 'pt-123', JSON.stringify(challenge.json));
   check('op13 签名命中固定回归向量', challenge.json !== null && challenge.json.signature === OP13_SIGNATURE, String(challenge.json && challenge.json.signature));
 
+  console.log('\n2c. 允许无签名回调时 Webhook 只绑回环（#33）');
+  {
+    // 适配器启动本身强制要 secret，所以「可鉴别」的判定条件实际是 --allow-unsigned：
+    // 允许无签名回调时，任何人都能 POST 一个 op=0 进来自称任意用户，这种配置必须收回 127.0.0.1。
+    const noSecret = startAdapter([
+      '--mode', 'webhook', '--listen', '0.0.0.0:0', '--path', '/qq/webhook',
+      '--appid', APPID, '--secret', SECRET, '--allow-unsigned', 'true',
+      '--api-base', mock.base, '--self-id', 'self-openid-9', '--send-gap-ms', '10',
+    ]);
+    try {
+      const listenNoSecret = await waitFrame(noSecret, 'listening');
+      check('--allow-unsigned + --listen 0.0.0.0：实际只绑回环 (#33)',
+        listenNoSecret.host === '127.0.0.1' || listenNoSecret.host === 'localhost', 'host=' + String(listenNoSecret.host));
+    } finally {
+      try { noSecret.proc.kill('SIGKILL'); } catch { /* 已退出 */ }
+    }
+  }
+
   console.log('\n3. 群消息事件翻译（GROUP_AT_MESSAGE_CREATE）');
   const groupMessageEvent = {
     op: 0, s: 7, t: 'GROUP_AT_MESSAGE_CREATE', id: 'evt-group-1',

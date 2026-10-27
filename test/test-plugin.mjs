@@ -23,6 +23,33 @@ import process from 'node:process';
 import { startMockOneBot } from './mock-onebot.mjs';
 import { __setNetworkHooks } from '../lib/http.js';
 
+// 公共抓取（qq_websearch / qq_imgsearch / 识图下载）走 lib/http.js 的 node:http 实现，不再经过
+// globalThis.fetch：要打桩只能用 http.js 的 __setNetworkHooks（解析 + 单次请求两个动作）。
+const TEST_PNG = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+const TEST_DDG_HTML = '<html><body><div class="result">'
+  + '<h2 class="result__title"><a class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Ftest-page">测试结果标题</a></h2>'
+  + '<a class="result__snippet" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Ftest-page">这是测试搜索的摘要内容</a>'
+  + '</div></body></html>';
+const TEST_TRACEMOE_JSON = JSON.stringify({
+  quota: 100, quotaUsed: 1, result: [
+    { anilist: { id: 6702, title: { chinese: '妖精的尾巴', romaji: 'FAIRY TAIL' }, siteUrl: 'https://anilist.co/anime/6702' },
+      episode: 1, similarity: 0.97, from: 123.4, filename: 'FT_EP1.mp4' },
+  ],
+});
+const TEST_HOSTS = new Set(['example.com', 'cdn.example.com', 'lite.duckduckgo.com', 'api.trace.moe']);
+__setNetworkHooks({
+  lookup: async (host) => (TEST_HOSTS.has(host) ? [{ address: '93.184.216.34', family: 4 }] : []),
+  request: async ({ parsed }) => {
+    const host = parsed.hostname;
+    const ok = (contentType, body) => ({ status: 200, location: '', setCookie: '', contentType, body: Buffer.from(body), truncated: false });
+    if (host === 'lite.duckduckgo.com') return ok('text/html', TEST_DDG_HTML);
+    if (host === 'api.trace.moe') return ok('application/json', TEST_TRACEMOE_JSON);
+    if (host === 'example.com' || host === 'cdn.example.com') return ok('image/png', TEST_PNG);
+    return { status: 404, location: '', setCookie: '', contentType: 'text/plain', body: Buffer.from('no stub'), truncated: false };
+  },
+});
+
+
 const here = path.dirname(fileURLToPath(import.meta.url));
 const PKG_ROOT = path.join(here, '..');
 // 装到 DSH profile 之后，@deepseek-ai/dsh-tools 由 DSH 运行时解析。这里允许用
@@ -669,13 +696,6 @@ try {
   };
   // 识图下载走 publicFetch（node:http 直连 + 地址钉死），fetch 桩拦不到它，用测试网络钩子。
   // 域名解析仍走判定：example.com → 93.184.216.34 是公网地址，isNonPublicIp 放行后才下发假响应。
-  __setNetworkHooks({
-    lookup: async (host) => (host === 'example.com' ? [{ address: '93.184.216.34', family: 4 }] : []),
-    request: async () => ({
-      status: 200, location: '', setCookie: '', contentType: 'image/png',
-      body: Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), truncated: false,
-    }),
-  });
   visionModelModalities = ['text', 'image'];
   const sentBeforeVision = mock.sent.length;
   await fetch(mock.httpUrl + '/__inject', {
@@ -890,6 +910,34 @@ try {
     && liveConfig.auth.guestToolAllow.get().includes('qq_history'),
     JSON.stringify(liveConfig.auth.guestToolAllow.get()));
 
+
+  console.log('\n4g. 入站限流只对「真的驱动回合」的消息计费（#22）');
+  {
+    // 以前 takeTurnSlot 放在消息入口：群里的闲聊、图片、没点名的消息都吃额度，
+    // 一个活跃群几十条闲聊之后，真正的 @ 就被静默丢掉（群里还不回复，等于人间蒸发）。
+    const floodGroup = 77777;
+    const floodUser = 66666;
+    for (let i = 0; i < 25; i += 1) {
+      await fetch(mock.httpUrl + '/__inject', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ message_type: 'group', group_id: floodGroup, user_id: floodUser, nickname: '话痨',
+          message: [{ type: 'text', data: { text: '闲聊' + String(i) } }] }),
+      });
+    }
+    await new Promise((r) => setTimeout(r, 300));
+    const beforeMention = mock.sent.length;
+    await fetch(mock.httpUrl + '/__inject', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ message_type: 'group', group_id: floodGroup, user_id: floodUser, nickname: '话痨',
+        message: [{ type: 'at', data: { qq: '10000' } }, { type: 'text', data: { text: '现在真的叫我' } }] }),
+    });
+    const mentioned = await Promise.race([
+      waitFor(() => (mock.sent.length > beforeMention ? mock.sent.slice(beforeMention) : null), 15000, '闲聊之后的 @ 应当被回复'),
+      new Promise((resolve) => setTimeout(() => resolve(null), 15000)),
+    ]);
+    check('25 条群闲聊之后 @ 仍然有回复（闲聊不占回合额度）', mentioned !== null,
+      'sent=' + String(mock.sent.length));
+  }
 
   console.log('\n4g. 本轮运行失败：显示提示而不是重发上一轮回复内容');
   const failSession = 'qqbot-group-99999';
