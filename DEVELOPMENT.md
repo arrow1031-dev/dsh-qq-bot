@@ -319,6 +319,8 @@ node -e "fetch('http://127.0.0.1:3000/__sent').then(r=>r.json()).then(j=>console
 
 两条路互不冲突：**自定义人格**（`persona.*`，每个新会话第一轮附一次设定，零额外 token）与**整档 preset**（`agentPreset` / `agentPresetCustom`，换的不只是人格还有工具面）。
 
+三个 preset 字段（`agentPresetCustom` / `auth.ownerPreset` / `auth.guestPreset`）都在设置页「高级 → 会话与排错」，标了「如果你不知道你在做什么，最好别动这个」：它们只决定人格与工具面偏好，**不是安全边界**（边界是访客工具白名单与流程授权）。用户加装了不影响安全的第三方扩展插件、又没进任何 preset 时，正确的用法是在 DSH 里自建一个 preset、把这些插件行加进它的 `plugins`，再把 id 填到 `agentPresetCustom`（或分流的两个字段）——而不是去放宽白名单。
+
 ## 5. 主动发言（细节）
 
 默认关闭，只有 `enabled: true` **且** `groups` 显式列了群号才生效。流程：按 `intervalMinutes` 看一次群里最近 `windowMessages` 条 → 频率 / 时段 / 新消息量闸门 → 模型判断要不要接、接什么 → 文本校验（长度、链接、@、重复）→ 发送或安静待着。
