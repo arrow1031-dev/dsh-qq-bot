@@ -14,7 +14,7 @@
 - **逐跳校验跳转**：`fetchUrlViaProxy` 之前只校验第一跳就 `redirect: 'follow'`，一个 302 就能把请求带到内网。现在统一走 `publicFetch`：每一跳都 `assertPublicHost`、最多 5 跳、响应体 8 MB 上限、显式 `accept-encoding: identity`（防压缩炸弹）。
 - **`assertPublicHost` 校验全部 A/AAAA**：以前只取一条解析结果，多记录/rebinding 可绕过。
 - **`multiEngineRequest` 直连分支补校验**（#20）：以前只有代理分支调 `assertPublicHost`，`qq_imgsearch` 的 Soutubot 直连分支可打内网。
-- **识图下载走 `publicFetch`**（#15）：图片 URL 来自消息里的 CQ 码，以前直接 `fetch` + `arrayBuffer()` 整包读入，一条消息就能打内网或撑爆内存。
+- **识图下载走 `publicFetch`**（#15）：图片 URL 来自消息里的 CQ 码，以前直接 `fetch` + `arrayBuffer()` 整包读入，一条消息就能打内网或撑爆内存。**这一条曾被分支重建回退**（PR #31 在旧快照上重建时把 `downloadImage` 又改回了裸 `fetch`），已恢复，并加源码级断言锁住——`downloadImage` 是闭包没导出，运行期测不到。配套加了测试用网络钩子 `__setNetworkHooks`（只替换「解析」与「单次请求」，注入的地址照样过 `isNonPublicIp`，测试里另有一条断言锁这一点），因为 `publicFetch` 换成 `node:http` 直连后，测试里「把全局 `fetch` 换成桩」对它不再生效。
 - **`qq_draw` 的 `result.url` 同样走 `publicFetch`**（#21）：生图接口返回的 url 也是外部输入。
 - **Moli 渲染抓取入口校验**（#14）：先限 scheme、拒以 `-` 开头的 URL、再 `assertPublicHost`；参数前加 `--`；去掉硬编码的 `--insecure-disable-tls-host-verification`（要跳过证书校验得显式加，不默认）。
 
@@ -43,7 +43,7 @@
 - **身份头清洗**：昵称/群名片进提示词之前去掉 `\r\n[]` 并限长 32 字。访客把群名片改成 `x)]` + 换行 + 伪造身份，就能在上下文头里多出一行身份（工具层仍按 `turnSpeaker` 鉴权，但会误导模型）。
 ### 测试
 
-- 新增 `test/test-security.mjs`（**45 项**）：id 净化、越界复核、跨群重算、私聊快照、撤回绑群，加上出站公网判定与 F1 回归（`[::ffff:7f00:1]`、八进制/十六进制/短写/整数写法、`pinnedLookup` 只返回已校验地址）。
+- 新增 `test/test-security.mjs`（**49 项**）：id 净化、越界复核、跨群重算、私聊快照、撤回绑群，加上出站公网判定与 F1 回归（`[::ffff:7f00:1]`、八进制/十六进制/短写/整数写法、`pinnedLookup` 只返回已校验地址、测试网络钩子不能绕过判定、识图下载必须走 `publicFetch` 的源码级断言）。
 - `test/test-http.mjs`（**23 项**）：补 `canonicalHost` 归一结果断言，锁住「判定必须建立在 URL 归一后的写法上」。
 - `test/mock-onebot.mjs` 的 `get_msg` 补 `group_id` 与 `retcode`，与真 NapCat 的返回对齐（之前假协议端不返回这两项，撤回校验测不出来）。
 - 全套 **29/29 套件通过**。

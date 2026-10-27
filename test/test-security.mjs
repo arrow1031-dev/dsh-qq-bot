@@ -1,10 +1,11 @@
 // 安全回归：协议帧 id 净化 / 越界删除复核 / 跨群权限重算 / 私聊判定用回合快照 / 撤回绑群
 // 跑法：node test/test-security.mjs
 import assert from 'node:assert';
+import { readFile } from 'node:fs/promises';
 import { safeSessionId, sessionWorkdir, imageCacheDir, isInside, qqMsgRootSync } from '../lib/workspace.js';
 import { resolveTargetAuthority, createAdmin } from '../lib/admin.js';
 import { checkCaller } from '../lib/owner-settings.js';
-import { assertPublicHost, publicFetch, multiEngineRequest, pinnedLookup, isNonPublicIp, canonicalHost, MAX_FETCH_BYTES } from '../lib/http.js';
+import { assertPublicHost, publicFetch, multiEngineRequest, pinnedLookup, isNonPublicIp, canonicalHost, __setNetworkHooks, MAX_FETCH_BYTES } from '../lib/http.js';
 import { resolveListenAddress, tokenEquals, decodeFrames } from '../lib/bridge/ws.mjs';
 
 let pass = 0;
@@ -160,6 +161,15 @@ await check('非字面量一律拒绝（域名交给 DNS 分支，不在本函�
   assert.strictEqual(isNonPublicIp('a/../b'), true);
   assert.strictEqual(canonicalHost('a/../b'), '');
 });
+await check('测试网络钩子不能绕过公网判定', async () => {
+  // 钩子只替换「解析」与「单次请求」，注入的解析结果仍要过 isNonPublicIp。
+  __setNetworkHooks({ lookup: async () => [{ address: '127.0.0.1', family: 4 }], request: async () => ({ status: 200, body: 'x' }) });
+  try {
+    await assert.rejects(() => publicFetch('http://hooktest.example/'), /非公网/);
+  } finally {
+    __setNetworkHooks(null);
+  }
+});
 await check('pinnedLookup 只返回已校验地址（防 rebinding）', () => {
   const lookup = pinnedLookup([{ address: '93.184.216.34', family: 4 }, { address: '2001:db8::1', family: 6 }]);
   const v4 = [];
@@ -212,6 +222,33 @@ await check('正常小帧不误判', () => {
   const got = decodeFrames(Buffer.concat([head, payload]));
   assert.ok(got.oversize !== true);
   assert.strictEqual(got.messages.length, 1);
-});console.log('\n' + pass + '/' + (pass + fails.length) + ' 项通过');
+});
+
+console.log('\n8. 回归：识图下载必须走 publicFetch（#15 曾被分支重建回退过一次）');
+// downloadImage 是 apply() 里的闭包，没有导出，运行期测不到；这里锁源码形状：
+// 谁在旧快照上重建分支，这一条会立刻红，而不是等下次渗透测试才发现回归。
+const indexSrc = await readFile(new URL('../lib/index.js', import.meta.url), 'utf8');
+function functionBody(src, signature) {
+  const start = src.indexOf(signature);
+  if (start < 0) return '';
+  const brace = src.indexOf('{', start);
+  const end = src.indexOf('\n  }', brace);
+  return src.slice(start, end < 0 ? src.length : end);
+}
+await check('downloadImage 走 publicFetch', () => {
+  const body = functionBody(indexSrc, 'async function downloadImage(');
+  assert.ok(body !== '', '找不到 downloadImage（签名变了要同步改这条测试）');
+  assert.ok(/publicFetch\(/.test(body), 'downloadImage 没有走 publicFetch —— #15 回归了');
+});
+await check('downloadImage 里没有裸 fetch', () => {
+  const body = functionBody(indexSrc, 'async function downloadImage(').replace(/publicFetch\(/g, '');
+  assert.ok(!/(^|[^\w.])fetch\(/.test(body), 'downloadImage 里又出现了裸 fetch —— #15 回归了');
+});
+await check('downloadImage 不再整包 arrayBuffer', () => {
+  const body = functionBody(indexSrc, 'async function downloadImage(');
+  assert.ok(!body.includes('arrayBuffer()'), 'downloadImage 又整包读入了');
+});
+
+console.log('\n' + pass + '/' + (pass + fails.length) + ' 项通过');
 if (fails.length > 0) { console.log('安全回归失败：' + fails.join('; ')); process.exit(1); }
 console.log('安全回归通过');

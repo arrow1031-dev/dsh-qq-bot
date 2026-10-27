@@ -21,6 +21,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import process from 'node:process';
 import { startMockOneBot } from './mock-onebot.mjs';
+import { __setNetworkHooks } from '../lib/http.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const PKG_ROOT = path.join(here, '..');
@@ -664,6 +665,15 @@ try {
     }
     return realFetch(url, init);
   };
+  // 识图下载走 publicFetch（node:http 直连 + 地址钉死），fetch 桩拦不到它，用测试网络钩子。
+  // 域名解析仍走判定：example.com → 93.184.216.34 是公网地址，isNonPublicIp 放行后才下发假响应。
+  __setNetworkHooks({
+    lookup: async (host) => (host === 'example.com' ? [{ address: '93.184.216.34', family: 4 }] : []),
+    request: async () => ({
+      status: 200, location: '', setCookie: '', contentType: 'image/png',
+      body: Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), truncated: false,
+    }),
+  });
   visionModelModalities = ['text', 'image'];
   const sentBeforeVision = mock.sent.length;
   await fetch(mock.httpUrl + '/__inject', {
