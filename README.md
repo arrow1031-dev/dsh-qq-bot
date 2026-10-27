@@ -6,7 +6,7 @@
 - **每个群、每个人都有独立的 DSH 会话**，会落盘、能像普通会话一样在 Web UI 里打开继续聊。
 - 零 npm 运行时依赖（适配器只用 Node 22 内置的 `WebSocket` / `fetch`）。
 
-> **版本 0.12.2** · 要求 **DSH ≥ 0.2.0-rc.2**（0.2.1 系列实测通过）
+> **版本 0.12.3** · 要求 **DSH ≥ 0.2.0-rc.2**（0.2.1 系列实测通过）
 > **设置入口**：首页侧边栏 → **插件 → 已安装 → dsh-qq-bot**。不再是「设置 → QQ 机器人」，**现有配置无需迁移**。
 > npm 包名 `@sputnikzaychik/dsh-qq-bot` · [CHANGELOG](CHANGELOG.md) · [AI 生成声明](AI-DISCLOSURE.md) · MIT
 
@@ -208,9 +208,9 @@ dsh plugin --profile web remove @sputnikzaychik/dsh-qq-bot          # 卸载
 
 | 文档 | 内容 |
 | --- | --- |
-| [DEVELOPMENT.md](DEVELOPMENT.md) | 本地开发与测试（28 套件 / 1018 项）、完整配置参考、工具细节、文件清单、设计取舍、发布流程、部署备注 |
+| [DEVELOPMENT.md](DEVELOPMENT.md) | 本地开发与测试（29 套件 / 1087 项）、完整配置参考、工具细节、文件清单、设计取舍、发布流程、部署备注 |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | 分层图、模块职责、关键数据流、身份契约、已知边界 |
-| [CHANGELOG.md](CHANGELOG.md) | 0.1.0 → 0.12.2 的完整演进 |
+| [CHANGELOG.md](CHANGELOG.md) | 0.1.0 → 0.12.3 的完整演进 |
 | [AI-DISCLOSURE.md](AI-DISCLOSURE.md) | AI 生成方式、验证到什么程度、**尚未验证清单**（用前务必读） |
 | [SECURITY.md](SECURITY.md) | 安全模型与漏洞报告方式（别在公开 issue 里贴细节） |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | 贡献流程与代码约定 |
