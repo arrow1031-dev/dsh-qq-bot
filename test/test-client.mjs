@@ -121,6 +121,8 @@ try {
     logAdapterFrames: false,
     auth: { owners: ['66666'], superAdmins: ['22222'], ownerPreset: '', guestPreset: '', grantTtlMinutes: 60, grantMaxTtlMinutes: 1440, guestDshTools: false, guestToolAllow: ['qqbot', 'qqgroup'] },
     admin: { enabled: true, manageGroups: [], requireGroupAdmin: true, prefix: '/', dryRun: false, allowConsole: false },
+    // 闸门区：动态码开着，用于验证「名单默认锁定」与「闸门区字段存在」。
+    flowAuth: { enabled: true, gatedTools: ['subagent', 'moli_fetch'], gateEditCode: '', grantTtlSeconds: 30 },
   };
   // dsh-moli 引擎检测的假数据：插件清单 + 它自己命名空间里的 engineState/engineVersion。
   // 默认「插件装了但停用、引擎就绪」——正好验证「只借它装引擎」这条设计。
@@ -485,6 +487,12 @@ try {
   check('流程授权页含闸门开关与绑定二维码区',
     advFlowJoined.includes('流程授权（子代理 / 队友 / 工作流先要私聊动态码）')
     && advFlowJoined.includes('绑定二维码'), advFlowJoined.slice(0, 240));
+
+  const gateJoined = textsOf(clickSubTabIn(advTree, '闸门区'));
+  check('闸门区含「需要动态码的工具名」与「改名单用的动态码」',
+    gateJoined.includes('需要动态码的工具名') && gateJoined.includes('改名单用的动态码'), gateJoined.slice(0, 240));
+  check('动态码开着时闸门名单默认锁定（有「已锁定」提示）',
+    gateJoined.includes('已锁定'), gateJoined.slice(0, 240));
 
   const advJoined = textsOf(clickSubTabIn(advTree, '会话与排错'));
   check('高级页含会话命名与排错项',
