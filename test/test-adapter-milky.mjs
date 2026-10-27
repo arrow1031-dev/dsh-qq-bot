@@ -577,6 +577,30 @@ try {
   } finally {
     try { hook.proc.kill('SIGKILL'); } catch { /* 已退出 */ }
   }
+
+  // ---------------------------------------------------------------- 9b. WebHook 默认准入（#33）
+  console.log('\n9b. WebHook 未配 token：强制回环 + 读体上限');
+  const openHook = startAdapter(['--listen', '0.0.0.0:0', '--http', mock.httpUrl, '--send-gap-ms', '10']);
+  try {
+    const openListening = await waitFor(() => openHook.first('listening'), 8000, 'listening 帧（无 token）');
+    check('没配 token 时 0.0.0.0 被收回到 127.0.0.1', openListening.host === '127.0.0.1', String(openListening.host));
+    const openUrl = 'http://127.0.0.1:' + openListening.port + '/event';
+    const anon = await fetch(openUrl, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ time: 1700000004, self_id: 10000, event_type: 'message_receive', data: { message_scene: 'friend', peer_id: 55555, sender_id: 55555, segments: [{ type: 'text', data: { text: '回环匿名' } }] } }),
+    });
+    check('回环内匿名事件仍可投递（本机信任语义不变）', anon.status === 200, String(anon.status));
+    const huge = await fetch(openUrl, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ event_type: 'message_receive', data: { text: 'x'.repeat(1024 * 1024 + 1) } }),
+    });
+    check('超过 1 MiB 的回调体回 413（不整包读入）', huge.status === 413, String(huge.status));
+    openHook.send({ type: 'shutdown' });
+    const openExit = await Promise.race([openHook.exited, sleep(5000).then(() => 'timeout')]);
+    check('无 token 的 WebHook 也能正常退出', openExit === 0, 'exit=' + String(openExit));
+  } finally {
+    try { openHook.proc.kill('SIGKILL'); } catch { /* 已退出 */ }
+  }
 } catch (error) {
   failures += 1;
   console.log('\nERROR: ' + (error && error.message ? error.message : String(error)));
