@@ -1,3 +1,12 @@
+## 0.12.4 —— 反向 WS 半开连接回收（验收新发现）
+
+0.12.3 发完后，独立验收又抓到一条可用性问题，这一版只修这一条：反向 WS 对端只发 FIN（不做 WebSocket close 握手）时连接不回收，4 次半关就能占满 4 条并发名额，之后正常客户端全拿 503，而适配器仍自报 `connected:true`、`links:4`。
+
+### 修复
+
+- **半开连接立即回收**：`upgrade` 拿到的 socket 是 `allowHalfOpen`，对端 FIN 只触发 `end`、不触发 `close`，而 `clients.delete` / `onClose` 都挂在 `close` 上——名额于是永不释放（幽灵链路 `ready` 仍为 true，发送会打进半死连接）。补 `socket.on('end')` → `destroy()`，走正常 close 路径回收名额并把 `link.ready` 置 false。
+- **回归断言**：`test-adapter-reverse.mjs` 新增第 4 段——4 条裸 TCP 握手后只发 FIN，断言 `links` 归零、新连接仍能 101（未修复时该段实测 2 条 FAIL：`links=4`、新连接被拒）。
+
 ## 0.12.3 —— 安全审计修复：SSRF、越权、资源耗尽、默认开放
 
 一轮攻防审计（四路并行：授权/身份、注入/路径、网络/协议端，加我自己一轮）+ 两轮独立验收复测扫出来的，按「能打穿」排序修完：issue **#13–#27** 与验收中新发现的 **#33**，共 16 条。下面按防线分组，所有数字都能在 `test/` 里核到。
@@ -66,12 +75,6 @@
 - **单条长度上限**：新增 `limits.maxChars`（默认 4000），超长正文截断并注明「原文 N 字，只处理前 M 字」。
 - **QQ 官方 Webhook 回调重放**：签名只覆盖 `timestamp + body`，本身不保证新鲜度——抓到一条合法回调就能无限重放。现在①`X-Signature-Timestamp` 必须落在 ±5 分钟内（超出回 401），②事件 `id` 去重（重投仍回 ACK `{"op":12}`，但不重复派发）。
 - 出站体积上限与 milky 回调体上限：上一轮 `publicFetch` 已做 8 MB + `identity`，本轮 milky 加 1 MiB。
-### 反向 WS 半开连接不回收：4 次 FIN 就能占满并发名额（验收新发现）
-
-独立验收在清单外发现：对端只发 FIN、不做 WebSocket close 握手时，连接不回收——`upgrade` 拿到的 socket 是 `allowHalfOpen`，只触发 `end`、不触发 `close`，于是 `clients` 里的名额永远不释放。4 次半关之后正常客户端全部拿 503，而适配器仍自报 `connected:true`、`links:4`（幽灵链路 `ready` 还是 true，发送会打进半死连接）。
-
-- **补 `socket.on('end')` → `socket.destroy()`**：半开即销毁，走正常 `close` 路径回收名额、把 `link.ready` 置 false 并触发 `onClose`；
-- **回归断言**：`test-adapter-reverse.mjs` 新增第 4 段——4 条裸 TCP 握手后只发 FIN，断言 `links` 归零且新连接仍能 101（未修复时该段实测 2 条 FAIL：`links=4`、新连接被拒）。
 ### 测试
 
 - 新增 `test/test-security.mjs`（**49 项**）：id 净化、越界复核、跨群重算、私聊快照、撤回绑群，加上出站公网判定与 F1 回归（`[::ffff:7f00:1]`、八进制/十六进制/短写/整数写法、`pinnedLookup` 只返回已校验地址、测试网络钩子不能绕过判定、识图下载必须走 `publicFetch` 的源码级断言）。
