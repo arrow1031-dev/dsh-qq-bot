@@ -13,7 +13,7 @@
 - **每个群、每个人都有独立的 DSH 会话**，会落盘、能像普通会话一样在 Web UI 里打开继续聊。
 - 零 npm 运行时依赖（适配器只用 Node 22 内置的 `WebSocket` / `fetch`）。
 
-> **版本 0.12.4** · 要求 **DSH ≥ 0.2.0-rc.2**（0.2.1 系列实测通过）
+> **版本 0.12.5** · 要求 **DSH ≥ 0.2.0-rc.2**（0.2.1 系列实测通过）
 > **设置入口**：首页侧边栏 → **插件 → 已安装 → dsh-qq-bot**。不再是「设置 → QQ 机器人」，**现有配置无需迁移**。
 > npm 包名 `@sputnikzaychik/dsh-qq-bot` · [CHANGELOG](CHANGELOG.md) · [AI 生成声明](AI-DISCLOSURE.md) · MIT
 
