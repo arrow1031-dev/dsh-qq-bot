@@ -1,5 +1,5 @@
 /** 单元测试：lib/http.js —— IP 公网判定 / HTTP 响应体解析 / 实体解码净化 / set-cookie 合并 */
-import { isNonPublicIp, extractHttpBody, meHeadersFromRaw, meDecodeEntities, meCleanText, meStripCdata } from '../lib/http.js';
+import { isNonPublicIp, canonicalHost, extractHttpBody, meHeadersFromRaw, meDecodeEntities, meCleanText, meStripCdata } from '../lib/http.js';
 
 const results = [];
 let failures = 0;
@@ -18,6 +18,19 @@ check('100.64/10 CGN 拒绝', isNonPublicIp('100.64.0.1') === true && isNonPubli
 check('IPv6 回环/未指定/ULA/链路本地拒绝', isNonPublicIp('::1') === true && isNonPublicIp('::') === true && isNonPublicIp('fc00::1') === true && isNonPublicIp('fe80::1') === true);
 check('IPv4 映射的 IPv6 递归判定', isNonPublicIp('::ffff:8.8.8.8') === false && isNonPublicIp('::ffff:192.168.1.1') === true);
 check('非字符串/空串视为不可信', isNonPublicIp('') === true && isNonPublicIp(null) === true && isNonPublicIp(undefined) === true);
+
+// F1（验收复测发现）：判定必须建立在「URL 解析器归一后的写法」上。
+// 只认某一种写法 = 留下一条换写法就能过的旁路：WHATWG URL 会把 [::ffff:127.0.0.1] 写成 [::ffff:7f00:1]。
+check('IPv4 映射按十六进制组写也被拒', ['::ffff:7f00:1', '::ffff:a00:1', '::ffff:c0a8:101', '::ffff:a9fe:a9fe'].every((ip) => isNonPublicIp(ip) === true));
+check('IPv4-translated（::ffff:0:0/96）与 NAT64 内嵌 IPv4 被拒', isNonPublicIp('::ffff:0:7f00:1') === true && isNonPublicIp('64:ff9b::7f00:1') === true && isNonPublicIp('::7f00:1') === true);
+check('IPv4 非常规写法（八进制/十六进制/短写/整数）归一后仍拒绝', ['0177.0.0.1', '0x7f.0.0.1', '127.1', '2130706433', '0177.0.0.1'].every((ip) => isNonPublicIp(ip) === true));
+check('公网不会因归一而被误伤', ['::ffff:5db8:d822', '2001:db8::1', '93.184.216.34', '0x59000000' /* 89.0.0.0 */].every((ip) => isNonPublicIp(ip) === false));
+check('canonicalHost 归一结果与 URL 一致', canonicalHost('0177.0.0.1') === '127.0.0.1'
+  && canonicalHost('[::ffff:127.0.0.1]') === '[::ffff:7f00:1]'
+  && canonicalHost('2130706433') === '127.0.0.1'
+  && canonicalHost('example.com') === 'example.com'
+  && canonicalHost('a/../b') === '');
+check('域名不会被当成字面量放行', isNonPublicIp('example.com') === true && isNonPublicIp('localhost') === true);
 
 console.log('2. extractHttpBody：普通/chunked/截断/无头');
 check('普通响应解析出状态码与正文', (() => { const r = extractHttpBody('HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\nHello'); return r.status === 200 && r.body === 'Hello' && r.head.includes('200 OK'); })());

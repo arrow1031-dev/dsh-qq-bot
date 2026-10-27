@@ -4,7 +4,7 @@ import assert from 'node:assert';
 import { safeSessionId, sessionWorkdir, imageCacheDir, isInside, qqMsgRootSync } from '../lib/workspace.js';
 import { resolveTargetAuthority, createAdmin } from '../lib/admin.js';
 import { checkCaller } from '../lib/owner-settings.js';
-import { assertPublicHost, publicFetch, multiEngineRequest, MAX_FETCH_BYTES } from '../lib/http.js';
+import { assertPublicHost, publicFetch, multiEngineRequest, pinnedLookup, isNonPublicIp, canonicalHost, MAX_FETCH_BYTES } from '../lib/http.js';
 import { resolveListenAddress, tokenEquals, decodeFrames } from '../lib/bridge/ws.mjs';
 
 let pass = 0;
@@ -125,6 +125,56 @@ await check('publicFetch 拒绝回环', async () => { await assert.rejects(() =>
 await check('publicFetch 拒绝非 http(s)', async () => { await assert.rejects(() => publicFetch('file:///etc/passwd')); });
 await check('multiEngineRequest 直连分支拒绝内网', async () => { await assert.rejects(() => multiEngineRequest('GET', 'http://127.0.0.1:1/x', {}, null, '')); });
 await check('响应体上限是 8MB', () => assert.strictEqual(MAX_FETCH_BYTES, 8 * 1024 * 1024));
+
+console.log('\n6b. 地址判定只有一条事实来源：URL 解析器归一后的写法（F1）');
+// 教训：只看「::ffff: + 点分 IPv4」时，WHATWG URL 把 [::ffff:127.0.0.1] 规范化成 [::ffff:7f00:1]，
+// 于是这类写法全被判成公网，上面四条出站防线一起被绕过。
+await check('URL 会把映射地址改写成十六进制组', () => {
+  assert.strictEqual(new URL('http://[::ffff:127.0.0.1]/').hostname, '[::ffff:7f00:1]');
+  assert.strictEqual(new URL('http://0177.0.0.1/').hostname, '127.0.0.1');
+  assert.strictEqual(new URL('http://2130706433/').hostname, '127.0.0.1');
+});
+await check('映射地址的十/八/十六进制与短写都被判非公网', () => {
+  for (const ip of ['::ffff:7f00:1', '::ffff:0:7f00:1', '::ffff:a00:1', '::ffff:c0a8:101', '::ffff:a9fe:a9fe',
+    '127.1', '0177.0.0.1', '0x7f.0.0.1', '2130706433', '0x7f000001']) {
+    assert.strictEqual(isNonPublicIp(ip), true, ip + ' 应判非公网');
+  }
+});
+await check('publicFetch 拒绝各种写法的回环', async () => {
+  for (const url of ['http://[::ffff:127.0.0.1]:1/', 'http://0177.0.0.1:1/', 'http://2130706433:1/',
+    'http://[0:0:0:0:0:ffff:7f00:1]:1/', 'http://127.1:1/']) {
+    await assert.rejects(() => publicFetch(url), url + ' 应被拒');
+  }
+});
+await check('assertPublicHost 拒绝映射内网与云元数据', async () => {
+  for (const host of ['[::ffff:a00:1]', '[::ffff:c0a8:101]', '[::ffff:a9fe:a9fe]', '::ffff:169.254.169.254']) {
+    await assert.rejects(() => assertPublicHost(host), host + ' 应被拒');
+  }
+});
+await check('公网映射地址不被误伤', async () => {
+  assert.strictEqual(isNonPublicIp('::ffff:5db8:d822'), false);
+  await assertPublicHost('::ffff:5db8:d822');
+});
+await check('非字面量一律拒绝（域名交给 DNS 分支，不在本函数放行）', () => {
+  assert.strictEqual(isNonPublicIp('example.com'), true);
+  assert.strictEqual(isNonPublicIp('a/../b'), true);
+  assert.strictEqual(canonicalHost('a/../b'), '');
+});
+await check('pinnedLookup 只返回已校验地址（防 rebinding）', () => {
+  const lookup = pinnedLookup([{ address: '93.184.216.34', family: 4 }, { address: '2001:db8::1', family: 6 }]);
+  const v4 = [];
+  const v6 = [];
+  const all = [];
+  lookup('example.com', { family: 4, all: false }, (error, address, family) => v4.push([error, address, family]));
+  lookup('example.com', { family: 6, all: false }, (error, address, family) => v6.push([error, address, family]));
+  lookup('example.com', { family: 0, all: true }, (error, list) => all.push([error, list]));
+  const none = [];
+  pinnedLookup([])('example.com', { family: 0, all: false }, (error) => none.push(error));
+  return v4.length === 1 && v4[0][1] === '93.184.216.34' && v4[0][2] === 4
+    && v6.length === 1 && v6[0][1] === '2001:db8::1' && v6[0][2] === 6
+    && all.length === 1 && Array.isArray(all[0][1]) && all[0][1].length === 2
+    && none.length === 1 && none[0] instanceof Error;
+});
 
 console.log('' + String.fromCharCode(10) + '7. 反向 WS：默认只监听回环 + 恒定时间 token + 帧上限');
 await check('未配 token 时 0.0.0.0 被收回到回环', () => {
