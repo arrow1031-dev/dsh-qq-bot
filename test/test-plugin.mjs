@@ -219,7 +219,9 @@ const ctx = {
   subprocess: {
     async resolveExecutable() { return process.execPath; },
     spawn(spec) {
-      const child = spawn(spec.argv[0], spec.argv.slice(1), { cwd: spec.cwd, stdio: ['pipe', 'pipe', 'pipe'] });
+      // 凭据现在走 env（不进 argv），mock 也要透传，否则适配器拿不到 token。
+      const env = spec.env === undefined ? process.env : { ...process.env, ...spec.env };
+      const child = spawn(spec.argv[0], spec.argv.slice(1), { cwd: spec.cwd, stdio: ['pipe', 'pipe', 'pipe'], env });
       const done = new Promise((resolve) => child.on('close', (exitCode, signal) => resolve({ exitCode, signal })));
       return {
         stdin: child.stdin, stdout: child.stdout, stderr: child.stderr, done,
