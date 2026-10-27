@@ -1,6 +1,11 @@
-# Auto Release：package.json 版本号变更（push main 且只改 package.json）时，自动发 GitHub Release。
-# Release 内容（标题+正文）取自「最近一次修改 package.json 的 commit」的提交信息（即版本 bump 那个 commit）。
-# 同名 tag 已存在则跳过（重复 push 幂等）。
+# Auto Release：package.json 版本号变更（push main 且只改 package.json）时，自动发 npm + GitHub Release。
+# Release 内容（标题+正文）取自「首次引入当前版本号」的 commit 提交信息（即版本 bump 那个 commit）。
+#
+# 幂等性按「产物是否已存在」分别判断，不再只看 tag：
+#   - npm 上已有该版本 → 跳过发布（但仍会补齐 release）
+#   - release 已存在   → 跳过创建（但仍会补齐 npm）
+# 曾经只看 tag：tag 先于 workflow 存在时整条流水线被跳过，npm 与 release 都不会补，
+# 而 skipped 步骤不算失败，run 仍然显示绿色（0.12.6 就这样漏过一次）。
 name: Auto Release
 
 on:
@@ -30,34 +35,52 @@ jobs:
         with:
           node-version: 24
 
-      - name: 读取新版本号
-        id: version
-        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
-
-      - name: 同名 tag 已存在则跳过
-        id: check
+      - name: 读取版本号并检测各产物是否已存在
+        id: state
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          if git rev-parse -q --verify "refs/tags/v${{ steps.version.outputs.version }}" >/dev/null; then
-            echo "tag v${{ steps.version.outputs.version }} 已存在，跳过"
-            echo "skip=true" >> "$GITHUB_OUTPUT"
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+          if git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then
+            echo "tag_exists=true" >> "$GITHUB_OUTPUT"
+            echo "✓ tag v$VERSION 已存在（gh release create 会复用它）"
           else
-            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "tag_exists=false" >> "$GITHUB_OUTPUT"
+            echo "→ tag v$VERSION 未创建，发 release 时一并创建"
+          fi
+
+          if npm view "@sputnikzaychik/dsh-qq-bot@$VERSION" version >/dev/null 2>&1; then
+            echo "npm_exists=true" >> "$GITHUB_OUTPUT"
+            echo "✓ npm 上已有 $VERSION，跳过发布"
+          else
+            echo "npm_exists=false" >> "$GITHUB_OUTPUT"
+            echo "→ npm 上缺 $VERSION，本次发布"
+          fi
+
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            echo "release_exists=true" >> "$GITHUB_OUTPUT"
+            echo "✓ release v$VERSION 已存在，跳过创建"
+          else
+            echo "release_exists=false" >> "$GITHUB_OUTPUT"
+            echo "→ release v$VERSION 未创建，本次创建"
           fi
 
       - name: 发布前自检（跑全部测试）
-        if: steps.check.outputs.skip == 'false'
+        if: steps.state.outputs.npm_exists == 'false'
         run: |
           npm install
           npm test
 
       - name: 发布到 npm（Trusted Publishing，无长期 token）
-        if: steps.check.outputs.skip == 'false'
+        if: steps.state.outputs.npm_exists == 'false'
         run: npm publish --provenance --access public
 
       - name: 取「首次引入当前版本号」的 commit 内容作为 Release 正文
-        if: steps.check.outputs.skip == 'false'
+        if: steps.state.outputs.release_exists == 'false'
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
+          VERSION="${{ steps.state.outputs.version }}"
           SHA=""
           for s in $(git log --reverse --format=%H -- package.json); do
             v=$(git show "$s:package.json" | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).version")
@@ -67,10 +90,24 @@ jobs:
           git log -1 --format=%B "$SHA" > /tmp/release-body.txt
 
       - name: 创建 GitHub Release
-        if: steps.check.outputs.skip == 'false'
+        if: steps.state.outputs.release_exists == 'false'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "v${{ steps.version.outputs.version }}" \
-            --title "v${{ steps.version.outputs.version }}" \
+          gh release create "v${{ steps.state.outputs.version }}" \
+            --title "v${{ steps.state.outputs.version }}" \
             --notes-file /tmp/release-body.txt
+
+      # 全跳过时 run 也会是绿色：把三个产物的实际状态写进 job summary，
+      # 让人一眼看出这次到底发布了什么、跳过了什么。
+      - name: 汇总本次动作
+        run: |
+          {
+            echo "### v${{ steps.state.outputs.version }}"
+            echo ""
+            echo "| 产物 | 触发前已存在 | 本次动作 |"
+            echo "| --- | --- | --- |"
+            echo "| npm | ${{ steps.state.outputs.npm_exists }} | ${{ steps.state.outputs.npm_exists == 'true' && '跳过' || '已发布' }} |"
+            echo "| release | ${{ steps.state.outputs.release_exists }} | ${{ steps.state.outputs.release_exists == 'true' && '跳过' || '已创建' }} |"
+            echo "| tag | ${{ steps.state.outputs.tag_exists }} | 由 release 创建或复用 |"
+          } >> "$GITHUB_STEP_SUMMARY"
