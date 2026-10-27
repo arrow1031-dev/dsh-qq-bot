@@ -147,7 +147,7 @@ DSH Agent（默认每个 QQ 会话一个）
 
 | # | 位置 | 做什么 |
 | --- | --- | --- |
-| 1 | `session.js` 接管块 | 开关打开时，在**本 agent 的 tools 作用域**里给 `subagent` / `subagent_fork` / `spawn_teammate` / `workflow` 各注册一个同名遮蔽层：先问闸门，放行才把参数原样转给被遮蔽的实现；单个工具注册失败就退回 `tools.restrict({deny})` 收掉它 |
+| 1 | `session.js` 接管块 | 开关打开时，在**本 agent 的 tools 作用域**里给 `subagent` / `subagent_fork` / `spawn_teammate` / `workflow` / `moli_fetch` 各注册一个同名遮蔽层（名单以 `flowAuth.gatedTools` 为准）：先问闸门，放行才把参数原样转给被遮蔽的实现；单个工具注册失败就退回 `tools.restrict({deny})` 收掉它 |
 | 2 | `flow-auth.js` | `requestAuth` 记一条待授权；私聊里 `/auth <6位码>` 命中即 `consumeToken`（30 秒窗口、同窗口不可重放、连错 5 次锁 15 分钟），落成一条 **grant** |
 | 3 | `session.js` guard | 工具真正执行前查闸门：一次 grant 只够一次消费；放行时记一笔账，同一回合里遮蔽层不再二次消费 |
 | 4 | `entry.turnSpeaker` | 身份按**回合快照**固化——排队期间别人插话，不会把访客的调用判成拥有者的 |

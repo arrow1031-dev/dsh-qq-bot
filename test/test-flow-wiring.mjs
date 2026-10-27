@@ -27,7 +27,8 @@ function check(name, ok, detail = '') {
 }
 
 /** 造一个最小的会话世界：假 tools 服务记录 guard/register/restrict，假 agent 直接返回。 */
-function makeWorld(flowEnabled) {
+function makeWorld(flowEnabled, options = {}) {
+  const gatedList = options.gated === undefined ? GATED.slice() : options.gated.slice();
   const clock = { now: 1700000000000 };
   const secret = generateSecret(20);
   const conf = {
@@ -41,12 +42,13 @@ function makeWorld(flowEnabled) {
   const gate = createFlowGate({
     auth,
     enabled: () => conf.enabled === true,
-    gatedTools: () => GATED,
+    gatedTools: () => gatedList,
   });
 
   const guards = [];
   const registry = {};
   const restricted = [];
+  const moliCalls = [];
   let nativeCalls = 0;
   const toolsService = {
     guard: (fn) => { guards.push(fn); return () => {}; },
@@ -56,12 +58,13 @@ function makeWorld(flowEnabled) {
   };
   registry.subagent = { name: 'subagent', execute: async () => { nativeCalls += 1; return { native: true }; } };
   registry.subagent_fork = { name: 'subagent_fork', execute: async () => { nativeCalls += 1; return { fork: true }; } };
+  registry.moli_fetch = { name: 'moli_fetch', execute: async (args) => { moliCalls.push(args); return { ok: true, url: args.url }; } };
 
   const state = { convos: new Map(), stats: { guestBlocked: 0, flowBlocked: 0 } };
   const cfg = {
     auth: { guestToolAllow: ['qqbot', 'qqgroup'], owners: [OWNER] },
     agentPreset: '',
-    flowAuth: { enabled: flowEnabled === true, gatedTools: GATED.slice() },
+    flowAuth: { enabled: flowEnabled === true, gatedTools: gatedList.slice() },
   };
   const agent = { ctx: { get: (k) => (k === 'tools' ? toolsService : undefined) }, session: undefined, status: 'idle' };
   const ctx = {
@@ -92,7 +95,7 @@ function makeWorld(flowEnabled) {
   };
 
   return {
-    clock, secret, auth, gate, guards, registry, restricted, state, session, runGuards, toolsService,
+    clock, secret, auth, gate, guards, registry, restricted, state, session, runGuards, toolsService, moliCalls,
     nativeCalls: () => nativeCalls,
   };
 }
@@ -213,6 +216,24 @@ console.log('\n7. 群里的尝试不能把私聊的授权烧掉');
   const privateVerdict = w.guards[g1]({ name: 'subagent', agent: null });
   check('私聊这边码还在（没被群里的尝试花掉）', privateVerdict === undefined, JSON.stringify(privateVerdict));
 }
+
+console.log('\n8. moli_fetch：原装工具只设一道验证墙（动态码），我们的渲染分支另有守卫');
+{
+  const gated = GATED.concat(['moli_fetch']);
+  const w = makeWorld(true, { gated });
+  await ownerEntry(w, 'private-' + OWNER, OWNER);
+  let noCode = '';
+  try { await w.registry.moli_fetch.execute({ url: 'http://127.0.0.1:1/' }, { name: 'moli_fetch', agent: null }); } catch (error) { noCode = String(error.message); }
+  check('没码时被闸门拦下（内网目标也一样）', noCode.includes('授权'), noCode);
+  check('拦下时没有调用原工具', w.moliCalls.length === 0, 'calls=' + w.moliCalls.length);
+
+  w.auth.requestAuth(OWNER, 'm', 'moli_fetch');
+  const granted = w.auth.consumeToken(OWNER, totp(w.secret, { timeMs: w.clock.now }));
+  w.gate.remember(OWNER, granted.grantId);
+  const okRes = await w.registry.moli_fetch.execute({ url: 'http://127.0.0.1:1/' }, { name: 'moli_fetch', agent: null });
+  check('拿到码后原样转交（内网地址由拥有者自己负责）', okRes.ok === true && w.moliCalls.length === 1, JSON.stringify(okRes));
+}
+
 
 // 以前这里印 total/total：即使挂了 3 条，汇总行照样是 20/20，看日志的人只会看到「全过」。
 console.log('\n' + (total - failures) + '/' + total + ' 项通过');
