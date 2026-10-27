@@ -19,11 +19,16 @@ import fs from 'node:fs';
 import os from 'node:os';
 import process from 'node:process';
 import { startMockOneBot } from './mock-onebot.mjs';
+import { ensureDshToolsLink } from './dsh-tools-link.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const PKG_ROOT = path.join(here, '..');
+// 工具注册要能真的跑起来，否则 qqgroup 的鉴权只有纯函数桩在测。
+const dshToolsReady = ensureDshToolsLink(PKG_ROOT);
 
 let failures = 0;
+let skips = 0;
+const skip = (name) => { skips += 1; console.log('  [SKIP] ' + name); };
 const results = [];
 function check(name, ok, detail = '') {
   results.push(ok);
@@ -69,6 +74,9 @@ console.log('假 OneBot：http=' + mock.httpUrl + ' ws=' + mock.wsUrl);
 
 const disposers = [];
 const registeredTools = [];
+// 插件是通过 ctx.get('tools')（服务就绪后）注册工具的：以前这里 get 恒返回 undefined，
+// 于是「工具经同一套鉴权」这一整段永远跳过——qqgroup 的权限判定只有纯函数桩在测。
+const toolsService = { register(tool) { registeredTools.push(tool); return () => {}; } };
 const agents = new Map();
 
 function fakeAgent(sessionId) {
@@ -114,7 +122,7 @@ const ctx = {
   },
   // 配置热更新通道（本套测试不验证重启行为，只需接口存在）
   on() { return () => {}; },
-  get: () => undefined,
+  get: (name) => (name === 'tools' ? toolsService : undefined),
   subprocess: {
     async resolveExecutable() { return process.execPath; },
     spawn(spec) {
@@ -244,12 +252,26 @@ try {
   check('delete_msg 用了被引用消息的 id', recalls.length === beforeRecall + 1
     && recalls[recalls.length - 1].params.message_id === 98765, JSON.stringify(recalls[recalls.length - 1].params));
 
+  // 跨群撤回：消息属于别的群，撤回必须被拒，而且不能真的发出 delete_msg。
+  // 这条以前只能靠纯函数桩测（mock 的 get_msg 恒回 group_id:null，端到端根本走不通）。
+  mock.extraMessages.push({ message_id: 98766, time: 0, user_id: 55555, group_id: 55555, message: [], raw_message: '', sender: {} });
+  const beforeCross = actionsOf('delete_msg').length;
+  r = await say(33333, 44444, '/recall', { replyTo: 98766 });
+  check('别的群的消息不认：提示只撤本群、且没有 fate 发出 delete_msg',
+    r.includes('只能撤回本群消息') && actionsOf('delete_msg').length === beforeCross, r.replace(/\n/g, ' | '));
+  // 自己群的消息照旧能撤（回归：别把正常路径一起挡了）
+  mock.extraMessages.push({ message_id: 98767, time: 0, user_id: 55555, group_id: 33333, message: [], raw_message: '', sender: {} });
+  const beforeOwn = actionsOf('delete_msg').length;
+  r = await say(33333, 44444, '/recall', { replyTo: 98767 });
+  check('本群消息仍可撤回（归属校验没误伤正常路径）',
+    done(r) && actionsOf('delete_msg').length === beforeOwn + 1, r.replace(/\n/g, ' | '));
+
   console.log('\n6. Agent 工具走同一套鉴权');
   const groupTool = registeredTools.find((t) => t.name === 'qqgroup');
   if (groupTool === undefined) {
-    check('（跳过）工具路径需要 @deepseek-ai/dsh-tools', true);
+    skip(dshToolsReady ? '工具没有注册成功（检查 ctx.inject / tools 服务）' : '工具路径需要 @deepseek-ai/dsh-tools');
   } else {
-    check('注册了 qqgroup 工具', true);
+    check('注册了 qqgroup 工具', groupTool !== undefined && typeof groupTool.execute === 'function');
   }
   if (groupTool !== undefined) {
     await say(33333, 55555, '你好');                      // 让无身份用户成为 33333 群的说话人
@@ -297,7 +319,7 @@ try {
 }
 
 const passed = results.filter(Boolean).length;
-console.log('\n' + passed + '/' + results.length + ' 项通过');
+console.log('\n' + passed + '/' + results.length + ' 项通过' + (skips > 0 ? '（另有 ' + skips + ' 项跳过：环境缺 @deepseek-ai/dsh-tools）' : ''));
 if (failures > 0) { console.log('权限自测失败'); process.exit(1); }
 console.log('权限自测通过');
 process.exit(0);

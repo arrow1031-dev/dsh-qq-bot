@@ -1,6 +1,6 @@
 // 主动发言：时间窗 / 消息清洗 / 摘要 / 提示词 / 决策解析 / 发言校验 / 频率闸。
 import {
-  parseClock, nowMinutes, parseQuietRanges, isQuiet, summarizeSegments,
+  parseClock, parseQuietRanges, isQuiet, summarizeSegments,
   normalizeMessages, newerThan, buildDigest, buildPrompt, parseDecision, runSpeakStage,
   validateMessage, allowSend, analyzeEvent, topicKey, topicRepeated, resolveStageModels, buildSpeakPrompt, resolveModel,
 } from '../lib/proactive.js';

@@ -18,6 +18,48 @@
 - `publicFetch` 统一返回类型：`binary: true` 给 Buffer，否则给字符串。之前只有真实请求路径做了转换，
   `__setNetworkHooks` 注入的响应把 Buffer 原样透出，调用方得两套判断（测试就踩到了）。
 
+### 代理隧道：三条路径收成一条，且都钉地址、都有上限
+
+- `webSearchPost`（官方搜索）与 `multiEngineRequest`（多引擎）以前各有一份 CONNECT 实现：
+  都不解析、不钉公网地址（DNS 重绑可把隧道导去内网），也都不设总超时——官方搜索那条的注释
+  还写着"60 秒"，实际一个定时器都没有，代理挂住就永远不回。
+- 现在三条路径共用 `proxyRequest()`：`resolvePublicAddresses` 先校验、把钉住的 IP 写进 CONNECT
+  目标、SNI 保持原名，连接+读取共用一个 deadline，响应体按 `maxBytes` 截断并回 `truncated`。
+  跳转仍由调用方逐跳重算（每一跳重新校验并重新钉地址）。
+- 附带修掉测试侧的老问题：隧道场景下 `server.close()` 会被挂住（socket 与 CONNECT 请求都要
+  destroy），`test-http` 的代理段现在能干净退出。
+
+### 权限：非 QQ 会话不再是后门
+
+- `qqbot` 工具的 `send` / `interrupt`：没有 QQ 会话（Web UI、任务板、子代理）时以前整段跳过
+  拥有者判断，等于任何会话都能往任意群发消息、掐断任意会话的回合。现在与 `qqgroup` 同一条判据：
+  默认拒绝，开了 `admin.allowConsole` 才放行；`status` 是只读，照旧可用。
+- `qq_draw` 以前没有任何来源判断：Web UI 会话可以让它把图发到任意群/人。现在同样受
+  `admin.allowConsole` 约束。
+- `qq_history` 的"当前会话"改从回合快照取：`perChatSession=false` 时所有群共用一个 entry，
+  以前按可变字段推当前群，跨群读会读错群。
+- 流程授权（`flowAuth.gatedTools`）以前只决定"谁要码"，接管哪几个工具是另一份写死的名单：
+  把 `subagent` 从配置里删掉，群里照样被拦（配置说了不算）。现在两边共用同一份名单。
+
+### QQ 官方：BotSecret 与 self_id 真的传下去了
+
+- 配置里的 `protocols.qqOfficial.botSecret` 以前只存在设置页：适配器进程收到的是 AppSecret，
+  于是只配 BotSecret、正式环境用 BotSecret 校验签名的部署一律回调 401。现在以 `--bot-secret` 传下去
+  （缺省回退 AppSecret，老配置行为不变），签名 seed 取 BotSecret，取 token 仍用 AppSecret。
+- 新增 `protocols.qqOfficial.selfId`（webhook 模式没有 READY 事件，适配器拿不到自己的 QQ 号，
+  @ 判定与自发消息过滤都会失效），以 `--self-id` 传下去。
+
+### 其它
+
+- 反向 WS 的分片上限只管片数不管字节：63 片 × 每片 8 MB ≈ 500 MB 才判超限。现在累计字节
+  超 `MAX_FRAME_BYTES` 立即判超限。
+- `workspace.js safeSessionId` 自己拒掉 `.` / `..` / 含 `..` 的 id：识图临时目录在回合结束
+  会被递归删除，以前只靠每个调用方记得加前缀。
+- 清掉一批死代码：`describeErrorStatic`、`owner-settings.js` 本文件没人调的 `sameValue`、
+  `bridge/ws.mjs` 的 `sleep` 导出、`bridge/segments.mjs` 的 `seg` 夹具与 `replyIdOf` 导出、
+  `moli.js` 永远进不去的 `insecureTls` 分支、几处没用到的 import。
+- `qq_imgsearch` 的 `imgSearch.maxResults` 以前只是设置页上的数字，实际固定按 5 取。
+
 ### 测试
 
 - `test-security` 49 → **55 项**：补跳转链的回归（302 到 `169.254.169.254` 必须拒、公网跳转要跟随、
@@ -26,8 +68,16 @@
   node:http + 钉地址（#32），`globalThis.fetch` 打桩拦不住，多引擎搜索与图片反搜四条断言
   一直在跑真实网络（本机表现为"走了 DuckDuckGo 真实结果"或"解析不到地址"直接失败）。
 - 新增回归：25 条群闲聊之后 @ 仍然有回复（闲聊不占回合额度）；QQ 官方
-  `--allow-unsigned` 时只绑回环。
-- 全套 **29/29 套件 / 1117 项通过**。
+  `--allow-unsigned` 时只绑回环；非 QQ 会话调 `qqbot send/interrupt` 与 `qq_draw` 被拒且没有真的发出去；
+  跨群撤回被拒（假 OneBot 的 `get_msg` 现在会回答消息属于哪个群，这条以前只能靠纯函数桩测）；
+  多引擎首选 `html.duckduckgo.com` 端点确实被请求（打桩主机表漏了它，首选引擎一直被自己屏蔽掉）。
+- 测试基建：`test/dsh-tools-link.mjs` 统一给 `@deepseek-ai/dsh-tools` 建临时链接，`test-admin`
+  因此第一次跑起工具鉴权段（以前那段永远"跳过"）；"跳过"不再记成通过（`test-plugin` /
+  `test-admin` 改成 `[SKIP]` 单列），`run-all` 加了单套件超时、套件清单与 `test/` 目录双向核对；
+  `test-flow-wiring` 的汇总行不再恒印 `N/N`；`test-client` 去掉一条恒真断言，换成真的切到反向模式再断言字段跟着换。
+- `test-http` 23 → **30 项**（代理隧道：钉地址、跳转逐跳重算、体积上限、超时）。
+- `test-adapter-qq-official` 92 → **95 项**（AppSecret 与 BotSecret 分开时签名取 BotSecret）。
+- 全套 **29/29 套件 / 1142 项通过**。
 
 ## 0.12.4 —— 反向 WS 半开连接回收（验收新发现）
 

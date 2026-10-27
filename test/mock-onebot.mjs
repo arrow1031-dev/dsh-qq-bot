@@ -202,6 +202,10 @@ export async function startMockOneBot(options = {}) {
       message: event.message,
       raw_message: event.raw_message,
       sender: event.sender,
+      // 群归属要跟着消息一起记：get_msg 靠它回答「这条消息属于哪个群」，
+      // 而 /recall 的越权判定正是拿它和当前群比对（以前这里不记，端到端根本测不了）。
+      group_id: messageType === 'group' ? Number(input.group_id ?? 33333) : null,
+      message_type: messageType === 'group' ? 'group' : 'private',
     });
     const delivered = broadcast(event);
     say('injected ' + messageType + ' message from ' + event.user_id + ' -> ' + delivered + ' client(s)');
