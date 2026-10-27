@@ -19,7 +19,6 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { ensureDshToolsLink } from './dsh-tools-link.mjs';
 import path from 'node:path';
 import fs from 'node:fs';
-import os from 'node:os';
 import process from 'node:process';
 import { startMockOneBot } from './mock-onebot.mjs';
 import { __setNetworkHooks } from '../lib/http.js';

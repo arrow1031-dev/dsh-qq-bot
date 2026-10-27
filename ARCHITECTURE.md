@@ -63,7 +63,7 @@ DSH Agent（默认每个 QQ 会话一个）
 | `lib/http.js` | 通用 HTTP + CONNECT 代理隧道 + 响应文本工具。**出站只允许公网**：地址先经 `canonicalHost`（WHATWG URL 归一）再判段，`publicFetch` 用 `node:http(s)` 直连并把 `pinnedLookup` 钉在已校验地址上（防 DNS rebinding） | `multiEngineRequest` `fetchUrlViaProxy` `webSearchPost` `publicFetch` `assertPublicHost` `canonicalHost` `resolvePublicAddresses` `pinnedLookup` | `websearch.js`、`imgsearch.js`、`moli.js`、`tools.js`（qq_draw）、`index.js`（qq_webfetch / 识图下载） |
 | `lib/websearch.js` | 联网搜索：DeepSeek 官方 web search + 多引擎组合 | `runWebSearch` | `index.js`（qq_websearch） |
 | `lib/imgsearch.js` | 图片反搜：TraceMoe / IQDB 等 + 图床上传 | `runImageSearch` `uploadToHost` | `index.js`（qq_imgsearch） |
-| `lib/moli.js` | Moli 引擎封装：探测可执行文件 + 按 dsh-moli 1.1.20 的同一套参数调 `moli fetch`（`-t` 位置、`--http-proxy`、TLS 跳过、URL 放 `--` 之后、输出按 maxChars 头尾省略） | `meFindMoli` `meMoliFetchText` `clipMiddle` | `index.js`（qq_webfetch 的 moli 分支） |
+| `lib/moli.js` | Moli 引擎封装：探测可执行文件 + 按 dsh-moli 1.1.20 的同一套参数调 `moli fetch`（`-t` 位置、`--http-proxy`、TLS 跳过、URL 放 `--` 之后、输出按 maxChars 头尾省略） | `meFindMoli` `meMoliFetchText` | `index.js`（qq_webfetch 的 moli 分支） |
 | `lib/imagegen.js` | 生图：OpenAI 兼容 `/images/generations`，含重试与任务轮询 | `generateImage` `parseImagePayload` | `index.js`（qq_draw） |
 | `lib/proactive.js` | 主动发言纯逻辑：时间窗、消息清洗、提示词、决策解析、频率闸、模型解析（含可选两段式） | `parseClock` `buildPrompt` `parseDecision` `allowSend` `resolveModel` `resolveStageModels` `buildSpeakPrompt` `runSpeakStage` | `index.js`（模型请求走 `ctx.llm.stream()`，经 DSH 已配置渠道，0.11 起） |
 | `lib/history-auth.js` | 历史消息的会话定向与鉴权（纯逻辑） | `resolveHistoryTarget` `judgeHistoryAccess` `buildHistoryRequest` | `tools.js`（qq_history） |

@@ -389,9 +389,10 @@ try {
   reactRuntime.__beginRender();
   check('再点一次收起', !textsOf(registered.component(props)).includes('渲染超时（毫秒）'));
   reactRuntime.__beginRender();
-  const capRetrievalTree2 = registered.component(props);
+  // 这里必须用重渲染后的新树：以前误用了上一轮的快照 capRetrievalJoined，断言等于在验旧状态。
+  const capRetrievalJoined2 = textsOf(registered.component(props));
   check('搜索与抓取页不显示生图与视觉字段',
-    !capRetrievalJoined.includes('生图（qq_draw）') && !capRetrievalJoined.includes('图片视觉'), capRetrievalJoined.slice(0, 160));
+    !capRetrievalJoined2.includes('生图（qq_draw）') && !capRetrievalJoined2.includes('图片视觉'), capRetrievalJoined2.slice(0, 160));
 
   const capVisionJoined = textsOf(clickSubTab('识图与绘图'));
   check('识图与绘图页含图片识别窗口两项',

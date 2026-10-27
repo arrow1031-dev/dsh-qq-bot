@@ -52,7 +52,7 @@
   把 `guardTargetAllowed` 改成「一律放行」后大部分用例照样绿，通过的理由根本不是策略拒绝。
   现在每个拒绝用例都配一个本地监听器数 accept，真的连过去就必红；另补上游代理链路（假上游 200/403）、
   403 与 502 的响应体断言。同一变异体现在 38 项里红 21 项。
-- 测试总数：30 个套件 / **1192 项通过**。
+- 测试总数：30 个套件 / **1197 项通过**。
 
 ### 安全与健壮性（第二轮：本轮落地）
 
@@ -144,6 +144,24 @@
   并补断言（绑定后只认那个工具、群会话夹具带上真实 `groupId`）。
 - `test-plugin` 的 subprocess mock 透传 `env`（凭据不再进 argv）。
 - 全套 **29/29 套件 / 1159 项通过**。
+
+### 死代码清理（四条只读审计 + 交叉验证）
+
+四条并行只读审计报出 79 条，逐条回到代码复核后清理死变量、不可达分支与多余导出，行为零变化：
+
+- 去掉算完就扔的 `ext`/`mime`、`proactive` 返回值里无人读的 `replyish`、`admin` 授权记录里
+  只写不读的 `permanent`（「永久」本就由 `expiresAt === null` 表达）、`owner-settings` 的
+  `_pending`，以及被上一行完全覆盖的 `return`/`break`。
+- `flow-auth` 的 TOTP 与恢复码两条路径各写了一份相同的 toolName 回退，抽成 `grantToolNameOf`。
+- 去掉 `dropConfigPaths` / `resolveDocumentsDir` / `ME_TIMEOUT_MS` / `clipMiddle` /
+  `MAX_PER_HOUR` / `MAX_PER_DAY` / `DENY_PREFIXES` 的多余 `export`，以及 bridge 的
+  `reconnect` / `links` / `size()` 三个零调用接口。
+- 修正与实现不符的注释：`flow-store.js` 头部描述着早已移除的「原子写入 / 显式覆盖」能力、
+  `guard-proxy.js` 两块错位的文档注释、`websearch.js` 描述已不存在的函数、`imgsearch.js`
+  说 tineye/copyseeker「留作后续」（其实已实现）、`config.js` 里会显示在设置页的作者草稿。
+- `/flow rm` 撞上目录时返回的 `not-removed` 不在中文对照表里，会把英文原文甩给主人；补上。
+- `test-client` 有一条断言误用上一轮快照（等于在验旧状态），改用重渲染后的新树。
+- `test-guard-proxy` 38 → **43 项**；全套 **30/30 套件 / 1197 项通过**。
 
 ## 0.12.5 —— 非 QQ 会话越权收口 + 代理隧道统一 + 限流计费修正（2026-10-27）
 

@@ -17,7 +17,7 @@ node test/run-all.mjs
 裸克隆即可跑全部测试：需要 DSH 运行时才能成立的少数断言（动态工具注册、`qqgroup` 工具路径）会自动跳过而不是判失败；
 想连那部分一起跑，把 `DSH_PROFILE_MODULES` 指向一个装了 DSH 运行时的 profile 的 `node_modules`。
 
-## 2. 测试（30 个套件 / 1192 项）
+## 2. 测试（30 个套件 / 1197 项）
 
 ```sh
 node test/run-all.mjs      # 一键全量
@@ -67,7 +67,7 @@ node -e "fetch('http://127.0.0.1:3000/__inject',{method:'POST',headers:{'content
 node -e "fetch('http://127.0.0.1:3000/__sent').then(r=>r.json()).then(j=>console.log(JSON.stringify(j.messages,null,2)))"
 ```
 
-> **文档里的测试数必须自洽**：改测试就同步本表、README 的「30 套件 / 1192 项」与顶部 `tests` 徽章（`tests-1192%20passing`）、`AI-DISCLOSURE.md` 的验证情况。数字以裸克隆跑 `npm test` 的输出为准；能解析到 `@deepseek-ai/dsh-tools` 的环境里 `test-plugin` 与 `test-admin` 会多跑工具注册段落，总数随之更多。跳过项按 `[SKIP]` 单列，不计入通过数；设 `DSH_TOOLS_DISABLE=1` 可以在这台机器上模拟裸克隆（否则 `test/dsh-tools-link.mjs` 会把链接建回来，永远看不到跳过路径——CI 就是这么红的）。
+> **文档里的测试数必须自洽**：改测试就同步本表、README 的「30 套件 / 1197 项」与顶部 `tests` 徽章（`tests-1197%20passing`）、`AI-DISCLOSURE.md` 的验证情况。数字以裸克隆跑 `npm test` 的输出为准；能解析到 `@deepseek-ai/dsh-tools` 的环境里 `test-plugin` 与 `test-admin` 会多跑工具注册段落，总数随之更多。跳过项按 `[SKIP]` 单列，不计入通过数；设 `DSH_TOOLS_DISABLE=1` 可以在这台机器上模拟裸克隆（否则 `test/dsh-tools-link.mjs` 会把链接建回来，永远看不到跳过路径——CI 就是这么红的）。
 
 <a id="完整配置参考"></a>
 ## 3. 完整配置参考
@@ -443,7 +443,7 @@ node -e "fetch('http://127.0.0.1:3000/__sent').then(r=>r.json()).then(j=>console
 ## 12. 兼容性
 
 - **DSH 版本**：要求 `>= 0.2.0-rc.2 < 0.3.0`。插件启动时读实际版本并判定，日志形如
-  `[dsh-qq-bot] 运行于 DSH 0.2.1-rc.3（在声明支持范围 0.1.7-0 <= v < 0.3.0-0 内）`；`qqbot status` 的 `runtime` 字段给同一结论。
+  `[dsh-qq-bot] 运行于 DSH 0.2.1-rc.3（在声明支持范围 0.2.0-rc.2-0 <= v < 0.3.0-0 内）`；`qqbot status` 的 `runtime` 字段给同一结论。
   支持范围只维护 `lib/compat.js` 的 `SUPPORT_FLOOR` / `SUPPORT_CEILING`，DSH 出新版本不用改代码。识别失败或超范围只提示，不影响收发消息。
 - **工具注册与闸门（0.8.0 起）**：注册先 `ctx.get('tools')`，未就绪用 `ctx.inject(['tools'], …)` 动态挂载；闸门走 `agent.ctx.get('tools').guard(…)`，取不到才回退 `agent.ctx.tools`。`tools` 仍是可选服务：没有它插件照常收发消息，只是少几个模型工具。
 - **旧会话不会被删**：旧版本建的 QQ 会话可能绑在别的工作区。插件检测到 `belongs to "…"` 时**不动旧会话**（历史完整保留），改用工作区限定的 id（`qqbot-group-<群号>-ws<6位哈希>`）新建一条，重试一次即成功，日志写明。
