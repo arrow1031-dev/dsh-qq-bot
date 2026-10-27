@@ -12,6 +12,7 @@
  */
 
 import { spawn } from 'node:child_process';
+import net from 'node:net';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import process from 'node:process';
@@ -124,6 +125,42 @@ try {
   check('带 token 连接后上报已连接', conn2 !== undefined);
   b.send({ type: 'shutdown' });
   await new Promise((r) => { const t = setTimeout(r, 3000); b.proc.once('exit', () => { clearTimeout(t); r(); }); });
+
+  console.log('\n4. 半开连接回收（对端只发 FIN，不做 WS close 握手）');
+  const c = startAdapter(['--listen', '127.0.0.1:0', '--http', mock.httpUrl, '--heartbeat-ms', '0']);
+  const l3 = await waitFor(() => c.frames.find((f) => f.type === 'listening'), 8000, 'listening 帧');
+  const rawUpgrade = async (index) => {
+    const sock = net.connect({ host: '127.0.0.1', port: l3.port });
+    await new Promise((resolve, reject) => { sock.once('connect', resolve); sock.once('error', reject); });
+    const key = Buffer.from('half-open-' + index).toString('base64');
+    sock.write('GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: ' + key + '\r\nSec-WebSocket-Version: 13\r\n\r\n');
+    const head = await new Promise((resolve) => { sock.once('data', (chunk) => resolve(String(chunk))); });
+    return { sock, head };
+  };
+  const halfOpen = [];
+  for (let i = 0; i < 4; i += 1) {
+    const { sock, head } = await rawUpgrade(i);
+    halfOpen.push(sock);
+    check('第 ' + String(i + 1) + ' 条半开握手成功', head.startsWith('HTTP/1.1 101'), head.split('\r\n')[0]);
+  }
+  const { sock: fifth, head: fifthHead } = await rawUpgrade(9);
+  check('第 5 条并发链路拿到 503', fifthHead.startsWith('HTTP/1.1 503'), fifthHead.split('\r\n')[0]);
+  try { fifth.destroy(); } catch { /* ignore */ }
+  for (const sock of halfOpen) { try { sock.end(); } catch { /* ignore */ } }
+  await sleep(800);
+  const linksStatus = c.frames.filter((f) => f.type === 'status' && typeof f.links === 'number').pop();
+  check('半开连接只发 FIN 也会被回收（links 归零）', linksStatus !== undefined && linksStatus.links === 0,
+    linksStatus === undefined ? '没有 status 帧' : 'links=' + String(linksStatus.links));
+  const fresh = new WebSocket('ws://127.0.0.1:' + l3.port + '/');
+  const freshOutcome = await new Promise((resolve) => {
+    fresh.addEventListener('open', () => resolve('opened'), { once: true });
+    fresh.addEventListener('error', () => resolve('rejected'), { once: true });
+    setTimeout(() => resolve('timeout'), 4000);
+  });
+  check('半开回收后新连接仍能握手', freshOutcome === 'opened', freshOutcome);
+  try { fresh.close(); } catch { /* ignore */ }
+  c.send({ type: 'shutdown' });
+  await new Promise((r) => { const t = setTimeout(r, 3000); c.proc.once('exit', () => { clearTimeout(t); r(); }); });
 } catch (error) {
   failures += 1;
   console.log('\n错误：' + (error && error.message ? error.message : String(error)));
