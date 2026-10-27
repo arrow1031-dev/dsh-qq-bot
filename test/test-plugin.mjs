@@ -265,6 +265,8 @@ try {
   console.log('\n1. 加载插件（正向 WS 连假 OneBot）');
   // 按 Cordis 的做法求值配置：Config['~standard'].validate(raw)，volatile 字段变成引用。
   const validated = mod.Config['~standard'].validate({
+    // #27 起 auth.owners 为空即 fail-closed（不驱动任何会话），测试必须显式配拥有者。
+    auth: { owners: ['22222'] },
     onebot: { wsUrl: mock.wsUrl, httpUrl: mock.httpUrl },
     reply: { ackAfterMs: 0, interimMinGapMs: 500 },
     vision: { enabled: true, provider: 'mock-provider', model: 'vision-exp' },
@@ -958,6 +960,25 @@ try {
   check('非连接类改动不重启适配器',
     logLines.filter((line) => line.includes('适配器已启动')).length === startsAfterTransport,
     String(logLines.filter((line) => line.includes('适配器已启动')).length - startsAfterTransport));
+
+  console.log('\n6b. 默认准入 fail-closed：owners 为空时不驱动会话（#27）');
+  liveConfig.auth.owners[VOLATILE_WRITE]([]);
+  for (const handler of volatileUpdateHandlers) handler([['auth', 'owners']]);
+  await sleep(200);
+  const noOwnerBefore = mock.sent.length;
+  const agentsBeforeNoOwner = agents.size;
+  await fetch(mock.httpUrl + '/__inject', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ message_type: 'private', user_id: 22222, nickname: '主人',
+      message: [{ type: 'text', data: { text: '在吗' } }] }),
+  });
+  const noOwnerSent = await waitFor(() => (mock.sent.length > noOwnerBefore ? mock.sent.slice(noOwnerBefore) : null), 12000, '未配置拥有者的配置指引');
+  const noOwnerText = String(textOf(noOwnerSent[0]));
+  check('owners 为空：私聊收到配置指引', noOwnerText.includes('还没配置拥有者'), JSON.stringify(noOwnerText.slice(0, 120)));
+  check('owners 为空：不新建会话、不驱动模型', agents.size === agentsBeforeNoOwner, 'agents=' + agents.size + ' before=' + agentsBeforeNoOwner);
+  liveConfig.auth.owners[VOLATILE_WRITE](['22222']);
+  for (const handler of volatileUpdateHandlers) handler([['auth', 'owners']]);
+  await sleep(300);
 
   console.log('\n7. 废弃配置清理（升级删字段后残留在 patch 里的旧键）');
   const staleOverride = { proactive: { enabled: true, judgeProvider: 'uymu', judgeModel: 'judge-m' }, onebot: { wsUrl: 'ws://x' }, agentPreset: 'standard' };

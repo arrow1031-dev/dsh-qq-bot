@@ -143,7 +143,7 @@ dsh plugin --profile web update
 
 | 路径 | 谁 | 能做什么 |
 | --- | --- | --- |
-| `auth.owners` | 拥有者 | 全部权限 + **永久授权** + 可走独立的拥有者会话 |
+| `auth.owners` | 拥有者 | 全部权限 + **永久授权** + 可走独立的拥有者会话。**必填**：留空时插件不驱动任何会话（fail-closed），私聊会回一句配置指引 |
 | `auth.superAdmins` | 后台设定的高级管理员 | 群管理权限（不能永久授权） |
 | 动态授权 | 被临时授权的人 | 仅被授予的项，**仅限本群**、带时限 |
 | 本群身份 | 该群的管理员 / 群主 | 群管理权限（可用 `admin.requireGroupAdmin` 关掉） |
@@ -158,7 +158,7 @@ dsh plugin --profile web update
 | `/mute` `/unmute` `/kick` `/recall` | mute / kick / recall | 禁言、解禁、踢人、撤回（回复某条再发 `/recall` 可省 id） |
 | `/banall on\|off` `/card` `/admin` `/rename` | settings | 全员禁言 / 名片 / 管理员 / 群名 |
 
-**上线顺序建议**：先在设置里填 `auth.owners` → 打开 `admin.dryRun` 在群里试几条指令 → 关掉 dryRun，再按需加 `superAdmins`。
+**第一次装好必须先填 `auth.owners`**：留空时插件不驱动任何会话（只在你私聊它时回一句「还没配置拥有者」），这是为了避免「装上即对外开放」——默认白名单为空表示「不额外限制」，不先填拥有者，任何人都能拿它跑模型额度、当抓网页的跳板。填好之后再：打开 `admin.dryRun` 在群里试几条指令 → 关掉 dryRun，再按需加 `superAdmins`。
 非拥有者默认不能用 DSH 内部工具（白名单 `auth.guestToolAllow` 之外一律拦），确实要放开再改 `auth.guestDshTools`。
 
 ## Agent 能用的工具
