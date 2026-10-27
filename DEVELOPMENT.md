@@ -157,7 +157,7 @@ node -e "fetch('http://127.0.0.1:3000/__sent').then(r=>r.json()).then(j=>console
       proxy: ''        # 留空 = 透传 webSearch.proxy
       defaultTimeoutMs: 30000   # 对应 moli 的 -t
       maxChars: 200000          # 单次输出上限（超出按头尾省略）
-      insecureTls: true         # 跳过 TLS 证书校验（代理网络下 CRL 不可达）
+      insecureTls: true         # 跳过 TLS 证书校验（默认开）：关掉后自签名证书 / 网关 TLS 拦截 / CRL 取不到都会让渲染失败
     flowAuth:
       enabled: false   # 流程授权总开关（子代理/队友/工作流需私聊动态码）
       totpSecret: ''   # base32；node lib/totp-cli.mjs enroll 生成后粘过来（不经 QQ）
