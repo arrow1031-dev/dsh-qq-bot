@@ -42,7 +42,7 @@ check('没有 grant → 拒绝', blocked.allow === false && blocked.reason === '
 check('拒绝文案让模型去申请授权', gate.blockedText(blocked.reason).includes('qqauth'));
 
 console.log('\n3. 授权到手后放行一次');
-auth.requestAuth(owner, 'workflow:release');
+auth.requestAuth(owner, 'workflow:release', 'workflow');
 const grant = auth.consumeToken(owner, code());
 check('拿到 grant', grant.ok === true);
 gate.remember(owner, grant.grantId);
@@ -53,7 +53,7 @@ check('第二次被拦（一次一用）', second.allow === false && second.reas
 
 console.log('\n4. 别人的授权用不了');
 clock += 30000;
-auth.requestAuth(owner, 'workflow:for-owner');
+auth.requestAuth(owner, 'workflow:for-owner', 'workflow');
 const g2 = auth.consumeToken(owner, code());
 gate.remember(owner, g2.grantId);
 const stolen = gate.check(other, 'workflow');
@@ -62,7 +62,7 @@ check('原主人的授权还在，没有被别人用掉', gate.check(owner, 'wor
 
 console.log('\n5. 过期即失效');
 clock += 30000;
-auth.requestAuth(owner, 'workflow:expiring');
+auth.requestAuth(owner, 'workflow:expiring', 'workflow');
 const g3 = auth.consumeToken(owner, code());
 gate.remember(owner, g3.grantId);
 clock += 301000;
@@ -78,7 +78,7 @@ check('关闭后 isGated 为假', gate.isGated('subagent') === false);
 console.log('\n7. forget 清掉待用授权');
 gateEnabled = true;
 clock += 30000;
-auth.requestAuth(owner, 'workflow:forget');
+auth.requestAuth(owner, 'workflow:forget', 'workflow');
 const g4 = auth.consumeToken(owner, code());
 gate.remember(owner, g4.grantId);
 gate.forget(owner);

@@ -99,7 +99,10 @@ function makeWorld(flowEnabled) {
 
 async function ownerEntry(world, key, qq) {
   const entry = await world.session.getEntry(key, 'qqbot-' + key, '', null);
-  entry.turnSpeaker = { userId: qq, groupId: null, tier: 'owner', owner: true, sources: ['static'] };
+  // groupId 按会话键推：闸门现在是靠回合快照判「私聊」的（不再解析 entryKey），
+  // 夹具不带上群号等于把群会话伪装成私聊。
+  const groupId = key.startsWith('group-') ? key.slice('group-'.length) : null;
+  entry.turnSpeaker = { userId: qq, groupId, tier: 'owner', owner: true, sources: ['static'] };
   entry.dshAllowed = true;
   entry.flowArmedAt = undefined;
   entry.flowAllow = undefined;
@@ -117,7 +120,7 @@ console.log('1. 开关关着：行为与 0.11 一致（遮蔽装上了，但原�
   try { outOff = await w.registry.subagent.execute({}, { name: 'subagent', agent: null }); } catch (error) { threwOff = String(error.message); }
   check('关着时访客也照常能用（不看身份、不拦）', threwOff === '' && outOff !== null && outOff.native === true, threwOff);
   check('关着时不消耗授权、也不标产物', w.auth.status().pending === 0 && entryOff.flowArmedAt === undefined);
-  check('关着时 requestAuth 直接拒绝（不建 pending）', w.auth.requestAuth(OWNER, 'x').ok === false);
+  check('关着时 requestAuth 直接拒绝（不建 pending）', w.auth.requestAuth(OWNER, 'x', 'subagent').ok === false);
 }
 
 console.log('\n2. 开关打开：拥有者私聊 → 同名遮蔽成带闸门的 wrapper');
@@ -131,7 +134,7 @@ check('没有把 subagent 摘掉（工具仍在表里）', world.restricted.ever
 
 console.log('\n3. 一次调用只吃一个 grant（guard + wrapper 不能各问一次）');
 {
-  world.auth.requestAuth(OWNER, 'run subagent');
+  world.auth.requestAuth(OWNER, 'run subagent', 'subagent');
   const granted = world.auth.consumeToken(OWNER, totp(world.secret, { timeMs: world.clock.now }));
   world.gate.remember(OWNER, granted.grantId);
   const exec = { name: 'subagent', agent: null };
@@ -164,7 +167,7 @@ console.log('\n5. 工具执行失败：撤掉产物标记');
   const w = makeWorld(true);
   w.registry.subagent.execute = async () => { throw new Error('boom'); };
   const e = await ownerEntry(w, 'private-' + OWNER, OWNER);
-  w.auth.requestAuth(OWNER, 'boom');
+  w.auth.requestAuth(OWNER, 'boom', 'subagent');
   const granted = w.auth.consumeToken(OWNER, totp(w.secret, { timeMs: w.clock.now }));
   w.gate.remember(OWNER, granted.grantId);
   const exec = { name: 'subagent', agent: null };
@@ -181,7 +184,7 @@ console.log('\n6. 同一回合的第二个 gated 工具仍要自己的码（记�
 {
   const w = makeWorld(true);
   await ownerEntry(w, 'private-' + OWNER, OWNER);
-  w.auth.requestAuth(OWNER, 'a');
+  w.auth.requestAuth(OWNER, 'a', 'subagent');
   const granted = w.auth.consumeToken(OWNER, totp(w.secret, { timeMs: w.clock.now }));
   w.gate.remember(OWNER, granted.grantId);
   const exec = { name: 'subagent', agent: null };
@@ -197,7 +200,7 @@ console.log('\n6. 同一回合的第二个 gated 工具仍要自己的码（记�
 console.log('\n7. 群里的尝试不能把私聊的授权烧掉');
 {
   const w = makeWorld(true);
-  w.auth.requestAuth(OWNER, 'x');
+  w.auth.requestAuth(OWNER, 'x', 'subagent');
   const granted = w.auth.consumeToken(OWNER, totp(w.secret, { timeMs: w.clock.now }));
   w.gate.remember(OWNER, granted.grantId);
   // 每个会话各装一个守卫：这里只看「刚建的这个会话」的守卫（真机上也只有这一个在跑）。
