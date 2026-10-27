@@ -17,7 +17,7 @@ node test/run-all.mjs
 裸克隆即可跑全部测试：需要 DSH 运行时才能成立的少数断言（动态工具注册、`qqgroup` 工具路径）会自动跳过而不是判失败；
 想连那部分一起跑，把 `DSH_PROFILE_MODULES` 指向一个装了 DSH 运行时的 profile 的 `node_modules`。
 
-## 2. 测试（29 个套件 / 1159 项）
+## 2. 测试（29 个套件 / 1154 项）
 
 ```sh
 node test/run-all.mjs      # 一键全量
@@ -49,7 +49,7 @@ npm test                   # 同上
 | `test-totp-cli.mjs` | 14 | 终端绑定（secret / otpauth URI / 二维码） |
 | `test-qr.mjs` | 18 | 二维码编码器（固定矩阵守回归） |
 | `test-flow-auth.mjs` | 35 | 授权状态机（授权 / 重放 / 锁定 / 过期 / 工具绑定） |
-| `test-flow-store.mjs` | 22 | 流程脚本存取（路径穿越 / 覆盖保护 / sha 校验） |
+| `test-flow-store.mjs` | 17 | 流程脚本存取（路径穿越 / sha 校验 / 目录删不掉要报错） |
 | `test-flow-commands.mjs` | 49 | `/auth` 与 `/flow` 解析（含不可见字符与控制符） |
 | `test-flow-gate.mjs` | 16 | 流程授权闸门 |
 | `test-flow-wiring.mjs` | 20 | 闸门接线：一次调用只吃一个授权 / 关着原样放行 |
@@ -66,7 +66,7 @@ node -e "fetch('http://127.0.0.1:3000/__inject',{method:'POST',headers:{'content
 node -e "fetch('http://127.0.0.1:3000/__sent').then(r=>r.json()).then(j=>console.log(JSON.stringify(j.messages,null,2)))"
 ```
 
-> **文档里的测试数必须自洽**：改测试就同步本表、README 的「29 套件 / 1159 项」与顶部 `tests` 徽章（`tests-1159%20passing`）、`AI-DISCLOSURE.md` 的验证情况。数字以裸克隆跑 `npm test` 的输出为准；能解析到 `@deepseek-ai/dsh-tools` 的环境里 `test-plugin` 与 `test-admin` 会多跑工具注册段落，总数随之更多。跳过项按 `[SKIP]` 单列，不计入通过数；设 `DSH_TOOLS_DISABLE=1` 可以在这台机器上模拟裸克隆（否则 `test/dsh-tools-link.mjs` 会把链接建回来，永远看不到跳过路径——CI 就是这么红的）。
+> **文档里的测试数必须自洽**：改测试就同步本表、README 的「29 套件 / 1154 项」与顶部 `tests` 徽章（`tests-1154%20passing`）、`AI-DISCLOSURE.md` 的验证情况。数字以裸克隆跑 `npm test` 的输出为准；能解析到 `@deepseek-ai/dsh-tools` 的环境里 `test-plugin` 与 `test-admin` 会多跑工具注册段落，总数随之更多。跳过项按 `[SKIP]` 单列，不计入通过数；设 `DSH_TOOLS_DISABLE=1` 可以在这台机器上模拟裸克隆（否则 `test/dsh-tools-link.mjs` 会把链接建回来，永远看不到跳过路径——CI 就是这么红的）。
 
 <a id="完整配置参考"></a>
 ## 3. 完整配置参考
@@ -399,6 +399,16 @@ node -e "fetch('http://127.0.0.1:3000/__sent').then(r=>r.json()).then(j=>console
 | `examples/dynamic-package-host.js` | 动态 Cordis Package 版（不装包也能在当前进程里试） |
 
 ## 9. 设计说明（踩过的坑）
+
+### 权限边界里刻意不收紧的两处（2026-10-27 复审结论）
+
+- **拥有者全权，不受 `admin.manageGroups` 约束**：`manageGroups` 是给「群管理员 / 动态授权」
+  划范围的，拥有者本来就该能管任何群。要收紧得先定义「拥有者也不能越界的群范围」，
+  那属于产品决策，不是漏洞——所以这里只记录，不改代码。
+- **`qqbot status` 会回 `wsUrl` / `workspace` / 会话列表**：这不是 QQ 路径上的越权——QQ 会话里
+  status 要求拥有者，非 QQ 会话（Web UI / 任务板 / 子代理）只放行这个只读动作，而能看到它的
+  本来就是能操作这台机器的人。脱敏会直接降低排障效率，因此保持原样；`send` / `interrupt`
+  这类外发动作仍然单独要 `admin.allowConsole`。
 
 - **为什么中间要子进程？** 动态插件沙箱没有 `fetch` / `WebSocket` / `require`；用 `ctx.subprocess` 拉真 Node 进程、换行分隔 JSON 通信，协议层可独立测试，换 QQ 框架不影响插件。
 - **为什么用 `sessionController` 建会话？** 直接 `agentLoop.create()` 建的 Agent 没装模型路由（首次请求必败）；`sessionController.create()` + `resolveAgent()` 才是官方组装路径。
