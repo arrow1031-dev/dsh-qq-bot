@@ -376,6 +376,47 @@ try {
   check('op13 回显 plain_token', challenge.json !== null && challenge.json.plain_token === 'pt-123', JSON.stringify(challenge.json));
   check('op13 签名命中固定回归向量', challenge.json !== null && challenge.json.signature === OP13_SIGNATURE, String(challenge.json && challenge.json.signature));
 
+  console.log('\n2c. 允许无签名回调时 Webhook 只绑回环（#33）');
+  {
+    // 适配器启动本身强制要 secret，所以「可鉴别」的判定条件实际是 --allow-unsigned：
+    // 允许无签名回调时，任何人都能 POST 一个 op=0 进来自称任意用户，这种配置必须收回 127.0.0.1。
+    const noSecret = startAdapter([
+      '--mode', 'webhook', '--listen', '0.0.0.0:0', '--path', '/qq/webhook',
+      '--appid', APPID, '--secret', SECRET, '--allow-unsigned', 'true',
+      '--api-base', mock.base, '--self-id', 'self-openid-9', '--send-gap-ms', '10',
+    ]);
+    try {
+      const listenNoSecret = await waitFrame(noSecret, 'listening');
+      check('--allow-unsigned + --listen 0.0.0.0：实际只绑回环 (#33)',
+        listenNoSecret.host === '127.0.0.1' || listenNoSecret.host === 'localhost', 'host=' + String(listenNoSecret.host));
+    } finally {
+      try { noSecret.proc.kill('SIGKILL'); } catch { /* 已退出 */ }
+    }
+  }
+
+  console.log('\n2d. AppSecret 与 BotSecret 分开时，签名 seed 取 BotSecret（配置里那个字段不再是装饰）');
+  {
+    // QQ 官方规范：回调签名 seed = BotSecret；取 access_token 才用 AppSecret。两者正常不同值。
+    const APP_ONLY = 'app-secret-only';
+    const BOT_ONLY = 'bot-secret-abc';
+    const splitAdapter = startAdapter([
+      '--mode', 'webhook', '--listen', '127.0.0.1:0', '--path', '/qq/webhook',
+      '--appid', APPID, '--secret', APP_ONLY, '--bot-secret', BOT_ONLY,
+      '--api-base', mock.base, '--self-id', 'self-openid-9', '--send-gap-ms', '10',
+    ]);
+    try {
+      const splitListening = await waitFrame(splitAdapter, 'listening');
+      const splitPort = splitListening.port;
+      const byBot = await postWebhook(splitPort, { op: 13, d: { plain_token: 'pt-split', event_ts: '1725442341' } }, { secret: BOT_ONLY });
+      check('按 BotSecret 签名 → 通过（200）', byBot.status === 200, 'status=' + String(byBot.status));
+      check('op13 用 BotSecret 派生出的签名正确', byBot.json !== null && byBot.json.signature === signWith(BOT_ONLY, '1725442341pt-split'), String(byBot.json && byBot.json.signature));
+      const byApp = await postWebhook(splitPort, { op: 13, d: { plain_token: 'pt-split2', event_ts: '1725442342' } }, { secret: APP_ONLY });
+      check('按 AppSecret 签名 → 被拒（401，说明 seed 没被混用）', byApp.status === 401, 'status=' + String(byApp.status));
+    } finally {
+      try { splitAdapter.proc.kill('SIGKILL'); } catch { /* 已退出 */ }
+    }
+  }
+
   console.log('\n3. 群消息事件翻译（GROUP_AT_MESSAGE_CREATE）');
   const groupMessageEvent = {
     op: 0, s: 7, t: 'GROUP_AT_MESSAGE_CREATE', id: 'evt-group-1',

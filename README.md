@@ -1,5 +1,12 @@
 # dsh-qq-bot —— 把 QQ 接到 DSH
 
+[![CI](https://github.com/arrow1031-dev/dsh-qq-bot/actions/workflows/ci.yml/badge.svg)](https://github.com/arrow1031-dev/dsh-qq-bot/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/%40sputnikzaychik%2Fdsh-qq-bot?label=npm)](https://www.npmjs.com/package/@sputnikzaychik/dsh-qq-bot)
+[![npm downloads](https://img.shields.io/npm/dm/%40sputnikzaychik%2Fdsh-qq-bot?label=%E4%B8%8B%E8%BD%BD)](https://www.npmjs.com/package/@sputnikzaychik/dsh-qq-bot)
+[![tests](https://img.shields.io/badge/tests-1142%20passing-brightgreen)](DEVELOPMENT.md)
+[![node](https://img.shields.io/badge/node-%E2%89%A522.6-339933)](https://nodejs.org/)
+[![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
 把一个 QQ 机器人接进 DSH：QQ 消息进来 → 交给 DSH Agent → 回复发回 QQ。
 
 - **一套插件接五种协议**：OneBot 11（默认）/ OneBot 12 / Satori / Milky / QQ 官方机器人，换协议只是设置里的一个下拉。
@@ -187,6 +194,7 @@ dsh plugin --profile web update
 | 能连上但收不到消息 | OneBot 版本要选 **v11**；不能只开 HTTP，必须开正向或反向 WS |
 | 群里 @ 了也不回 | `group.enabled`、`group.allow` 白名单、`self_id` 是否一致（`logAdapterFrames: true` 看原始帧） |
 | 回「（本轮没有产生文字回复：…）」 | 括号里是 `turn/end` 的原因，据此定位（模型路由、额度、工具报错） |
+| 回「（发得太快了：一分钟内最多 N 条…）」 | 入站限流：同一会话里同一个人每分钟最多驱动 N 个回合（默认 20，设置页「每人每分钟最多几条」）。只有真正驱动回合的消息才计数，群里的闲聊不算 |
 | 发送失败 | NapCat 的 HTTP 服务器（默认 3000）是否开着；`accessToken`；看日志里的「发送失败」 |
 | 网页端整个插件报错 / 设置面板空白 | 0.12.1 的已知问题，升到 **0.12.2** 即可 |
 | 日志在哪 | 插件前缀 `[dsh-qq-bot]`，适配器前缀 `[dsh-qq-bot]/adapter`，都打到 DSH Host 的 stdout |
@@ -208,7 +216,7 @@ dsh plugin --profile web remove @sputnikzaychik/dsh-qq-bot          # 卸载
 
 | 文档 | 内容 |
 | --- | --- |
-| [DEVELOPMENT.md](DEVELOPMENT.md) | 本地开发与测试（29 套件 / 1094 项）、完整配置参考、工具细节、文件清单、设计取舍、发布流程、部署备注 |
+| [DEVELOPMENT.md](DEVELOPMENT.md) | 本地开发与测试（29 套件 / 1142 项）、完整配置参考、工具细节、文件清单、设计取舍、发布流程、部署备注 |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | 分层图、模块职责、关键数据流、身份契约、已知边界 |
 | [CHANGELOG.md](CHANGELOG.md) | 0.1.0 → 0.12.3 的完整演进 |
 | [AI-DISCLOSURE.md](AI-DISCLOSURE.md) | AI 生成方式、验证到什么程度、**尚未验证清单**（用前务必读） |

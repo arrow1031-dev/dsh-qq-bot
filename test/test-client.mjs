@@ -503,16 +503,73 @@ try {
   const secretCount = mutateCalls.length > 0 ? mutateCalls[mutateCalls.length - 1].ops.length : 0;
   check('新 token 是唯一改动', secretCount === 1, String(secretCount));
 
-  // 切到反向模式，应出现监听地址、隐藏正向地址
-  const reverseDraft = JSON.parse(JSON.stringify(SETTINGS_VALUE));
-  reverseDraft.mode = 'reverse';
-  mutateCalls.length = 0;
-  const reverseProps = { ...faces, close: () => {} };
   reactRuntime.__beginRender();
-  registered.component(reverseProps);
+  const treeReverse0 = registered.component(props);
   reactRuntime.__takeEffects();
-  // 直接改 draft 不容易，这里只验证 when() 条件逻辑通过组件重渲染生效：
-  check('组件对 mode 分支有处理（无异常）', true);
+  // 切到反向模式：真的驱动「连接方式」下拉的 onChange，再重渲染断言字段跟着换。
+  // 以前这里造了个 reverseDraft 却从没用过，最后断言还是 check(..., true) —— 恒真，白占一行。
+  const collectSelects = (node, out) => {
+    if (node === null || node === undefined || typeof node !== 'object') return out;
+    if (Array.isArray(node)) { for (const item of node) collectSelects(item, out); return out; }
+    if (node.type === 'select') out.push(node);
+    for (const child of node.children || []) collectSelects(child, out);
+    return out;
+  };
+  // 设置面板按标签渲染，mode 在「连接」标签里：先点回那个标签。
+  const collectByProp = (node, key, out) => {
+    if (node === null || node === undefined || typeof node !== 'object') return out;
+    if (Array.isArray(node)) { for (const item of node) collectByProp(item, key, out); return out; }
+    if (node.props !== undefined && node.props !== null && node.props[key] !== undefined) out.push(node);
+    for (const child of node.children || []) collectByProp(child, key, out);
+    return out;
+  };
+  const connectionTab = collectByProp(treeReverse0, 'data-tab', []).find((el) => el.props['data-tab'] === 'connection');
+  check('找得到「连接」标签按钮', Boolean(connectionTab));
+  if (connectionTab !== undefined) {
+    connectionTab.props.onClick();
+    reactRuntime.__beginRender();
+    registered.component(props);
+    reactRuntime.__takeEffects();
+  }
+  const connectionTree = (() => {
+    reactRuntime.__beginRender();
+    const t = registered.component(props);
+    reactRuntime.__takeEffects();
+    return t;
+  })();
+  // select 渲染成 <select> + <option> 子节点（不是 props.options 数组），按 option 的 value 认。
+  const optionValues = (el) => {
+    const out = [];
+    const walk = (node) => {
+      if (node === null || node === undefined || typeof node !== 'object') return;
+      if (Array.isArray(node)) { for (const item of node) walk(item); return; }
+      if (node.type === 'option') out.push(String(node.props && node.props.value));
+      for (const child of node.children || []) walk(child);
+    };
+    walk(el.children || []);
+    return out;
+  };
+  const modeSelect = collectSelects(connectionTree, []).find((el) => optionValues(el).includes('reverse'));
+  check('找得到「连接方式」下拉（含 forward / reverse 两个选项）', Boolean(modeSelect));
+  if (modeSelect === undefined) throw new Error('找不到连接方式下拉，反向分支无法验证');
+  modeSelect.props.onChange({ target: { value: 'reverse' } });
+  reactRuntime.__beginRender();
+  const treeReverse = registered.component(props);
+  reactRuntime.__takeEffects();
+  const labelsReverse = [];
+  const collectLabels = (node) => {
+    if (node === null || node === undefined || typeof node !== 'object') return;
+    if (Array.isArray(node)) { for (const item of node) collectLabels(item); return; }
+    for (const child of node.children || []) {
+      if (typeof child === 'string' && child.length > 1) labelsReverse.push(child);
+      collectLabels(child);
+    }
+  };
+  collectLabels(treeReverse);
+  const hasListen = labelsReverse.some((t) => t.includes('反向 WS 监听地址'));
+  const hasForward = labelsReverse.some((t) => t.includes('正向 WS 地址'));
+  check('切到反向模式：出现「反向 WS 监听地址」', hasListen, JSON.stringify(labelsReverse.slice(0, 12)));
+  check('切到反向模式：正向 WS 地址被隐藏', hasForward === false && hasListen === true, JSON.stringify(labelsReverse.slice(0, 12)));
 } catch (error) {
   failures += 1;
   console.log('\n错误：' + (error && error.stack ? error.stack : String(error)));

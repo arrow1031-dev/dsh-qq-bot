@@ -249,6 +249,84 @@ await check('downloadImage 不再整包 arrayBuffer', () => {
   assert.ok(!body.includes('arrayBuffer()'), 'downloadImage 又整包读入了');
 });
 
+console.log('\n11. 跳转与体积（#13 #22）');
+await check('跳转到内网地址被拒（302 -> 169.254.169.254）', async () => {
+  __setNetworkHooks({
+    lookup: async (host) => (host === 'public.example' ? [{ address: '93.184.216.34', family: 4 }] : []),
+    request: async () => ({ status: 302, location: 'http://169.254.169.254/latest/meta-data/', setCookie: '', contentType: '', body: Buffer.alloc(0), truncated: false }),
+  });
+  try {
+    await assert.rejects(() => publicFetch('http://public.example/x'), /非公网/, '跳转目标没被拦');
+  } finally { __setNetworkHooks(null); }
+});
+await check('跳转到公网地址仍跟随（不误伤正常跳转）', async () => {
+  const seen = [];
+  __setNetworkHooks({
+    lookup: async (host) => (host === 'a.example' || host === 'b.example' ? [{ address: '93.184.216.34', family: 4 }] : []),
+    request: async ({ parsed }) => {
+      seen.push(parsed.hostname);
+      if (parsed.hostname === 'a.example') {
+        return { status: 302, location: 'http://b.example/ok', setCookie: '', contentType: '', body: Buffer.alloc(0), truncated: false };
+      }
+      return { status: 200, location: '', setCookie: '', contentType: 'text/plain', body: Buffer.from('ok'), truncated: false };
+    },
+  });
+  try {
+    const res = await publicFetch('http://a.example/x');
+    assert.ok(res.status === 200 && res.body === 'ok', '公网跳转没跟随：' + JSON.stringify(res));
+    assert.deepEqual(seen, ['a.example', 'b.example'], '跳转链路不对：' + JSON.stringify(seen));
+  } finally { __setNetworkHooks(null); }
+});
+await check('跳转次数有上限（防跳转死循环）', async () => {
+  __setNetworkHooks({
+    lookup: async (host) => (host === 'loop.example' ? [{ address: '93.184.216.34', family: 4 }] : []),
+    request: async () => ({ status: 302, location: 'http://loop.example/again', setCookie: '', contentType: '', body: Buffer.alloc(0), truncated: false }),
+  });
+  try {
+    await assert.rejects(() => publicFetch('http://loop.example/x'), /跳转次数过多/, '跳转没有上限');
+  } finally { __setNetworkHooks(null); }
+});
+await check('请求头显式 identity（不吃 gzip 炸弹）', async () => {
+  let headers = '';
+  __setNetworkHooks({
+    lookup: async () => [{ address: '93.184.216.34', family: 4 }],
+    request: async ({ headers: sent }) => {
+      headers = JSON.stringify(sent === undefined || sent === null ? {} : sent);
+      return { status: 200, location: '', setCookie: '', contentType: 'text/plain', body: Buffer.from('ok'), truncated: false };
+    },
+  });
+  try {
+    await publicFetch('http://enc.example/x');
+    assert.ok(/accept-encoding/i.test(headers) && /identity/.test(headers), '没有显式 accept-encoding: identity：' + headers);
+  } finally { __setNetworkHooks(null); }
+});
+await check('体积上限透传到请求层（默认 8 MB，可覆盖）', async () => {
+  const limits = [];
+  __setNetworkHooks({
+    lookup: async () => [{ address: '93.184.216.34', family: 4 }],
+    request: async ({ maxBytes }) => {
+      limits.push(Number(maxBytes));
+      return { status: 200, location: '', setCookie: '', contentType: 'text/plain', body: 'ok', truncated: false };
+    },
+  });
+  try {
+    await publicFetch('http://big.example/x');
+    await publicFetch('http://big.example/x', { maxBytes: 4096 });
+    assert.ok(limits[0] === MAX_FETCH_BYTES, '默认上限不是 MAX_FETCH_BYTES：' + String(limits[0]));
+    assert.ok(limits[1] === 4096, 'maxBytes 没透传：' + String(limits[1]));
+  } finally { __setNetworkHooks(null); }
+});
+await check('truncated 标记原样透出（超限时调用方看得见）', async () => {
+  __setNetworkHooks({
+    lookup: async () => [{ address: '93.184.216.34', family: 4 }],
+    request: async () => ({ status: 200, location: '', setCookie: '', contentType: 'text/plain', body: 'abcd', truncated: true }),
+  });
+  try {
+    const res = await publicFetch('http://big.example/x');
+    assert.ok(res.truncated === true && res.body === 'abcd', 'truncated 没透出：' + JSON.stringify(res));
+  } finally { __setNetworkHooks(null); }
+});
+
 console.log('\n' + pass + '/' + (pass + fails.length) + ' 项通过');
 if (fails.length > 0) { console.log('安全回归失败：' + fails.join('; ')); process.exit(1); }
 console.log('安全回归通过');

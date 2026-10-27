@@ -211,7 +211,8 @@ console.log('\n7. 群里的尝试不能把私聊的授权烧掉');
   check('私聊这边码还在（没被群里的尝试花掉）', privateVerdict === undefined, JSON.stringify(privateVerdict));
 }
 
-console.log('\n' + total + '/' + total + ' 项通过');
+// 以前这里印 total/total：即使挂了 3 条，汇总行照样是 20/20，看日志的人只会看到「全过」。
+console.log('\n' + (total - failures) + '/' + total + ' 项通过');
 if (failures > 0) {
   console.log(failures + ' 项失败');
   process.exit(1);

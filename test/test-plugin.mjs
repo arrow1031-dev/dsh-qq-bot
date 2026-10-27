@@ -16,6 +16,7 @@
 
 import { spawn } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { ensureDshToolsLink } from './dsh-tools-link.mjs';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -23,20 +24,51 @@ import process from 'node:process';
 import { startMockOneBot } from './mock-onebot.mjs';
 import { __setNetworkHooks } from '../lib/http.js';
 
+// 公共抓取（qq_websearch / qq_imgsearch / 识图下载）走 lib/http.js 的 node:http 实现，不再经过
+// globalThis.fetch：要打桩只能用 http.js 的 __setNetworkHooks（解析 + 单次请求两个动作）。
+const TEST_PNG = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+const TEST_DDG_HTML = '<html><body><div class="result">'
+  + '<h2 class="result__title"><a class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Ftest-page">测试结果标题</a></h2>'
+  + '<a class="result__snippet" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Ftest-page">这是测试搜索的摘要内容</a>'
+  + '</div></body></html>';
+const TEST_TRACEMOE_JSON = JSON.stringify({
+  quota: 100, quotaUsed: 1, result: [
+    { anilist: { id: 6702, title: { chinese: '妖精的尾巴', romaji: 'FAIRY TAIL' }, siteUrl: 'https://anilist.co/anime/6702' },
+      episode: 1, similarity: 0.97, from: 123.4, filename: 'FT_EP1.mp4' },
+  ],
+});
+const TEST_HOSTS = new Set(['example.com', 'cdn.example.com', 'html.duckduckgo.com', 'lite.duckduckgo.com', 'api.trace.moe']);
+// 打桩命中记录：用来断言「首选端点真的被请求过」，而不是又被测试自己的 DNS 桩屏蔽、退回兜底。
+const TEST_HIT_HOSTS = [];
+__setNetworkHooks({
+  lookup: async (host) => (TEST_HOSTS.has(host) ? [{ address: '93.184.216.34', family: 4 }] : []),
+  request: async ({ parsed }) => {
+    const host = parsed.hostname;
+    TEST_HIT_HOSTS.push(host);
+    const ok = (contentType, body) => ({ status: 200, location: '', setCookie: '', contentType, body: Buffer.from(body), truncated: false });
+    // html 与 lite 回同一份结果页：parseDdgResults 先按 result__a（html 形态）解析，
+    // 解析不到才退到 result-link（lite 形态），一份夹具两边都能用。
+    if (host === 'html.duckduckgo.com' || host === 'lite.duckduckgo.com') return ok('text/html', TEST_DDG_HTML);
+    if (host === 'api.trace.moe') return ok('application/json', TEST_TRACEMOE_JSON);
+    if (host === 'example.com' || host === 'cdn.example.com') return ok('image/png', TEST_PNG);
+    return { status: 404, location: '', setCookie: '', contentType: 'text/plain', body: Buffer.from('no stub'), truncated: false };
+  },
+});
+
+
 const here = path.dirname(fileURLToPath(import.meta.url));
 const PKG_ROOT = path.join(here, '..');
-// 装到 DSH profile 之后，@deepseek-ai/dsh-tools 由 DSH 运行时解析。这里允许用
-// DSH_PROFILE_MODULES 显式指向 profile 的 node_modules 来复现那种布局；
-// 解析不到就跳过依赖宿主服务的断言（裸克隆照样跑）。
-// 候选目录按顺序试：显式环境变量 > profile 的 node_modules > DSH 自己的安装目录。
-// 最后一项很重要：没有它，本地跑永远跳过工具注册断言，工具数量从 7 漂到 9 也没人发现。
-const DSH_INSTALL_MODULES = path.join('/usr/local/lib/node_modules/@deepseek-ai/dsh', 'node_modules');
-const PROFILE_MODULES = [process.env.DSH_PROFILE_MODULES,
-  path.join(process.env.DSH_HOME ?? path.join(os.homedir(), '.dsh'), 'profiles', 'node_modules'),
-  DSH_INSTALL_MODULES].filter((p) => typeof p === 'string' && p !== '' && fs.existsSync(path.join(p, '@deepseek-ai', 'dsh-tools')))[0]
-  ?? path.join(process.env.DSH_HOME ?? path.join(os.homedir(), '.dsh'), 'profiles', 'node_modules');
+// 装到 DSH profile 之后，@deepseek-ai/dsh-tools 由 DSH 运行时解析。临时软链逻辑与 test-admin
+// 共用（dsh-tools-link.mjs：显式环境变量 > profile 的 node_modules > DSH 安装目录）。
+// 解析不到就跳过依赖宿主服务的断言（裸克隆照样跑），但跳过会单独标 [SKIP]、不记成通过——
+// 否则工具注册面从没被验证过也全绿（0.11 那次工具数 7→9 漂移就是这么漏掉的）。
+const createdLink = ensureDshToolsLink(PKG_ROOT);
 
 let failures = 0;
+let skips = 0;
+// 「跳过」不能算通过：以前写成 check('（跳过）…', true)，裸克隆/CI 上 70 条工具断言会静静变成
+// PASS，工具注册面从没被验证过也全绿（0.11 那次工具数 7→9 漂移就是这么漏掉的）。
+const skip = (name) => { skips += 1; console.log('  [SKIP] ' + name); };
 const results = [];
 function check(name2, ok, detail = '') {
   results.push(ok);
@@ -60,21 +92,6 @@ async function waitFor(fn, timeoutMs, label) {
   }
 }
 
-// ---- 临时软链：模拟「装进 profile 之后」的解析位置 ----
-// 整包 node_modules 已经在（schemastery 等），所以只给 dsh-tools 单独建一个链接；
-// 以前整目录建链的写法在已有 node_modules 时永远不落，导致工具断言永远被跳过。
-const linkPath = path.join(PKG_ROOT, 'node_modules', '@deepseek-ai', 'dsh-tools');
-let createdLink = false;
-if (!fs.existsSync(linkPath)) {
-  const linkTarget = path.join(PROFILE_MODULES, '@deepseek-ai', 'dsh-tools');
-  if (fs.existsSync(linkTarget)) {
-    try {
-      fs.mkdirSync(path.dirname(linkPath), { recursive: true });
-      fs.symlinkSync(linkTarget, linkPath, process.platform === 'win32' ? 'junction' : 'dir');
-      createdLink = true;
-    } catch (error) { /* 建不出就照旧跳过 */ }
-  }
-}
 // 插件现在静态 import @deepseek-ai/schemastery（Config schema 必需）。
 try { await import.meta.resolve('@deepseek-ai/schemastery'); }
 catch {
@@ -344,7 +361,7 @@ try {
   console.log('\n2. 动态工具注册（走真的 defineTool）');
   const tool = registeredTools.find((t) => t.name === 'qqbot');
   if (hasDshTools !== true) {
-    check('（跳过）工具注册需 @deepseek-ai/dsh-tools；路由/回复断言不受影响', true);
+    skip('工具注册需 @deepseek-ai/dsh-tools；路由/回复断言不受影响');
   } else {
     const EXPECTED_TOOLS = ['qqbot', 'qqconfig', 'qqgroup', 'qq_websearch', 'qq_webfetch', 'qq_imgsearch', 'qq_history', 'qq_draw', 'qqauth'];
     check('注册了 ' + EXPECTED_TOOLS.length + ' 个工具（qqbot / qqconfig / qqgroup / qq_websearch / qq_webfetch / qq_imgsearch / qq_history / qq_draw / qqauth）',
@@ -669,13 +686,6 @@ try {
   };
   // 识图下载走 publicFetch（node:http 直连 + 地址钉死），fetch 桩拦不到它，用测试网络钩子。
   // 域名解析仍走判定：example.com → 93.184.216.34 是公网地址，isNonPublicIp 放行后才下发假响应。
-  __setNetworkHooks({
-    lookup: async (host) => (host === 'example.com' ? [{ address: '93.184.216.34', family: 4 }] : []),
-    request: async () => ({
-      status: 200, location: '', setCookie: '', contentType: 'image/png',
-      body: Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), truncated: false,
-    }),
-  });
   visionModelModalities = ['text', 'image'];
   const sentBeforeVision = mock.sent.length;
   await fetch(mock.httpUrl + '/__inject', {
@@ -751,23 +761,12 @@ try {
     && typeof liveConfig.webSearch.multiEngine.get === 'function'
     && liveConfig.webSearch.multiEngine.get() === true,
     String(liveConfig.webSearch.multiEngine && liveConfig.webSearch.multiEngine.get && liveConfig.webSearch.multiEngine.get()));
-  // 在 4b 的 fetch 桩基础上再拦 DuckDuckGo（html 端点 → 固定结果页）
-  const meBaseFetch = globalThis.fetch;
-  globalThis.fetch = async (url, init) => {
-    if (String(url).startsWith('https://html.duckduckgo.com')) {
-      return {
-        ok: true, status: 200, headers: { get: () => 'text/html' },
-        text: async () => '<html><body><div class="result">'
-          + '<h2 class="result__title"><a class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Ftest-page">测试结果标题</a></h2>'
-          + '<a class="result__snippet" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Ftest-page">这是测试搜索的摘要内容</a>'
-          + '</div></body></html>',
-      };
-    }
-    return meBaseFetch(url, init);
-  };
   if (hasDshTools === true) {
   const wsTool4d = registeredTools.find((t) => t.name === 'qq_websearch');
+  TEST_HIT_HOSTS.length = 0;
   const meResult = wsTool4d !== undefined ? await wsTool4d.execute({ query: '测试搜索' }, {}) : null;
+  check('多引擎首选 html.duckduckgo.com 端点（没有被测试自己的 DNS 桩挡回兜底）',
+    TEST_HIT_HOSTS.includes('html.duckduckgo.com'), JSON.stringify(TEST_HIT_HOSTS));
   check('多引擎搜索返回 mock DuckDuckGo 结果（未走官方 DeepSeek）',
     meResult !== null && meResult !== undefined && meResult.ok === true
     && Array.isArray(meResult.sources) && meResult.sources.some((s) => s.url === 'https://example.com/test-page'),
@@ -776,9 +775,8 @@ try {
     meResult !== null && meResult !== undefined && meResult.sources[0]
     && meResult.sources[0].title === '测试结果标题' && meResult.sources[0].snippet.includes('测试搜索'),
     JSON.stringify(meResult && meResult.sources && meResult.sources[0]));
-  globalThis.fetch = meBaseFetch;
   } else {
-    check('（跳过）4d 多引擎工具断言需 @deepseek-ai/dsh-tools', true);
+    skip('4d 多引擎工具断言需 @deepseek-ai/dsh-tools');
   }
 
   console.log('\n4e. 图片反搜：imgSearch 默认开，qq_imgsearch 工具走 mock TraceMoe');
@@ -820,7 +818,7 @@ try {
     JSON.stringify(imgResult && imgResult.sources && imgResult.sources[0] && imgResult.sources[0].snippet));
   globalThis.fetch = imBaseFetch;
   } else {
-    check('（跳过）4e 图片反搜工具断言需 @deepseek-ai/dsh-tools', true);
+    skip('4e 图片反搜工具断言需 @deepseek-ai/dsh-tools');
   }
 
   console.log('\n4f. qq_history：AI 自取聊天记录与图片（识别窗口锚定最新提及，不再自动塞上下文）');
@@ -852,18 +850,10 @@ try {
     }),
   });
   await waitFor(() => (mock.sent.length > beforeHist ? mock.sent.slice(beforeHist) : null), 15000, '触发消息已回复');
-  // stub cdn.example.com 下载（识别走「未配置 provider/model」分支，验证失败不阻塞只给 URL）
-  const histRealFetch = globalThis.fetch;
-  globalThis.fetch = async (url, init) => {
-    if (String(url).startsWith('https://cdn.example.com/')) {
-      return { ok: true, status: 200, headers: { get: (h) => (String(h).toLowerCase() === 'content-type' ? 'image/png' : null) },
-        arrayBuffer: async () => new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]).buffer };
-    }
-    return histRealFetch(url, init);
-  };
+  // 图片下载走 publicFetch + 网络钩子（TEST_HOSTS 里的 cdn.example.com 回 TEST_PNG），
+  // 不再需要 globalThis.fetch 桩 —— #32 之后那种桩根本拦不到请求。
   const histExec = { agent: agents.get('qqbot-group-33333') };
   const histRes = histTool !== undefined ? await histTool.execute({ count: 20 }, histExec) : null;
-  globalThis.fetch = histRealFetch;
   check('qq_history 返回结构化消息列表（time/user_id/nickname/text/images）',
     histRes !== null && histRes.ok === true && Array.isArray(histRes.messages) && histRes.messages.length >= 1
     && typeof histRes.messages[0].text === 'string' && histRes.messages[0].images !== undefined,
@@ -884,12 +874,40 @@ try {
     })(),
     histRes ? String(histRes.messages.reduce((acc, m) => acc + m.images.length, 0)) : 'null');
   } else {
-    check('（跳过）4f qq_history 工具断言需 @deepseek-ai/dsh-tools', true);
+    skip('4f qq_history 工具断言需 @deepseek-ai/dsh-tools');
   }
   check('qq_history 默认在访客白名单', Array.isArray(liveConfig.auth.guestToolAllow.get())
     && liveConfig.auth.guestToolAllow.get().includes('qq_history'),
     JSON.stringify(liveConfig.auth.guestToolAllow.get()));
 
+
+  console.log('\n4g. 入站限流只对「真的驱动回合」的消息计费（#22）');
+  {
+    // 以前 takeTurnSlot 放在消息入口：群里的闲聊、图片、没点名的消息都吃额度，
+    // 一个活跃群几十条闲聊之后，真正的 @ 就被静默丢掉（群里还不回复，等于人间蒸发）。
+    const floodGroup = 77777;
+    const floodUser = 66666;
+    for (let i = 0; i < 25; i += 1) {
+      await fetch(mock.httpUrl + '/__inject', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ message_type: 'group', group_id: floodGroup, user_id: floodUser, nickname: '话痨',
+          message: [{ type: 'text', data: { text: '闲聊' + String(i) } }] }),
+      });
+    }
+    await new Promise((r) => setTimeout(r, 300));
+    const beforeMention = mock.sent.length;
+    await fetch(mock.httpUrl + '/__inject', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ message_type: 'group', group_id: floodGroup, user_id: floodUser, nickname: '话痨',
+        message: [{ type: 'at', data: { qq: '10000' } }, { type: 'text', data: { text: '现在真的叫我' } }] }),
+    });
+    const mentioned = await Promise.race([
+      waitFor(() => (mock.sent.length > beforeMention ? mock.sent.slice(beforeMention) : null), 15000, '闲聊之后的 @ 应当被回复'),
+      new Promise((resolve) => setTimeout(() => resolve(null), 15000)),
+    ]);
+    check('25 条群闲聊之后 @ 仍然有回复（闲聊不占回合额度）', mentioned !== null,
+      'sent=' + String(mock.sent.length));
+  }
 
   console.log('\n4g. 本轮运行失败：显示提示而不是重发上一轮回复内容');
   const failSession = 'qqbot-group-99999';
@@ -931,7 +949,36 @@ try {
       status.conversations.some((c) => c.conversation === 'group-33333'), JSON.stringify(status.conversations));
     check('status 里有统计计数', status.stats.accepted >= 1 && status.stats.replies >= 1, JSON.stringify(status.stats));
   }
-  if (status === null) check('（跳过）status 动作需要 dsh-tools', true);
+  if (status === null) skip('status 动作需要 dsh-tools');
+
+  console.log('\n5b. 非 QQ 会话（Web UI / 子代理）调用：外发动作默认拒、只读放行');
+  if (hasDshTools !== true) {
+    skip('非 QQ 会话来源闸（需要 @deepseek-ai/dsh-tools 才能注册工具）');
+  } else {
+    // exec 里没有 QQ 会话的 agent → entryForAgent 返回 null。以前这里整段跳过拥有者判断，
+    // 等于任何 Web UI 会话/子代理都能拿 qqbot send 往任意群发消息、掐断任意会话的回合。
+    const sendsBefore = mock.sent.length;
+    const consoleSend = await tool.execute({ action: 'send', message_type: 'group', target_id: '88888', text: '越权外发' }, {});
+    check('console 调 send：默认被拒（admin.allowConsole 未开）',
+      consoleSend !== null && consoleSend !== undefined && consoleSend.ok === false
+      && String(consoleSend.error).includes('allowConsole'), JSON.stringify(consoleSend));
+    check('console 调 send：没有真的发出去', mock.sent.length === sendsBefore, String(mock.sent.length));
+    const consoleInterrupt = await tool.execute({ action: 'interrupt', conversation: 'all' }, {});
+    check('console 调 interrupt：默认被拒',
+      consoleInterrupt !== null && consoleInterrupt !== undefined && consoleInterrupt.ok === false, JSON.stringify(consoleInterrupt));
+    const consoleStatus = await tool.execute({ action: 'status' }, {});
+    check('console 调 status：只读动作照旧放行',
+      consoleStatus !== null && consoleStatus !== undefined && consoleStatus.connected !== undefined, JSON.stringify(consoleStatus).slice(0, 120));
+    const drawTool = registeredTools.find((t) => t.name === 'qq_draw');
+    if (drawTool !== undefined) {
+      // 生图会把图发到参数指定的任意群/人，和 send 同级；console 来源默认不许。
+      // 这里靠「未启用生图」之前的那道来源闸，所以先断言它先被拦住（不看 imageGen 开关）。
+      const consoleDraw = await drawTool.execute({ prompt: '一只鲸鱼', target_id: '88888' }, {});
+      check('console 调 qq_draw：被来源闸拦下（不是只靠生图开关或目标校验）',
+        consoleDraw !== null && consoleDraw !== undefined && consoleDraw.ok === false
+        && String(consoleDraw.error).includes('allowConsole'), JSON.stringify(consoleDraw));
+    }
+  }
 
   console.log('\n6. 配置热更新（volatile 就地更新 + loader/volatile-update）');
   const VOLATILE_WRITE = Symbol.for('cosmokit.volatile.write');
@@ -1123,14 +1170,14 @@ try {
   console.log('\n错误：' + (error && error.stack ? error.stack : String(error)));
 } finally {
   await mock.close();
-  if (createdLink) {
+  if (createdLink === true) {
     // 只删链接本身：对 junction 用 rmSync(recursive) 会把目标目录删空。
     try { if (process.platform === 'win32') fs.rmdirSync(linkPath); else fs.unlinkSync(linkPath); } catch { /* ignore */ }
   }
 }
 
 const passed = results.filter(Boolean).length;
-console.log('\n' + passed + '/' + results.length + ' 项通过');
+console.log('\n' + passed + '/' + results.length + ' 项通过' + (skips > 0 ? '（另有 ' + skips + ' 项跳过：环境缺 @deepseek-ai/dsh-tools）' : ''));
 if (failures > 0) { console.log('插件自测失败'); process.exit(1); }
 console.log('插件自测通过');
 process.exit(0);
