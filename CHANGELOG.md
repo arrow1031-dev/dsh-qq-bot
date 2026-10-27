@@ -13,14 +13,21 @@
   `user_id` 直接决定身份，此时 `--listen 0.0.0.0:port` 会强制收回到 `127.0.0.1`。
   （适配器启动本身强制要 secret，所以可达的宽松配置就是 `--allow-unsigned`。）
 
+### 抓取层的类型归一（#13 #22 收尾）
+
+- `publicFetch` 统一返回类型：`binary: true` 给 Buffer，否则给字符串。之前只有真实请求路径做了转换，
+  `__setNetworkHooks` 注入的响应把 Buffer 原样透出，调用方得两套判断（测试就踩到了）。
+
 ### 测试
 
+- `test-security` 49 → **55 项**：补跳转链的回归（302 到 `169.254.169.254` 必须拒、公网跳转要跟随、
+  跳转次数有上限）、请求头显式 `accept-encoding: identity`、`maxBytes` 透传与 `truncated` 标记。
 - `test-plugin` 的抓取打桩改走 `http.js` 的 `__setNetworkHooks`：公共抓取已经改成
   node:http + 钉地址（#32），`globalThis.fetch` 打桩拦不住，多引擎搜索与图片反搜四条断言
   一直在跑真实网络（本机表现为"走了 DuckDuckGo 真实结果"或"解析不到地址"直接失败）。
 - 新增回归：25 条群闲聊之后 @ 仍然有回复（闲聊不占回合额度）；QQ 官方
   `--allow-unsigned` 时只绑回环。
-- 全套 **29/29 套件 / 1111 项通过**。
+- 全套 **29/29 套件 / 1117 项通过**。
 
 ## 0.12.4 —— 反向 WS 半开连接回收（验收新发现）
 
