@@ -1,4 +1,4 @@
-# 架构（0.12.2）
+# 架构（0.12.3）
 
 把 QQ 消息桥给 DSH Agent：五种聊天协议各有一个**独立子进程适配器**，插件内核只认一套 stdio 帧和一套统一消息段（OneBot 11 风格）。帧的权威定义只有一处：[lib/bridge/CONTRACT.md](lib/bridge/CONTRACT.md)。
 
@@ -86,7 +86,7 @@ DSH Agent（默认每个 QQ 会话一个）
 
 **扩展点**（其余文件基本不用动）：加协议 → 新写 `lib/adapters/<协议>.mjs` + 在 `lib/index.js` 的 `ADAPTER_FILES` 与 `lib/config.js` 加一项；加协议动作 → 改对应适配器的映射表；加 Agent 工具 → 只改 `lib/tools.js`。
 
-**测试与发布**：`test/run-all.mjs` 汇总 **28 个套件 / 1018 项**（5 个协议各一套，其余为插件/权限/设置/搜索/生图/历史/授权链路等），每个协议都自带零依赖假协议端（OneBot 11 的是 `test/mock-onebot.mjs`，其余在各自 `test-adapter-*.mjs` 内）；`npm test` 即跑全部。进 npm 包的只有 `lib/`、`cordis.patch.yml` 与根目录文档（见 `package.json` 的 `files`），`test/`、`examples/` 只在仓库里。
+**测试与发布**：`test/run-all.mjs` 汇总 **29 个套件 / 1087 项**（5 个协议各一套，其余为插件/权限/设置/搜索/生图/历史/授权链路等），每个协议都自带零依赖假协议端（OneBot 11 的是 `test/mock-onebot.mjs`，其余在各自 `test-adapter-*.mjs` 内）；`npm test` 即跑全部。进 npm 包的只有 `lib/`、`cordis.patch.yml` 与根目录文档（见 `package.json` 的 `files`），`test/`、`examples/` 只在仓库里。
 
 ## 3. 关键数据流
 

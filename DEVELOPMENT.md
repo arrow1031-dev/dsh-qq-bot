@@ -17,7 +17,7 @@ node test/run-all.mjs
 裸克隆即可跑全部测试：需要 DSH 运行时才能成立的少数断言（动态工具注册、`qqgroup` 工具路径）会自动跳过而不是判失败；
 想连那部分一起跑，把 `DSH_PROFILE_MODULES` 指向一个装了 DSH 运行时的 profile 的 `node_modules`。
 
-## 2. 测试（28 个套件 / 1018 项）
+## 2. 测试（29 个套件 / 1087 项）
 
 ```sh
 node test/run-all.mjs      # 一键全量
@@ -30,12 +30,12 @@ npm test                   # 同上
 | `test-adapter-reverse.mjs` | 12 | OneBot 11 反向适配器 |
 | `test-adapter-onebot12.mjs` | 30 | OneBot 12 适配器 |
 | `test-adapter-satori.mjs` | 70 | Satori 适配器 |
-| `test-adapter-milky.mjs` | 79 | Milky 适配器 |
-| `test-adapter-qq-official.mjs` | 87 | QQ 官方适配器 |
-| `test-plugin.mjs` | 107 | Host 半边：假 ctx + 真适配器 + 真 `lib/index.js`，含 Config 契约、热更新、9 个工具、适配器重启 |
+| `test-adapter-milky.mjs` | 83 | Milky 适配器（含 WebHook 默认准入与读体上限） |
+| `test-adapter-qq-official.mjs` | 91 | QQ 官方适配器（含回调重放防护） |
+| `test-plugin.mjs` | 98 | Host 半边：假 ctx + 真适配器 + 真 `lib/index.js`，含 Config 契约、热更新、9 个工具、适配器重启、默认准入 fail-closed 与入站限制（能解析到 `@deepseek-ai/dsh-tools` 时多跑工具注册段落） |
 | `test-client.mjs` | 84 | 客户端设置页：模拟模块加载器 + 最小 React 渲染 + 四档标签 + 只写密钥护栏 |
 | `test-admin.mjs` | 32 | 权限 · 群管理 · 访客工具闸 |
-| `test-http.mjs` | 17 | HTTP / 代理隧道 |
+| `test-http.mjs` | 23 | HTTP / 代理隧道 / IP 归一与公网判定 |
 | `test-config.mjs` | 24 | 配置合并、volatile 还原、废弃键清理 |
 | `test-websearch.mjs` | 5 | 多引擎搜索结果解析 |
 | `test-imagegen.mjs` | 16 | 生图重试 / 轮询 / 响应解析 |
@@ -48,12 +48,13 @@ npm test                   # 同上
 | `test-totp.mjs` | 44 | TOTP / HOTP（RFC 4226 + 6238 官方向量） |
 | `test-totp-cli.mjs` | 14 | 终端绑定（secret / otpauth URI / 二维码） |
 | `test-qr.mjs` | 18 | 二维码编码器（固定矩阵守回归） |
-| `test-flow-auth.mjs` | 27 | 授权状态机（授权 / 重放 / 锁定 / 过期） |
+| `test-flow-auth.mjs` | 35 | 授权状态机（授权 / 重放 / 锁定 / 过期 / 工具绑定） |
 | `test-flow-store.mjs` | 22 | 流程脚本存取（路径穿越 / 覆盖保护 / sha 校验） |
-| `test-flow-commands.mjs` | 42 | `/auth` 与 `/flow` 解析 |
+| `test-flow-commands.mjs` | 49 | `/auth` 与 `/flow` 解析（含不可见字符与控制符） |
 | `test-flow-gate.mjs` | 16 | 流程授权闸门 |
 | `test-flow-wiring.mjs` | 20 | 闸门接线：一次调用只吃一个授权 / 关着原样放行 |
 | `test-interim.mjs` | 14 | 中间发言：最后一条留给结论、锚点丢了不重播 |
+| `test-security.mjs` | 49 | 安全回归：帧 id 净化 / 越界复核 / 跨群重算 / 撤回绑群 / 出站公网判定与 F1 / 识图下载源码断言 |
 
 **手动联调**（假 OneBot 端口正好是 NapCat 默认值，不用真 QQ 号）：
 
@@ -65,7 +66,7 @@ node -e "fetch('http://127.0.0.1:3000/__inject',{method:'POST',headers:{'content
 node -e "fetch('http://127.0.0.1:3000/__sent').then(r=>r.json()).then(j=>console.log(JSON.stringify(j.messages,null,2)))"
 ```
 
-> **文档里的测试数必须自洽**：改测试就同步本表、README 的「28 套件 / 1018 项」与 `AI-DISCLOSURE.md` 的验证情况。
+> **文档里的测试数必须自洽**：改测试就同步本表、README 的「29 套件 / 1087 项」与 `AI-DISCLOSURE.md` 的验证情况。数字以裸克隆跑 `npm test` 的输出为准；能解析到 `@deepseek-ai/dsh-tools` 的环境里 `test-plugin` 会多跑工具注册段落，总数随之更多。
 
 <a id="完整配置参考"></a>
 ## 3. 完整配置参考
@@ -387,7 +388,7 @@ node -e "fetch('http://127.0.0.1:3000/__sent').then(r=>r.json()).then(j=>console
 | `lib/proactive.js` | 主动发言纯逻辑（时间窗、提示词、决策解析、频率闸、两段式） |
 | `lib/compat.js` | DSH 版本兼容自检（只维护两个常量） |
 | `cordis.patch.yml` | bundle 补丁：把插件插入 profile 组合树（`id` 固定，`name` 跟包名走） |
-| `test/` | 28 个测试套件 + `mock-onebot.mjs`（零依赖 OneBot 11 模拟器） |
+| `test/` | 29 个测试套件 + `mock-onebot.mjs`（零依赖 OneBot 11 模拟器） |
 | `examples/dynamic-package-host.js` | 动态 Cordis Package 版（不装包也能在当前进程里试） |
 
 ## 9. 设计说明（踩过的坑）
