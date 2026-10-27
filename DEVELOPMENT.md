@@ -17,7 +17,7 @@ node test/run-all.mjs
 裸克隆即可跑全部测试：需要 DSH 运行时才能成立的少数断言（动态工具注册、`qqgroup` 工具路径）会自动跳过而不是判失败；
 想连那部分一起跑，把 `DSH_PROFILE_MODULES` 指向一个装了 DSH 运行时的 profile 的 `node_modules`。
 
-## 2. 测试（29 个套件 / 1154 项）
+## 2. 测试（30 个套件 / 1172 项）
 
 ```sh
 node test/run-all.mjs      # 一键全量
@@ -55,6 +55,7 @@ npm test                   # 同上
 | `test-flow-wiring.mjs` | 20 | 闸门接线：一次调用只吃一个授权 / 关着原样放行 |
 | `test-interim.mjs` | 14 | 中间发言：最后一条留给结论、锚点丢了不重播 |
 | `test-security.mjs` | 55 | 安全回归：帧 id 净化 / 越界复核 / 跨群重算 / 撤回绑群 / 出站公网判定与 F1 / 识图下载源码断言 |
+| `test-guard-proxy.mjs` | 18 | 内网校验代理：CONNECT 与明文请求一律拒绝回环 / 元数据 / 私网 / IPv6 / 6to4 / localhost，拒绝后不崩、stop 后端口关闭 |
 
 **手动联调**（假 OneBot 端口正好是 NapCat 默认值，不用真 QQ 号）：
 
@@ -66,7 +67,7 @@ node -e "fetch('http://127.0.0.1:3000/__inject',{method:'POST',headers:{'content
 node -e "fetch('http://127.0.0.1:3000/__sent').then(r=>r.json()).then(j=>console.log(JSON.stringify(j.messages,null,2)))"
 ```
 
-> **文档里的测试数必须自洽**：改测试就同步本表、README 的「29 套件 / 1154 项」与顶部 `tests` 徽章（`tests-1154%20passing`）、`AI-DISCLOSURE.md` 的验证情况。数字以裸克隆跑 `npm test` 的输出为准；能解析到 `@deepseek-ai/dsh-tools` 的环境里 `test-plugin` 与 `test-admin` 会多跑工具注册段落，总数随之更多。跳过项按 `[SKIP]` 单列，不计入通过数；设 `DSH_TOOLS_DISABLE=1` 可以在这台机器上模拟裸克隆（否则 `test/dsh-tools-link.mjs` 会把链接建回来，永远看不到跳过路径——CI 就是这么红的）。
+> **文档里的测试数必须自洽**：改测试就同步本表、README 的「30 套件 / 1172 项」与顶部 `tests` 徽章（`tests-1172%20passing`）、`AI-DISCLOSURE.md` 的验证情况。数字以裸克隆跑 `npm test` 的输出为准；能解析到 `@deepseek-ai/dsh-tools` 的环境里 `test-plugin` 与 `test-admin` 会多跑工具注册段落，总数随之更多。跳过项按 `[SKIP]` 单列，不计入通过数；设 `DSH_TOOLS_DISABLE=1` 可以在这台机器上模拟裸克隆（否则 `test/dsh-tools-link.mjs` 会把链接建回来，永远看不到跳过路径——CI 就是这么红的）。
 
 <a id="完整配置参考"></a>
 ## 3. 完整配置参考
@@ -158,6 +159,8 @@ node -e "fetch('http://127.0.0.1:3000/__sent').then(r=>r.json()).then(j=>console
       defaultTimeoutMs: 30000   # 对应 moli 的 -t
       maxChars: 200000          # 单次输出上限（超出按头尾省略）
       insecureTls: true         # 跳过 TLS 证书校验（默认开）：关掉后自签名证书 / 网关 TLS 拦截 / CRL 取不到都会让渲染失败
+      guardProxy: true          # 内网防护：moli 全部流量（重定向 / 子资源 / 页面 JS）先过本地校验代理，内网 IP 一律 403
+      rateLimitPerMin: 5        # 每个会话每分钟最多渲染几次（0 = 不限；普通抓取不受限）
     flowAuth:
       enabled: false   # 流程授权总开关（子代理/队友/工作流需私聊动态码）
       totpSecret: ''   # base32；node lib/totp-cli.mjs enroll 生成后粘过来（不经 QQ）
@@ -388,6 +391,7 @@ node -e "fetch('http://127.0.0.1:3000/__sent').then(r=>r.json()).then(j=>console
 | `lib/totp-cli.mjs` | 终端绑定：secret / otpauth URI / 二维码 / 恢复码 |
 | `lib/qr.js` | 二维码编码器（字节模式、纠错 M、v1–v9），浏览器版同算法副本 |
 | `lib/flow-auth.js` | 流程授权状态机 + 闸门 |
+| `lib/guard-proxy.js` | 本地校验代理：moli 全部流量逐条过 `assertPublicHost`，内网 IP 直接 403（只监听 127.0.0.1） |
 | `lib/flow-store.js` | 流程脚本存取（名字白名单、sha256、路径穿越防护） |
 | `lib/flow-commands.js` | `/auth` `/flow` 解析、拦截判定、产物输入归一 |
 | `lib/interim.js` | 中间发言挑选（哪段现在发、哪段留结论） |
