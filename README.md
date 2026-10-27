@@ -3,7 +3,7 @@
 [![CI](https://github.com/arrow1031-dev/dsh-qq-bot/actions/workflows/ci.yml/badge.svg)](https://github.com/arrow1031-dev/dsh-qq-bot/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/%40sputnikzaychik%2Fdsh-qq-bot?label=npm)](https://www.npmjs.com/package/@sputnikzaychik/dsh-qq-bot)
 [![npm downloads](https://img.shields.io/npm/dm/%40sputnikzaychik%2Fdsh-qq-bot?label=%E4%B8%8B%E8%BD%BD)](https://www.npmjs.com/package/@sputnikzaychik/dsh-qq-bot)
-[![tests](https://img.shields.io/badge/tests-1204%20passing-brightgreen)](DEVELOPMENT.md)
+[![tests](https://img.shields.io/badge/tests-1218%20passing-brightgreen)](DEVELOPMENT.md)
 [![node](https://img.shields.io/badge/node-%E2%89%A522.6-339933)](https://nodejs.org/)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
@@ -27,7 +27,7 @@
 | 联网与媒体 | `qq_websearch` 多引擎搜索、`qq_webfetch` 抓网页（可走代理）、`qq_imgsearch` 图片反搜、`qq_draw` 生图直接发群 |
 | 看图 | 收到的图片用视觉模型识别后并入回答；群内近期图片由 AI 按需自取（不硬塞上下文） |
 | 主动发言（可选） | 到点看一眼群里聊什么，自己决定要不要接话；判断与发言可分用两个模型 |
-| 流程授权（可选） | 子代理 / 队友 / 工作流 / 第三方抓取（`moli_fetch`）被拦下时，私聊回一次 6 位动态码才放行 |
+| 流程授权（可选） | 子代理 / 队友 / 工作流 / 第三方抓取（`moli_fetch`）被拦下时，私聊回一次 6 位动态码才放行；改「哪些工具要码」的名单本身也要一次码（设置页「高级 → 闸门区」，填码解锁、保存即消费） |
 | 人格 | 每个 QQ 会话可套自定义人格，或指定专属 agent preset |
 
 ## 快速开始
@@ -218,7 +218,7 @@ dsh plugin --profile web remove @sputnikzaychik/dsh-qq-bot          # 卸载
 
 | 文档 | 内容 |
 | --- | --- |
-| [DEVELOPMENT.md](DEVELOPMENT.md) | 本地开发与测试（30 套件 / 1204 项）、完整配置参考、工具细节、文件清单、设计取舍、发布流程、部署备注 |
+| [DEVELOPMENT.md](DEVELOPMENT.md) | 本地开发与测试（31 套件 / 1218 项）、完整配置参考、工具细节、文件清单、设计取舍、发布流程、部署备注 |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | 分层图、模块职责、关键数据流、身份契约、已知边界 |
 | [CHANGELOG.md](CHANGELOG.md) | 0.1.0 → 0.12.6 的完整演进 |
 | [AI-DISCLOSURE.md](AI-DISCLOSURE.md) | AI 生成方式、验证到什么程度、**尚未验证清单**（用前务必读） |

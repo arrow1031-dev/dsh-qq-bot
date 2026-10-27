@@ -467,13 +467,14 @@ try {
   moliPluginRows = [{ entryId: 'dsh-moli', moduleName: 'dsh-moli', enabled: false, fiberPhase: 'active' }];
   moliEngine = { engineState: 'installed', engineVersion: 'moli 1.1.19' };
 
-  // 切到「高级」：0.12 起分两个二级标签（流程授权 / 会话与排错）
+  // 切到「高级」：三个二级标签（流程授权 / 闸门区 / 会话与排错）。闸门区单独一档，
+  // 里面是「哪些工具要动态码」+ 改名单用的动态码（填码解锁、保存即消费）。
   const advTree = clickTab('高级');
   const advSubTabs = collectButtons(advTree, [])
     .filter((b) => b.props.role === 'tab' && b.props['data-subtab'] !== undefined)
     .map((b) => childText(b));
-  check('高级页有两个二级标签（流程授权 / 会话与排错）',
-    JSON.stringify(advSubTabs) === JSON.stringify(['流程授权', '会话与排错']), JSON.stringify(advSubTabs));
+  check('高级页有三个二级标签（流程授权 / 闸门区 / 会话与排错）',
+    JSON.stringify(advSubTabs) === JSON.stringify(['流程授权', '闸门区', '会话与排错']), JSON.stringify(advSubTabs));
 
   const advFlowJoined = textsOf(advTree);
   // 密钥是 role(secret)，远程读会脱敏成空串：这时必须靠 isSecret 判断「配过没有」，
