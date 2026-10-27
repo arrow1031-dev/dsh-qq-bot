@@ -60,7 +60,7 @@ DSH Agent（默认每个 QQ 会话一个）
 | `lib/tools.js` | 9 个 Agent 工具：`qqbot` `qqconfig` `qqgroup` `qq_websearch` `qq_webfetch` `qq_imgsearch` `qq_history` `qq_draw` `qqauth` | `createTools` → `registerTools` | `index.js`（动态 import `@deepseek-ai/dsh-tools`） |
 | `lib/owner-settings.js` | 拥有者设置通道：白名单、确认码、限流、审计 | `createOwnerSettings` → `show` `propose` `apply` `cancel`，`SPECS` `checkCaller` | `tools.js`（qqconfig）、`index.js`（审计落盘） |
 | `lib/workspace.js` | QQ_msg 工作区根解析（Documents 解析，与 DSH 默认工作区同级） | `qqMsgRootSync` `sessionWorkdir` | `index.js`、`imgsearch.js` |
-| `lib/http.js` | 通用 HTTP + CONNECT 代理隧道 + 响应文本工具 | `multiEngineRequest` `fetchUrlViaProxy` `webSearchPost` | `websearch.js`、`imgsearch.js`、`index.js`（qq_webfetch） |
+| `lib/http.js` | 通用 HTTP + CONNECT 代理隧道 + 响应文本工具。**出站只允许公网**：地址先经 `canonicalHost`（WHATWG URL 归一）再判段，`publicFetch` 用 `node:http(s)` 直连并把 `pinnedLookup` 钉在已校验地址上（防 DNS rebinding） | `multiEngineRequest` `fetchUrlViaProxy` `webSearchPost` `publicFetch` `assertPublicHost` `canonicalHost` `resolvePublicAddresses` `pinnedLookup` | `websearch.js`、`imgsearch.js`、`moli.js`、`tools.js`（qq_draw）、`index.js`（qq_webfetch / 识图下载） |
 | `lib/websearch.js` | 联网搜索：DeepSeek 官方 web search + 多引擎组合 | `runWebSearch` | `index.js`（qq_websearch） |
 | `lib/imgsearch.js` | 图片反搜：TraceMoe / IQDB 等 + 图床上传 | `runImageSearch` `uploadToHost` | `index.js`（qq_imgsearch） |
 | `lib/moli.js` | Moli 无头浏览器渲染抓取 | `meFindMoli` `meMoliFetchText` | `index.js`（qq_webfetch 的 moli 分支） |

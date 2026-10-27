@@ -17,6 +17,17 @@
 - **识图下载走 `publicFetch`**（#15）：图片 URL 来自消息里的 CQ 码，以前直接 `fetch` + `arrayBuffer()` 整包读入，一条消息就能打内网或撑爆内存。
 - **`qq_draw` 的 `result.url` 同样走 `publicFetch`**（#21）：生图接口返回的 url 也是外部输入。
 - **Moli 渲染抓取入口校验**（#14）：先限 scheme、拒以 `-` 开头的 URL、再 `assertPublicHost`；参数前加 `--`；去掉硬编码的 `--insecure-disable-tls-host-verification`（要跳过证书校验得显式加，不默认）。
+
+### 地址判定：先按 URL 归一，再判，且钉死解析结果（#13 #15 #20 #21 #14 的残留绕过）
+
+验收复测发现上面「出站只允许公网」整条防线有一个**共用旁路**：判定拿到的字符串不是网络栈真正会去连的那一个。
+
+- **WHATWG URL 会改写地址写法**：`http://[::ffff:127.0.0.1]/` 的 `hostname` 是 `[::ffff:7f00:1]`（16 组写成十六进制），`http://0177.0.0.1/` 是 `127.0.0.1`（八进制），`http://2130706433/` 也是 `127.0.0.1`（整数写法）。旧 `isNonPublicIp` 只匹配「`::ffff:` 后面紧跟点分 IPv4」这一种形式，于是 `[::ffff:7f00:1]`、`[::ffff:a00:1]`、`[::ffff:c0a8:101]`、`[::ffff:a9fe:a9fe]` 全被判成公网——回环、10/8、192.168/16、云元数据用这一种写法就能重新打回去，`publicFetch` / `multiEngineRequest` / 识图下载 / `qq_draw` / Moli 五条路一起失效。
+- **现在只有一条事实来源**：新增 `canonicalHost`，所有地址先过 `new URL('http://' + host + '/')` 归一，再用 `node:net` 的 `isIP` 分类；`isNonPublicIp` 只认归一后的字面量（域名返回 true，交给 DNS 分支），IPv6 按 8 组 16 位整数判段，内嵌 IPv4 的四种形态（映射 `::ffff:0:0/96`、转换 `::ffff:0:0:0/96`、兼容 `::/96`、NAT64 `64:ff9b::/96`）取低 32 位按 IPv4 规则判。
+- **解析一次，连的就是解析到的那个地址**：`resolvePublicAddresses` 返回已校验列表，`publicFetch` 把它塞进自定义 `lookup`（`pinnedLookup`）。以前「先 `dns.lookup` 校验、再让 `fetch` 自己再解析一次」是标准 TOCTOU：第一次给公网、第二次给 `127.0.0.1` 就能穿透。
+- **`publicFetch` 改用 `node:http`/`node:https` 直连**（不再用全局 `fetch`）：要拿到 `lookup` 钩子只能这样；顺带把响应体改成边读边截（8 MB）、超时覆盖到读完、跳转仍是逐跳校验（最多 5 跳）。
+- **`webSearchPost` 直连分支也走 `publicFetch`**：以前对搜索端点用 `fetch` + `resp.json()`，对端塞 gzip 炸弹就整包解压进内存。
+
 ### 反向 WS：默认只监听回环 + 帧/缓冲上限（#19 #16）
 
 - **没配 `access_token` 时强制只监听 `127.0.0.1`**（`resolveListenAddress`）：反向端口上的帧能直接冒充任意 QQ 号——身份完全来自 `frame.user_id`。以前默认 `0.0.0.0:6199` + 空 token，等于「任何能连上端口的人 = 拥有者」。要公网监听必须先配 token。
@@ -32,7 +43,8 @@
 - **身份头清洗**：昵称/群名片进提示词之前去掉 `\r\n[]` 并限长 32 字。访客把群名片改成 `x)]` + 换行 + 伪造身份，就能在上下文头里多出一行身份（工具层仍按 `turnSpeaker` 鉴权，但会误导模型）。
 ### 测试
 
-- 新增 `test/test-security.mjs`（21 项）：id 净化、越界复核、跨群重算、私聊快照、撤回绑群。
+- 新增 `test/test-security.mjs`（**45 项**）：id 净化、越界复核、跨群重算、私聊快照、撤回绑群，加上出站公网判定与 F1 回归（`[::ffff:7f00:1]`、八进制/十六进制/短写/整数写法、`pinnedLookup` 只返回已校验地址）。
+- `test/test-http.mjs`（**23 项**）：补 `canonicalHost` 归一结果断言，锁住「判定必须建立在 URL 归一后的写法上」。
 - `test/mock-onebot.mjs` 的 `get_msg` 补 `group_id` 与 `retcode`，与真 NapCat 的返回对齐（之前假协议端不返回这两项，撤回校验测不出来）。
 - 全套 **29/29 套件通过**。
 ## 0.12.2 —— 修好「网页端加载失败」与「设置面板空白」
