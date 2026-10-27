@@ -49,6 +49,23 @@
 - 新增 `protocols.qqOfficial.selfId`（webhook 模式没有 READY 事件，适配器拿不到自己的 QQ 号，
   @ 判定与自发消息过滤都会失效），以 `--self-id` 传下去。
 
+### 设置页：Moli 引擎检测 + 参数复刻，访客不再直连 moli_fetch
+
+- `moli` 段收成一个开关 + 一张卡片，并补回**参数面**：`exePath` / `proxy` /
+  `defaultTimeoutMs` / `maxChars` / `insecureTls`，全部对齐 dsh-moli 1.1.20 的 Config。
+  引擎就绪后卡片上出现「高级设置」折叠区，改完保存即生效。
+- 检测口径从「插件装没装」改成「**引擎就绪没就绪**」：同时看插件清单与 dsh-moli 自己的设置
+  命名空间（`engineState` / `engineVersion`）。dsh-moli 只用来装引擎，装好之后启不启用它都
+  不影响本开关——引擎在就能用。
+- `qq_webfetch` 的 moli 分支按 dsh-moli 的同一套参数调引擎：`-t` 紧跟 `fetch`（放末尾会被
+  `--eval` 之类吞掉）、`--http-proxy`、`--insecure-disable-tls-host-verification`、URL 一律放在
+  `--` 之后（v1.1.20 的防 flag 注入修复）、取消兜底 = 引擎超时 + 30 秒、输出按 `maxChars` 头尾省略。
+- **访客白名单去掉 `moli_fetch`**：它是 dsh-moli 的原生工具，支持 `writeTo` 任意绝对路径写文件、
+  `eval` 页面内执行 JS、`cookieFile`/`profileDir` 读本机 cookie、`proxy`/`insecureTls` 逐次覆盖，
+  而且不校验内网地址——放进访客白名单等于把这些能力交给群里任何人。访客的渲染需求由
+  `qq_webfetch` 的 moli 分支承担：同样的引擎、同样的参数，但入口只有 `url` / `max_chars`。
+- 未装 / 未启用时的引导文案改了口径：dsh-moli 只是「装引擎的工具」，未装时直接给出仓库链接。
+
 ### 其它
 
 - 反向 WS 的分片上限只管片数不管字节：63 片 × 每片 8 MB ≈ 500 MB 才判超限。现在累计字节
@@ -78,7 +95,9 @@
 - 裸克隆 / CI 下 `test-plugin` 会直接崩（非 QQ 会话来源闸那段没守 `@deepseek-ai/dsh-tools` 缺失，`tool.execute` 打到 `undefined`）：补上守卫并记 `[SKIP]`，`test/dsh-tools-link.mjs` 支持 `DSH_TOOLS_DISABLE=1` 复现裸克隆。
 - `test-http` 23 → **30 项**（代理隧道：钉地址、跳转逐跳重算、体积上限、超时）。
 - `test-adapter-qq-official` 92 → **95 项**（AppSecret 与 BotSecret 分开时签名取 BotSecret）。
-- 全套 **29/29 套件 / 1142 项通过**。
+- `test-client` 87 → **107 项**：Moli 卡片断言（收成一张卡、引擎就绪时开关可点、dsh-moli 停用也不影响、
+  高级设置折叠区展开/收起五项参数、没装/引擎缺失时开关被禁用、没装时带仓库链接、已就绪时不带）。
+- 全套 **29/29 套件 / 1162 项通过**。
 
 ## 0.12.4 —— 反向 WS 半开连接回收（验收新发现）
 

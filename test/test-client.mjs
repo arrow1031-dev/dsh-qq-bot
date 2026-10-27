@@ -122,12 +122,25 @@ try {
     auth: { owners: ['66666'], superAdmins: ['22222'], ownerPreset: '', guestPreset: '', grantTtlMinutes: 60, grantMaxTtlMinutes: 1440, guestDshTools: false, guestToolAllow: ['qqbot', 'qqgroup'] },
     admin: { enabled: true, manageGroups: [], requireGroupAdmin: true, prefix: '/', dryRun: false, allowConsole: false },
   };
+  // dsh-moli 引擎检测的假数据：插件清单 + 它自己命名空间里的 engineState/engineVersion。
+  // 默认「插件装了但停用、引擎就绪」——正好验证「只借它装引擎」这条设计。
+  let moliPluginRows = [{ entryId: 'dsh-moli', moduleName: 'dsh-moli', enabled: false, fiberPhase: 'active' }];
+  let moliEngine = { engineState: 'installed', engineVersion: 'moli 1.1.19' };
+  const fakePluginManager = { async listPlugins() { return { ok: true, value: moliPluginRows }; } };
   const mutateCalls = [];
   const fakeSettingsApi = {
-    async describe() { return { ok: true, value: { writable: true, hasDocument: true, namespaces: [{ ns: 'dsh-qq-bot', value: SETTINGS_VALUE, revision: 7, secrets: [{ path: ['onebot', 'accessToken'], set: true }, { path: ['flowAuth', 'totpSecret'], set: true }] }] } }; },
+    async describe() {
+      const namespaces = [{ ns: 'dsh-qq-bot', value: SETTINGS_VALUE, revision: 7, secrets: [{ path: ['onebot', 'accessToken'], set: true }, { path: ['flowAuth', 'totpSecret'], set: true }] }];
+      if (moliEngine !== null) namespaces.push({ ns: 'dsh-moli', value: moliEngine, revision: 1, secrets: [] });
+      return { ok: true, value: { writable: true, hasDocument: true, namespaces } };
+    },
     async mutate(ns, ops, revision) { mutateCalls.push({ ns, ops, revision }); return { ok: true, value: { ns, revision: 8 } }; },
   };
-  slotsCtx.get = (name) => (name === 'remote.settings' ? fakeSettingsApi : undefined);
+  slotsCtx.get = (name) => {
+    if (name === 'remote.settings') return fakeSettingsApi;
+    if (name === 'remote.pluginManager') return fakePluginManager;
+    return undefined;
+  };
 
   plugin.apply(slotsCtx);
   check('注入到 plugins.bundle.config（插件详情页配置区）', injectName === 'plugins.bundle.config', String(injectName));
@@ -327,11 +340,56 @@ try {
   };
   const clickSubTab = (label) => clickSubTabIn(capTree, label);
 
-  const capRetrievalJoined = textsOf(clickSubTab('搜索与抓取'));
+  const capRetrievalTree = clickSubTab('搜索与抓取');
+  const capRetrievalJoined = textsOf(capRetrievalTree);
   check('搜索与抓取页含联网搜索与图片反搜',
     capRetrievalJoined.includes('联网搜索 HTTP 代理') && capRetrievalJoined.includes('图片反搜'), capRetrievalJoined.slice(0, 200));
-  check('搜索与抓取页含 moli 网页抓取字段',
-    capRetrievalJoined.includes('dsh-moli 接管网页抓取'), capRetrievalJoined.slice(0, 200));
+
+  // 找带某个 data-* 标记的元素（卡片里的开关 / 检测按钮）。
+  const findDataSet = (node, key) => {
+    if (node === null || node === undefined || typeof node !== 'object') return null;
+    if (Array.isArray(node)) { for (const item of node) { const hit = findDataSet(item, key); if (hit) return hit; } return null; }
+    if (node.props && node.props[key] !== undefined) return node;
+    for (const child of node.children || []) { const hit = findDataSet(child, key); if (hit) return hit; }
+    return null;
+  };
+
+  check('搜索与抓取页把 moli 收成一张卡片',
+    capRetrievalJoined.includes('Moli 渲染抓取') && capRetrievalJoined.includes('dsh-moli 装引擎 · qq_webfetch 渲染抓取')
+    && !capRetrievalJoined.includes('Moli HTTP 代理') && !capRetrievalJoined.includes('moli 可执行文件路径'),
+    capRetrievalJoined.slice(0, 300));
+  check('卡片显示引擎就绪（带引擎版本）',
+    capRetrievalJoined.includes('引擎就绪') && capRetrievalJoined.includes('moli 1.1.19'), capRetrievalJoined.slice(0, 320));
+  check('dsh-moli 停用了也不影响（只借它装引擎）',
+    capRetrievalJoined.includes('启不启用它都无所谓') || capRetrievalJoined.includes('启不启用'), capRetrievalJoined.slice(0, 420));
+  const moliToggleInstalled = findDataSet(capRetrievalTree, 'data-moli-toggle');
+  check('引擎就绪时 moli 开关可点（未禁用）',
+    moliToggleInstalled !== null && moliToggleInstalled.props.disabled !== true,
+    JSON.stringify(moliToggleInstalled && moliToggleInstalled.props));
+  const moliProbeBtn = findDataSet(capRetrievalTree, 'data-moli-probe');
+  check('卡片带「检测」按钮', moliProbeBtn !== null && childText(moliProbeBtn) === '检测', String(moliProbeBtn && childText(moliProbeBtn)));
+
+  // 启用状态下的「高级设置」折叠区：默认收起，点开才出现 moli 的参数
+  const moliAdvBtn = findDataSet(capRetrievalTree, 'data-moli-advanced');
+  check('引擎就绪时卡片有「高级设置」折叠按钮',
+    moliAdvBtn !== null && childText(moliAdvBtn) === '高级设置 ▸', String(moliAdvBtn && childText(moliAdvBtn)));
+  check('折叠区默认收起（不渲染参数项）', !capRetrievalJoined.includes('渲染超时（毫秒）'), capRetrievalJoined.slice(0, 300));
+  moliAdvBtn.props.onClick();
+  reactRuntime.__beginRender();
+  const capAdvanced = registered.component(props);
+  const advancedJoined = textsOf(capAdvanced);
+  check('展开后复刻 dsh-moli 1.1.20 的五项参数',
+    advancedJoined.includes('moli 可执行文件路径') && advancedJoined.includes('渲染抓取代理')
+    && advancedJoined.includes('渲染超时（毫秒）') && advancedJoined.includes('单次输出上限（字符）')
+    && advancedJoined.includes('跳过 TLS 证书校验'), advancedJoined.slice(0, 600));
+  const moliAdvBtnOpen = findDataSet(capAdvanced, 'data-moli-advanced');
+  check('展开后按钮变成「高级设置 ▾」',
+    moliAdvBtnOpen !== null && childText(moliAdvBtnOpen) === '高级设置 ▾', String(moliAdvBtnOpen && childText(moliAdvBtnOpen)));
+  moliAdvBtnOpen.props.onClick();
+  reactRuntime.__beginRender();
+  check('再点一次收起', !textsOf(registered.component(props)).includes('渲染超时（毫秒）'));
+  reactRuntime.__beginRender();
+  const capRetrievalTree2 = registered.component(props);
   check('搜索与抓取页不显示生图与视觉字段',
     !capRetrievalJoined.includes('生图（qq_draw）') && !capRetrievalJoined.includes('图片视觉'), capRetrievalJoined.slice(0, 160));
 
@@ -356,6 +414,57 @@ try {
     && !capDialogueJoined.includes('识图往回找几条消息'), capDialogueJoined.slice(0, 160));
   check('切二级标签后底部保存/重新读取仍常驻',
     findByTextEarly(clickSubTab('搜索与抓取'), '保存') !== null);
+
+  // ---- 卡片交互：没有引擎时开关强制不可启用（点「检测」刷新）----
+  moliPluginRows = [];
+  moliEngine = null;
+  const capBeforeProbe = clickSubTab('搜索与抓取');
+  const probeBtn2 = findDataSet(capBeforeProbe, 'data-moli-probe');
+  check('检测按钮可点（没装时也能刷新状态）', probeBtn2 !== null && probeBtn2.props.disabled !== true);
+  probeBtn2.props.onClick();
+  reactRuntime.__beginRender();
+  await sleep(40);
+  const capMissing = registered.component(props);
+  const missingJoined = textsOf(capMissing);
+  check('重新检测后显示「未装 dsh-moli」', missingJoined.includes('未装 dsh-moli'), missingJoined.slice(0, 240));
+  const moliToggleMissing = findDataSet(capMissing, 'data-moli-toggle');
+  check('没装时 moli 开关被禁用（不可启用）',
+    moliToggleMissing !== null && moliToggleMissing.props.disabled === true,
+    JSON.stringify(moliToggleMissing && moliToggleMissing.props));
+  check('没装时开关显示为关闭',
+    moliToggleMissing !== null && moliToggleMissing.props.checked === false,
+    JSON.stringify(moliToggleMissing && moliToggleMissing.props));
+  check('引导文本说明 dsh-moli 只用来装引擎', missingJoined.includes('它只是用来装 Moli 引擎的'), missingJoined.slice(0, 400));
+  const moliRepoLink = findDataSet(capMissing, 'data-moli-repo');
+  check('没装时给出 dsh-moli 仓库链接',
+    moliRepoLink !== null && moliRepoLink.type === 'a'
+    && moliRepoLink.props.href === 'https://github.com/27painter/dsh-moli'
+    && moliRepoLink.props.target === '_blank' && moliRepoLink.props.rel === 'noopener noreferrer',
+    JSON.stringify(moliRepoLink && moliRepoLink.props));
+  check('链接文案指向 dsh-moli 仓库',
+    moliRepoLink !== null && childText(moliRepoLink) === '去 GitHub 看 dsh-moli →',
+    String(moliRepoLink && childText(moliRepoLink)));
+  check('引擎就绪时不显示安装链接', findDataSet(capRetrievalTree, 'data-moli-repo') === null);
+  check('没装时不给「高级设置」入口（先解决引擎）', findDataSet(capMissing, 'data-moli-advanced') === null);
+
+  // ---- 插件在、引擎缺失：同样不可启用 ----
+  moliPluginRows = [{ entryId: 'dsh-moli', moduleName: 'dsh-moli', enabled: true, fiberPhase: 'active' }];
+  moliEngine = { engineState: 'missing', engineVersion: '' };
+  const capEngineMissing = clickSubTab('搜索与抓取');
+  findDataSet(capEngineMissing, 'data-moli-probe').props.onClick();
+  reactRuntime.__beginRender();
+  await sleep(40);
+  const capEngineTree = registered.component(props);
+  const engineJoined = textsOf(capEngineTree);
+  check('插件在但引擎缺失时显示「引擎缺失」', engineJoined.includes('引擎缺失'), engineJoined.slice(0, 300));
+  const toggleEngineMissing = findDataSet(capEngineTree, 'data-moli-toggle');
+  check('引擎缺失时开关不可启用',
+    toggleEngineMissing !== null && toggleEngineMissing.props.disabled === true,
+    JSON.stringify(toggleEngineMissing && toggleEngineMissing.props));
+
+  // 复原，后面的「高级」页测试继续用引擎就绪态
+  moliPluginRows = [{ entryId: 'dsh-moli', moduleName: 'dsh-moli', enabled: false, fiberPhase: 'active' }];
+  moliEngine = { engineState: 'installed', engineVersion: 'moli 1.1.19' };
 
   // 切到「高级」：0.12 起分两个二级标签（流程授权 / 会话与排错）
   const advTree = clickTab('高级');

@@ -17,7 +17,7 @@ node test/run-all.mjs
 裸克隆即可跑全部测试：需要 DSH 运行时才能成立的少数断言（动态工具注册、`qqgroup` 工具路径）会自动跳过而不是判失败；
 想连那部分一起跑，把 `DSH_PROFILE_MODULES` 指向一个装了 DSH 运行时的 profile 的 `node_modules`。
 
-## 2. 测试（29 个套件 / 1142 项）
+## 2. 测试（29 个套件 / 1162 项）
 
 ```sh
 node test/run-all.mjs      # 一键全量
@@ -33,7 +33,7 @@ npm test                   # 同上
 | `test-adapter-milky.mjs` | 83 | Milky 适配器（含 WebHook 默认准入与读体上限） |
 | `test-adapter-qq-official.mjs` | 95 | QQ 官方适配器（含回调重放防护） |
 | `test-plugin.mjs` | 120 | Host 半边：假 ctx + 真适配器 + 真 `lib/index.js`，含 Config 契约、热更新、9 个工具、适配器重启、默认准入 fail-closed 与入站限制（120 项含工具注册段落；解析不到 `@deepseek-ai/dsh-tools` 的裸克隆里为 94 项 + 6 项 `[SKIP]`） |
-| `test-client.mjs` | 87 | 客户端设置页：模拟模块加载器 + 最小 React 渲染 + 四档标签 + 只写密钥护栏 |
+| `test-client.mjs` | 107 | 客户端设置页：模拟模块加载器 + 最小 React 渲染 + 四档标签 + 只写密钥护栏 |
 | `test-admin.mjs` | 38 | 权限 · 群管理 · 访客工具闸 |
 | `test-http.mjs` | 30 | HTTP / 代理隧道 / IP 归一与公网判定 |
 | `test-config.mjs` | 24 | 配置合并、volatile 还原、废弃键清理 |
@@ -66,7 +66,7 @@ node -e "fetch('http://127.0.0.1:3000/__inject',{method:'POST',headers:{'content
 node -e "fetch('http://127.0.0.1:3000/__sent').then(r=>r.json()).then(j=>console.log(JSON.stringify(j.messages,null,2)))"
 ```
 
-> **文档里的测试数必须自洽**：改测试就同步本表、README 的「29 套件 / 1142 项」与顶部 `tests` 徽章（`tests-1142%20passing`）、`AI-DISCLOSURE.md` 的验证情况。数字以裸克隆跑 `npm test` 的输出为准；能解析到 `@deepseek-ai/dsh-tools` 的环境里 `test-plugin` 与 `test-admin` 会多跑工具注册段落，总数随之更多。跳过项按 `[SKIP]` 单列，不计入通过数；设 `DSH_TOOLS_DISABLE=1` 可以在这台机器上模拟裸克隆（否则 `test/dsh-tools-link.mjs` 会把链接建回来，永远看不到跳过路径——CI 就是这么红的）。
+> **文档里的测试数必须自洽**：改测试就同步本表、README 的「29 套件 / 1162 项」与顶部 `tests` 徽章（`tests-1162%20passing`）、`AI-DISCLOSURE.md` 的验证情况。数字以裸克隆跑 `npm test` 的输出为准；能解析到 `@deepseek-ai/dsh-tools` 的环境里 `test-plugin` 与 `test-admin` 会多跑工具注册段落，总数随之更多。跳过项按 `[SKIP]` 单列，不计入通过数；设 `DSH_TOOLS_DISABLE=1` 可以在这台机器上模拟裸克隆（否则 `test/dsh-tools-link.mjs` 会把链接建回来，永远看不到跳过路径——CI 就是这么红的）。
 
 <a id="完整配置参考"></a>
 ## 3. 完整配置参考
@@ -139,7 +139,7 @@ node -e "fetch('http://127.0.0.1:3000/__sent').then(r=>r.json()).then(j=>console
       guestPreset: ''   # 非拥有者用的 preset（仅人格分离，不是安全边界）
       grantTtlMinutes: 60
       grantMaxTtlMinutes: 1440
-      guestToolAllow: ["qqgroup", "qq_websearch", "qq_webfetch", "qq_imgsearch", "qq_history", "moli_fetch"]   # 访客仍可用的工具白名单（qqbot / qqconfig / qq_draw 只给拥有者）
+      guestToolAllow: ["qqgroup", "qq_websearch", "qq_webfetch", "qq_imgsearch", "qq_history"]   # 访客仍可用的工具白名单（qqbot / qqconfig / qq_draw 只给拥有者；不放 moli_fetch）
       guestDshTools: false   # 是否允许访客用 DSH 内部工具（默认否）
       ownerSettings: true
       ownerSettingsMaxPerHour: 6
@@ -152,9 +152,12 @@ node -e "fetch('http://127.0.0.1:3000/__sent').then(r=>r.json()).then(j=>console
       dryRun: false   # true = 只回复将执行什么
       allowConsole: false   # 允许 Web UI 会话直接调用管理工具
     moli:
-      enabled: false   # qq_webfetch 改用 Moli 无头浏览器渲染（需已装 Moli 引擎）
-      proxy: ''
-      exePath: ''
+      enabled: false   # qq_webfetch 改用 Moli 引擎渲染；需引擎就绪（设置页卡片检测，dsh-moli 只负责装引擎）
+      exePath: ''      # 留空 = 自动探测 ~/.local/bin/moli 与 PATH
+      proxy: ''        # 留空 = 透传 webSearch.proxy
+      defaultTimeoutMs: 30000   # 对应 moli 的 -t
+      maxChars: 200000          # 单次输出上限（超出按头尾省略）
+      insecureTls: true         # 跳过 TLS 证书校验（代理网络下 CRL 不可达）
     flowAuth:
       enabled: false   # 流程授权总开关（子代理/队友/工作流需私聊动态码）
       totpSecret: ''   # base32；node lib/totp-cli.mjs enroll 生成后粘过来（不经 QQ）
