@@ -71,6 +71,7 @@ DSH Agent（默认每个 QQ 会话一个）
 | `lib/totp-cli.mjs` | 终端绑定：打印 base32 secret / otpauth URI / 终端二维码 / 恢复码（密钥不经 QQ） | —（命令行入口） | 运维手动执行 |
 | `lib/qr.js` | 自研二维码编码器（字节模式、纠错等级 M、版本 1..9），零依赖 | `encode` `chooseVersion` `toTerminal` `MAX_VERSION` | `totp-cli.mjs`、`lib/client.js`（浏览器版同算法副本） |
 | `lib/flow-auth.js` | 授权状态机 + 闸门：申请 / 验码 / grant / 一次性消费 / 连错锁定 / 审计 | `createFlowAuth` `createFlowGate` | `index.js`、`session.js` |
+| `lib/gate-guard.js` | 闸门区名单改动的判定：填码解锁、保存即消费；动态码开着时名单改动必须带一次有效码 | `decideGateEdit` `sameToolList` | `index.js` |
 | `lib/flow-store.js` | 流程脚本存取：名字白名单、sha256、路径穿越与覆盖防护 | `createFlowStore` `isValidFlowName` `sha256` | `index.js`（/flow 指令） |
 | `lib/flow-commands.js` | `/auth` `/flow` 文本解析、拦截判定、打包输入归一化、帮助文案 | `parseAuthCommand` `parseFlowCommand` `flowInterceptKind` `artifactInputLines` `FLOW_HELP` | `index.js`、`session.js` |
 | `lib/compat.js` | DSH 版本兼容自检（范围只维护两个常量） | `SUPPORT_FLOOR` `SUPPORT_CEILING` `compatibilityInfo` | `index.js` |
