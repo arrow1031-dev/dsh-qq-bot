@@ -980,6 +980,38 @@ try {
   for (const handler of volatileUpdateHandlers) handler([['auth', 'owners']]);
   await sleep(300);
 
+  console.log('\n6c. 入站限制（#22）：每人每分钟条数 + 单条长度');
+  liveConfig.limits.perMinute[VOLATILE_WRITE](1);
+  liveConfig.limits.maxChars[VOLATILE_WRITE](100);
+  for (const handler of volatileUpdateHandlers) handler([['limits', 'perMinute'], ['limits', 'maxChars']]);
+  await sleep(200);
+  const limitedUser = 31337;
+  const longText = '长'.repeat(300);
+  const longBefore = mock.sent.length;
+  await fetch(mock.httpUrl + '/__inject', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ message_type: 'private', user_id: limitedUser, nickname: '路人甲',
+      message: [{ type: 'text', data: { text: longText } }] }),
+  });
+  const longOut = await waitFor(() => (mock.sent.length > longBefore ? mock.sent.slice(longBefore) : null), 15000, '超长消息回复');
+  const longReply = String(textOf(longOut[0]));
+  check('超长正文进 Agent 前被截断（回复里能看到截断标记）', longReply.includes('已截断'), JSON.stringify(longReply.slice(0, 160)));
+  check('截断保留原文长度说明', longReply.includes('原文 300 字'), JSON.stringify(longReply.slice(0, 200)));
+  const rateBefore = mock.sent.length;
+  await fetch(mock.httpUrl + '/__inject', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ message_type: 'private', user_id: limitedUser, nickname: '路人甲',
+      message: [{ type: 'text', data: { text: '第二条' } }] }),
+  });
+  const rateOut = await waitFor(() => (mock.sent.length > rateBefore ? mock.sent.slice(rateBefore) : null), 15000, '限流提示');
+  const rateReply = String(textOf(rateOut[0]));
+  check('同一分钟第二条被限流并回提示', rateReply.includes('发得太快'), JSON.stringify(rateReply.slice(0, 160)));
+  check('限流的那条没有进 Agent（没有 REPLY: 回显）', !rateReply.includes('REPLY:'), JSON.stringify(rateReply.slice(0, 160)));
+  liveConfig.limits.perMinute[VOLATILE_WRITE](20);
+  liveConfig.limits.maxChars[VOLATILE_WRITE](4000);
+  for (const handler of volatileUpdateHandlers) handler([['limits', 'perMinute'], ['limits', 'maxChars']]);
+  await sleep(200);
+
   console.log('\n7. 废弃配置清理（升级删字段后残留在 patch 里的旧键）');
   const staleOverride = { proactive: { enabled: true, judgeProvider: 'uymu', judgeModel: 'judge-m' }, onebot: { wsUrl: 'ws://x' }, agentPreset: 'standard' };
   let editedConfig = null;
