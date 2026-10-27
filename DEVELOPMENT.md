@@ -17,7 +17,7 @@ node test/run-all.mjs
 裸克隆即可跑全部测试：需要 DSH 运行时才能成立的少数断言（动态工具注册、`qqgroup` 工具路径）会自动跳过而不是判失败；
 想连那部分一起跑，把 `DSH_PROFILE_MODULES` 指向一个装了 DSH 运行时的 profile 的 `node_modules`。
 
-## 2. 测试（30 个套件 / 1172 项）
+## 2. 测试（30 个套件 / 1192 项）
 
 ```sh
 node test/run-all.mjs      # 一键全量
@@ -41,7 +41,7 @@ npm test                   # 同上
 | `test-imagegen.mjs` | 16 | 生图重试 / 轮询 / 响应解析 |
 | `test-session-id.mjs` | 5 | 会话 id 回退 |
 | `test-compat.mjs` | 14 | 运行时兼容自检 |
-| `test-history.mjs` | 23 | 聊天记录鉴权与定向 |
+| `test-history.mjs` | 20 | 聊天记录鉴权与定向 |
 | `test-proactive.mjs` | 84 | 主动发言纯逻辑（时间窗、判据、去重、两段式） |
 | `test-proactive-round.mjs` | 35 | 主动发言回合端到端（不动定时器） |
 | `test-owner-settings.mjs` | 58 | 拥有者设置通道（白名单 / 确认码 / 限流 / 审计） |
@@ -55,7 +55,7 @@ npm test                   # 同上
 | `test-flow-wiring.mjs` | 20 | 闸门接线：一次调用只吃一个授权 / 关着原样放行 |
 | `test-interim.mjs` | 14 | 中间发言：最后一条留给结论、锚点丢了不重播 |
 | `test-security.mjs` | 55 | 安全回归：帧 id 净化 / 越界复核 / 跨群重算 / 撤回绑群 / 出站公网判定与 F1 / 识图下载源码断言 |
-| `test-guard-proxy.mjs` | 18 | 内网校验代理：CONNECT 与明文请求一律拒绝回环 / 元数据 / 私网 / IPv6 / 6to4 / localhost，拒绝后不崩、stop 后端口关闭 |
+| `test-guard-proxy.mjs` | 38 | 内网校验代理：CONNECT 与明文请求拒绝回环 / 元数据 / 私网 / IPv6 / 6to4 / Teredo / localhost；用「本地监听器 accept 计数 = 0」证明真的没有连过去（把判定改成一律放行必然变红），另覆盖上游代理链路与 403/502 语义分离、CONNECT 目标归一（尾点 / userinfo / 多冒号）、并发 start 去重、socks5 上游告警、拒绝后不崩、stop 后端口关闭 |
 
 **手动联调**（假 OneBot 端口正好是 NapCat 默认值，不用真 QQ 号）：
 
@@ -67,7 +67,7 @@ node -e "fetch('http://127.0.0.1:3000/__inject',{method:'POST',headers:{'content
 node -e "fetch('http://127.0.0.1:3000/__sent').then(r=>r.json()).then(j=>console.log(JSON.stringify(j.messages,null,2)))"
 ```
 
-> **文档里的测试数必须自洽**：改测试就同步本表、README 的「30 套件 / 1172 项」与顶部 `tests` 徽章（`tests-1172%20passing`）、`AI-DISCLOSURE.md` 的验证情况。数字以裸克隆跑 `npm test` 的输出为准；能解析到 `@deepseek-ai/dsh-tools` 的环境里 `test-plugin` 与 `test-admin` 会多跑工具注册段落，总数随之更多。跳过项按 `[SKIP]` 单列，不计入通过数；设 `DSH_TOOLS_DISABLE=1` 可以在这台机器上模拟裸克隆（否则 `test/dsh-tools-link.mjs` 会把链接建回来，永远看不到跳过路径——CI 就是这么红的）。
+> **文档里的测试数必须自洽**：改测试就同步本表、README 的「30 套件 / 1192 项」与顶部 `tests` 徽章（`tests-1192%20passing`）、`AI-DISCLOSURE.md` 的验证情况。数字以裸克隆跑 `npm test` 的输出为准；能解析到 `@deepseek-ai/dsh-tools` 的环境里 `test-plugin` 与 `test-admin` 会多跑工具注册段落，总数随之更多。跳过项按 `[SKIP]` 单列，不计入通过数；设 `DSH_TOOLS_DISABLE=1` 可以在这台机器上模拟裸克隆（否则 `test/dsh-tools-link.mjs` 会把链接建回来，永远看不到跳过路径——CI 就是这么红的）。
 
 <a id="完整配置参考"></a>
 ## 3. 完整配置参考
@@ -159,8 +159,11 @@ node -e "fetch('http://127.0.0.1:3000/__sent').then(r=>r.json()).then(j=>console
       defaultTimeoutMs: 30000   # 对应 moli 的 -t
       maxChars: 200000          # 单次输出上限（超出按头尾省略）
       insecureTls: true         # 跳过 TLS 证书校验（默认开）：关掉后自签名证书 / 网关 TLS 拦截 / CRL 取不到都会让渲染失败
-      guardProxy: true          # 内网防护：moli 全部流量（重定向 / 子资源 / 页面 JS）先过本地校验代理，内网 IP 一律 403
+      guardProxy: true          # 内网防护：moli 全部流量（重定向 / 子资源 / 页面 JS）先过本地校验代理；确定是内网才拒（403），
+                                # 本机解析不了的域名交给上游代理解析，连接类失败回 502
+      allowGuest: true          # 允许访客（群聊 / 别人的私聊）触发渲染；关掉后只有拥有者私聊可用，访客退回普通抓取
       rateLimitPerMin: 5        # 每个会话每分钟最多渲染几次（0 = 不限；普通抓取不受限）
+      maxConcurrentRenders: 2   # 全局同时最多几个渲染在跑（跨会话，0 = 不限；超出的直接返回忙，不排队）
     flowAuth:
       enabled: false   # 流程授权总开关（子代理/队友/工作流需私聊动态码）
       totpSecret: ''   # base32；node lib/totp-cli.mjs enroll 生成后粘过来（不经 QQ）
@@ -270,7 +273,7 @@ node -e "fetch('http://127.0.0.1:3000/__sent').then(r=>r.json()).then(j=>console
 
 ### qq_webfetch
 
-`{url, max_chars?}` → 抓公网网页原文；抓取前校验目标为公网 IP，内网 / 回环 / 私有地址一律拒绝（防经代理扫内网）。`moli.enabled` 时改用无头浏览器渲染（可抓 SPA），未检测到引擎时返回 `moliUnavailable` 并回退普通抓取。
+`{url, max_chars?}` → 抓公网网页原文；抓取前校验目标为公网 IP，内网 / 回环 / 私有地址一律拒绝（防经代理扫内网）。`moli.enabled` 时改用无头浏览器渲染（可抓 SPA），未检测到引擎时返回 `moliUnavailable` 明确报错，**不回退**普通抓取（要普通抓取请自己再调一次）；渲染失败会区分「被内网防护拦下 / 上游代理不可达 / 目标 4xx-5xx / 没拿到内容」四种文案。
 
 ### qq_imgsearch
 
@@ -386,12 +389,12 @@ node -e "fetch('http://127.0.0.1:3000/__sent').then(r=>r.json()).then(j=>console
 | `lib/websearch.js` | Tavily / DuckDuckGo / Yandex / Bing / Wikipedia 组合搜索 |
 | `lib/imgsearch.js` | 图床 + TraceMoe / IQDB / SauceNAO / Soutubot 等反搜 |
 | `lib/imagegen.js` | 生图（`/images/generations` + 重试 + 任务轮询） |
-| `lib/moli.js` | Moli 渲染抓取探测（可选） |
+| `lib/moli.js` | Moli 引擎封装：探测可执行文件、拼 argv（含 `--fail-with-body`）、spawn 与超时、头尾截断 |
 | `lib/totp.js` | 零依赖 TOTP / HOTP / base32 / 恢复码 |
 | `lib/totp-cli.mjs` | 终端绑定：secret / otpauth URI / 二维码 / 恢复码 |
 | `lib/qr.js` | 二维码编码器（字节模式、纠错 M、v1–v9），浏览器版同算法副本 |
 | `lib/flow-auth.js` | 流程授权状态机 + 闸门 |
-| `lib/guard-proxy.js` | 本地校验代理：moli 全部流量逐条过 `assertPublicHost`，内网 IP 直接 403（只监听 127.0.0.1） |
+| `lib/guard-proxy.js` | 本地校验代理：moli 全部流量逐条过 `guardTargetAllowed`（确定是内网才拒，本机解析不了就交给上游），策略拒绝回 403、连接类失败回 502（只监听 127.0.0.1） |
 | `lib/flow-store.js` | 流程脚本存取（名字白名单、sha256、路径穿越防护） |
 | `lib/flow-commands.js` | `/auth` `/flow` 解析、拦截判定、产物输入归一 |
 | `lib/interim.js` | 中间发言挑选（哪段现在发、哪段留结论） |
@@ -399,7 +402,7 @@ node -e "fetch('http://127.0.0.1:3000/__sent').then(r=>r.json()).then(j=>console
 | `lib/proactive.js` | 主动发言纯逻辑（时间窗、提示词、决策解析、频率闸、两段式） |
 | `lib/compat.js` | DSH 版本兼容自检（只维护两个常量） |
 | `cordis.patch.yml` | bundle 补丁：把插件插入 profile 组合树（`id` 固定，`name` 跟包名走） |
-| `test/` | 29 个测试套件 + `mock-onebot.mjs`（零依赖 OneBot 11 模拟器）+ `dsh-tools-link.mjs`（给宿主编译期服务建临时链接） |
+| `test/` | 30 个测试套件 + `mock-onebot.mjs`（零依赖 OneBot 11 模拟器）+ `dsh-tools-link.mjs`（给宿主编译期服务建临时链接） |
 | `examples/dynamic-package-host.js` | 动态 Cordis Package 版（不装包也能在当前进程里试） |
 
 ## 9. 设计说明（踩过的坑）
