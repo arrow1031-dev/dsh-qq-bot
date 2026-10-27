@@ -1,6 +1,6 @@
 // qq_history 的会话定向 / 鉴权 / 请求构造 / 归一化。
 import {
-  conversationOf, currentConversationOf, resolveHistoryTarget,
+  currentConversationOf, resolveHistoryTarget,
   judgeHistoryAccess, buildHistoryRequest, normalizeHistory,
 } from '../lib/history-auth.js';
 
@@ -15,10 +15,6 @@ const owner = { owner: true, tier: 'owner', perms: perms('query') };
 const superAdmin = { owner: false, tier: 'super', perms: perms('query') };
 const groupAdmin = { owner: false, tier: 'group-admin', perms: perms('query', 'mute') };
 const guest = { owner: false, tier: 'guest', perms: perms() };
-
-check('conversationOf 群', JSON.stringify(conversationOf('123', '')) === JSON.stringify({ kind: 'group', id: '123' }));
-check('conversationOf 私聊', JSON.stringify(conversationOf('', '456')) === JSON.stringify({ kind: 'private', id: '456' }));
-check('conversationOf 空', conversationOf('', '') === null);
 
 const frameGroup = { group_id: 33333, user_id: 22222, message_id: 9001 };
 check('currentConversationOf 群取 frame.group_id', JSON.stringify(currentConversationOf({ groupId: '33333' }, frameGroup)) === JSON.stringify({ kind: 'group', id: '33333' }));

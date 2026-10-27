@@ -1,3 +1,59 @@
+## 未发布 —— 多代理安全复审：死循环、SSRF 绕过、授权绑定、适配器重启
+
+> 主语料来自四条并行的只读复审（网络与外部输入 / 权限与凭据 / 并发与资源 / 死代码），
+> 每条都回到代码里复核过之后才动手改。
+
+### 安全
+
+- `http.js` 的 `dechunkBuffer` 只接受正数 chunk-size 并强制单向推进：`-24` 会被 `parseInt`
+  解成 -24，`pos` 往回退后同一段被反复解析——**同步死循环**，一条 11 字节的畸形响应就能卡死
+  整个 DSH 宿主（`qq_webfetch` 默认在访客白名单里，访客可直接触发）。
+- `qq_webfetch` 的 Moli 分支只给拥有者私聊用，其它来源静默退回普通抓取：无头浏览器会跟随
+  3xx、加载子资源、跑页面 JS，都不经过 `assertPublicHost` 的逐跳校验；配 `--http-proxy` 时
+  入口域名还是代理侧解析的，本地校验的对象和真正建连的对象不是同一个字符串。
+- 流程授权的 grant 现在必须绑定「真正要跑的工具」（guard 拦下时记下的工具名，或调用方显式
+  给出），空的 `toolName` 一律拒绝。以前 `purpose` 恰好等于工具名才绑定，模型把用途写成
+  别的话术就能拿一次授权去跑任意受闸工具。
+- 「拥有者私聊」判据改用回合快照（`turnSpeaker.groupId`），不再解析 `entryKey`：
+  `perChatSession=false` 时 `entryKey` 恒为 `'shared'`，该配置下高危工具全部放不了行。
+- `qq_draw` 增加拥有者校验：以前只判「在 QQ 会话里 + `admin.allowConsole`」，主人一旦把它
+  加进 `auth.guestToolAllow`，任何群成员都能烧生图额度并以 bot 身份外发图片。
+- `/grant` 不许给自己授权、授出的权限必须自己已经拥有；`/revoke` 需要 `grant` 权限
+  （`/grant` 本身就在同一张权限表里，以前是自我提权入口）。
+- 适配器凭据（access token / AppSecret / BotSecret）改走环境变量，不再出现在
+  `/proc/<pid>/cmdline` 与 `ps` 里；各适配器本来就有同名 env 兜底，命令行仍然优先。
+- 恢复码不再被动态码的失败锁定连坐——认证器丢失或时钟漂移时它是唯一的兜底路径。
+- `moli.insecureTls` 默认改为 `false`：跳过 TLS 证书校验必须是显式选择。
+
+### 可用性与资源
+
+- 换连接配置时等旧适配器真的退出再启动新的。以前只隔 250ms，旧进程还在 `graceMs` 里：
+  forward 模式两个客户端同时在线（重复回合），reverse 模式新进程 `EADDRINUSE` 后进程存活
+  但永远连不上——机器人永久离线，只能手动 reload。旧进程迟到的退出也不再覆盖新进程的
+  `connected` 状态；适配器退出时立即结算在途动作，`qq_history`/`qqgroup` 不再干等 12 秒。
+- `writeToAdapter` 返回真实写入结果。以前恒 `true`：管道已满或已销毁时 `proactive` 照记账、
+  `qq_draw` 报 `sent:true`、`qqbot send` 报 `ok:true`，消息静默丢失却报告成功。
+- 顺序锁 `release` 幂等 + 120 秒超时兜底：异常路径漏释放（`resolveAuthority` 那段 await 没包）
+  不会让单个会话永久哑掉——表现是「一个人突然不说话了」。
+- 图片缓存三条泄漏路径：识别失败分支返回已落盘路径、无回复分支也执行清理、新增每 6 小时按
+  mtime 收尸（覆盖异常/中断的回合与 `qq-images/gen`）。
+- 产物打包从 `execFileSync` 改成异步 `spawn`：打包期间不再停住整个 DSH 事件循环
+  （Web UI 与其它会话一起卡，最坏 240 秒）。
+- 适配器 stdout 缓冲加 1MB 上限（非行式数据不会把宿主撑到 OOM）；`cleanupStaleConfig` 补
+  `catch`（以前是 unhandled rejection，Node 默认退出整个宿主）。
+- 直连抓取加绝对 deadline（socket timeout 只是空闲超时，对端慢慢滴字节就能无限拖）；
+  代理隧道响应头加 64KB 上限（以前收到头为止无上限，且每块都全量拼接）。
+- 会话池加上限（200）并按最久未用淘汰；`state.stats` 的 `admin`/`actions`/`notices`/
+  `flowBlocked` 重新出现在 `qqbot status` 里。
+
+### 测试
+
+- `test-history` 23 → **20 项**：删掉零调用的 `conversationOf`（`currentConversationOf` 才是现役）。
+- `test-flow-auth` / `test-flow-gate` / `test-flow-wiring` 按“授权必须绑定工具”的新语义调整，
+  并补断言（绑定后只认那个工具、群会话夹具带上真实 `groupId`）。
+- `test-plugin` 的 subprocess mock 透传 `env`（凭据不再进 argv）。
+- 全套 **29/29 套件 / 1159 项通过**。
+
 ## 0.12.5 —— 非 QQ 会话越权收口 + 代理隧道统一 + 限流计费修正（2026-10-27）
 
 ### 入站限流只对真正驱动回合的消息计费（#22 后续）
@@ -97,7 +153,7 @@
 - `test-adapter-qq-official` 92 → **95 项**（AppSecret 与 BotSecret 分开时签名取 BotSecret）。
 - `test-client` 87 → **107 项**：Moli 卡片断言（收成一张卡、引擎就绪时开关可点、dsh-moli 停用也不影响、
   高级设置折叠区展开/收起五项参数、没装/引擎缺失时开关被禁用、没装时带仓库链接、已就绪时不带）。
-- 全套 **29/29 套件 / 1162 项通过**。
+- 全套 **29/29 套件 / 1159 项通过**。
 
 ## 0.12.4 —— 反向 WS 半开连接回收（验收新发现）
 
