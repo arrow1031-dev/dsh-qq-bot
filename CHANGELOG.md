@@ -33,13 +33,14 @@
 - **没配 `access_token` 时强制只监听 `127.0.0.1`**（`resolveListenAddress`）：反向端口上的帧能直接冒充任意 QQ 号——身份完全来自 `frame.user_id`。以前默认 `0.0.0.0:6199` + 空 token，等于「任何能连上端口的人 = 拥有者」。要公网监听必须先配 token。
 - **单连接缓冲 / 单帧 / 分片数上限**（16 MB / 8 MB / 64 片）：以前可以声明一个巨大帧慢慢灌，把整条链路饿死并吃满内存（`Buffer.concat` 还是 O(n²)）。
 - **并发链路上限 4 条**：`linkSet` 以前只加不删、`active()` 按插入序取第一条，先连者能抢走全部出站消息（含别的会话的私聊回复）。
-- **token 比较改 `timingSafeEqual`**：空 token 依旧不放行（`tokenEquals('','')` 恒 false）。
+- **token 比较改 `timingSafeEqual`**：空 token 依旧不放行（`tokenEquals('','')` 恒 false）。OneBot 12 适配器原来自己写了一套 `===` 比较（时序侧信道），改回共用 `bearerOrQueryToken`。
+- **并发上限改在 101 之前判**：以前先回 `101 Switching Protocols` 再回 `503`，客户端已经以为握手成功，协议上不干净。
 ### 授权绑定工具 + 提示词层清洗（#18 #26）
 
-- **grant 绑定申请时的工具**：用途恰好是 `flowAuth.gatedTools` 里某个工具名时，grant 记下工具名，`takeGrant` 只允许用同一个工具（以前「申请时写查天气、实际拿去跑 `workflow`」）；自由文本用途仍不绑定。
+- **grant 绑定申请时的工具**：用途恰好是 `flowAuth.gatedTools` 里某个工具名时，grant 记下工具名，`takeGrant` 只允许用同一个工具（以前「申请时写查天气、实际拿去跑 `workflow`」）；自由文本用途仍不绑定。验收复测补了一处 fail-closed：**取用时省略工具名也算不匹配**（以前的 `&& want !== ''` 让「不传工具名」成为绕过绑定的后门）。
 - **`reset(qq)` 修复**：原来拿 qq 当 grantId 去 `grants.delete()`，永远删不掉。
 - **过期 grant 回收**：`grant()` 时顺手清掉 `expiresAt <= now` 的条目，只申请不使用不会缓慢堆积。
-- **`stripInvisible` 全量剥**：改用 `\p{Cf}` + Default_Ignorable 里非 Cf 的段，补上 U+2066–2069（双向隔离符）、U+061C、U+E0020（标签字符）等。以前在这些字符后面写 `/auth 123456` 能绕过拦截，把动态码整条喂进模型与会话历史。
+- **`stripInvisible` 全量剥**：改用 `\p{Cf}` + Default_Ignorable 里非 Cf 的段，补上 U+2066–2069（双向隔离符）、U+061C、U+E0020（标签字符）等。以前在这些字符后面写 `/auth 123456` 能绕过拦截，把动态码整条喂进模型与会话历史。验收复测又补了一段：C0/C1 控制符（U+0000–U+0008、U+000E–U+001F、U+007F–U+009F）同样剥——`\u0000` 不是空白、`trim()` 去不掉，`'\u0000/auth 123456'` 一样能绕过；`\t \n \r` 保留不误伤多行文本。
 - **身份头清洗**：昵称/群名片进提示词之前去掉 `\r\n[]` 并限长 32 字。访客把群名片改成 `x)]` + 换行 + 伪造身份，就能在上下文头里多出一行身份（工具层仍按 `turnSpeaker` 鉴权，但会误导模型）。
 ### 测试
 

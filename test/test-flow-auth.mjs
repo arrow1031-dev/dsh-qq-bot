@@ -127,6 +127,8 @@ console.log('\n9. 授权绑定工具：申请时写什么，就只能跑什么')
   check('用途是受闸门工具时，grant 绑定了工具名', g3.ok === true);
   const wrong = a3.takeGrant(g3.grantId, '888', 'workflow');
   check('拿它去跑另一个工具被拒（wrong-tool）', wrong.ok === false && wrong.reason === 'wrong-tool', JSON.stringify(wrong));
+  const omitted = a3.takeGrant(g3.grantId, '888');
+  check('取用时省略工具名同样被拒（不能靠「不传」绕过绑定）', omitted.ok === false && omitted.reason === 'wrong-tool', JSON.stringify(omitted));
   const right = a3.takeGrant(g3.grantId, '888', 'subagent');
   check('拿它跑申请的那个工具放行', right.ok === true);
   // 用途不是工具名（自由文本）时不绑定，任何受闸门工具都能用一次

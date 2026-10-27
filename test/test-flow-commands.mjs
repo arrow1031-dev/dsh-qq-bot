@@ -82,6 +82,10 @@ check('U+E0020（标签字符）也拦得住',
 check('这些剥完之后也能解析',
   ['\u2066', '\u061c', '\u{e0020}'].every((ch) => parseAuthCommand(ch + '/auth 123456') !== null));
 check('\\p{Cf} 全量剥不误伤正常文本', stripInvisible('/auth 123456') === '/auth 123456');
+check('C0 控制符（NUL 等）也剥：\\u0000 不是空白，trim 去不掉',
+  ['\u0000', '\u0001', '\u0007', '\u001f', '\u007f', '\u009f'].every((ch) => stripInvisible(ch + '/auth 123456') === '/auth 123456'
+    && flowInterceptKind({ isGroup: false, isOwner: true, text: ch + '/auth 123456' }) === 'auth'));
+check('制表符与换行仍保留（不误伤多行文本）', stripInvisible('a\tb\nc') === 'a\tb\nc');
 
 console.log('');
 if (fail === 0) { console.log(pass + '/' + (pass + fail) + ' 项通过'); console.log('指令解析自测通过'); }
