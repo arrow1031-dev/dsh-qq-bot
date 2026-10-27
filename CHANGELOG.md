@@ -75,6 +75,7 @@
   因此第一次跑起工具鉴权段（以前那段永远"跳过"）；"跳过"不再记成通过（`test-plugin` /
   `test-admin` 改成 `[SKIP]` 单列），`run-all` 加了单套件超时、套件清单与 `test/` 目录双向核对；
   `test-flow-wiring` 的汇总行不再恒印 `N/N`；`test-client` 去掉一条恒真断言，换成真的切到反向模式再断言字段跟着换。
+- 裸克隆 / CI 下 `test-plugin` 会直接崩（非 QQ 会话来源闸那段没守 `@deepseek-ai/dsh-tools` 缺失，`tool.execute` 打到 `undefined`）：补上守卫并记 `[SKIP]`，`test/dsh-tools-link.mjs` 支持 `DSH_TOOLS_DISABLE=1` 复现裸克隆。
 - `test-http` 23 → **30 项**（代理隧道：钉地址、跳转逐跳重算、体积上限、超时）。
 - `test-adapter-qq-official` 92 → **95 项**（AppSecret 与 BotSecret 分开时签名取 BotSecret）。
 - 全套 **29/29 套件 / 1142 项通过**。

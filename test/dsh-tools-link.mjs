@@ -14,6 +14,9 @@ import path from 'node:path';
 const DSH_INSTALL_MODULES = path.join('/usr/local/lib/node_modules/@deepseek-ai/dsh', 'node_modules');
 
 export function ensureDshToolsLink(pkgRoot) {
+  // CI 与裸克隆里根本没有这个包：想复现那种环境就设 DSH_TOOLS_DISABLE=1
+  // （否则本函数会把链接建回来，本地永远看不到「工具断言被跳过」的真实表现）。
+  if (process.env.DSH_TOOLS_DISABLE === '1') return false;
   const linkPath = path.join(pkgRoot, 'node_modules', '@deepseek-ai', 'dsh-tools');
   if (fs.existsSync(linkPath)) return true;
   const candidates = [

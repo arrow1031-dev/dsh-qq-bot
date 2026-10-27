@@ -952,7 +952,9 @@ try {
   if (status === null) skip('status 动作需要 dsh-tools');
 
   console.log('\n5b. 非 QQ 会话（Web UI / 子代理）调用：外发动作默认拒、只读放行');
-  {
+  if (hasDshTools !== true) {
+    skip('非 QQ 会话来源闸（需要 @deepseek-ai/dsh-tools 才能注册工具）');
+  } else {
     // exec 里没有 QQ 会话的 agent → entryForAgent 返回 null。以前这里整段跳过拥有者判断，
     // 等于任何 Web UI 会话/子代理都能拿 qqbot send 往任意群发消息、掐断任意会话的回合。
     const sendsBefore = mock.sent.length;

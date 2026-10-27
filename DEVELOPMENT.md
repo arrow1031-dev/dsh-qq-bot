@@ -32,7 +32,7 @@ npm test                   # 同上
 | `test-adapter-satori.mjs` | 70 | Satori 适配器 |
 | `test-adapter-milky.mjs` | 83 | Milky 适配器（含 WebHook 默认准入与读体上限） |
 | `test-adapter-qq-official.mjs` | 95 | QQ 官方适配器（含回调重放防护） |
-| `test-plugin.mjs` | 120 | Host 半边：假 ctx + 真适配器 + 真 `lib/index.js`，含 Config 契约、热更新、9 个工具、适配器重启、默认准入 fail-closed 与入站限制（能解析到 `@deepseek-ai/dsh-tools` 时多跑工具注册段落） |
+| `test-plugin.mjs` | 120 | Host 半边：假 ctx + 真适配器 + 真 `lib/index.js`，含 Config 契约、热更新、9 个工具、适配器重启、默认准入 fail-closed 与入站限制（120 项含工具注册段落；解析不到 `@deepseek-ai/dsh-tools` 的裸克隆里为 94 项 + 6 项 `[SKIP]`） |
 | `test-client.mjs` | 87 | 客户端设置页：模拟模块加载器 + 最小 React 渲染 + 四档标签 + 只写密钥护栏 |
 | `test-admin.mjs` | 38 | 权限 · 群管理 · 访客工具闸 |
 | `test-http.mjs` | 30 | HTTP / 代理隧道 / IP 归一与公网判定 |
@@ -66,7 +66,7 @@ node -e "fetch('http://127.0.0.1:3000/__inject',{method:'POST',headers:{'content
 node -e "fetch('http://127.0.0.1:3000/__sent').then(r=>r.json()).then(j=>console.log(JSON.stringify(j.messages,null,2)))"
 ```
 
-> **文档里的测试数必须自洽**：改测试就同步本表、README 的「29 套件 / 1142 项」与顶部 `tests` 徽章（`tests-1142%20passing`）、`AI-DISCLOSURE.md` 的验证情况。数字以裸克隆跑 `npm test` 的输出为准；能解析到 `@deepseek-ai/dsh-tools` 的环境里 `test-plugin` 与 `test-admin` 会多跑工具注册段落，总数随之更多。跳过项按 `[SKIP]` 单列，不计入通过数。
+> **文档里的测试数必须自洽**：改测试就同步本表、README 的「29 套件 / 1142 项」与顶部 `tests` 徽章（`tests-1142%20passing`）、`AI-DISCLOSURE.md` 的验证情况。数字以裸克隆跑 `npm test` 的输出为准；能解析到 `@deepseek-ai/dsh-tools` 的环境里 `test-plugin` 与 `test-admin` 会多跑工具注册段落，总数随之更多。跳过项按 `[SKIP]` 单列，不计入通过数；设 `DSH_TOOLS_DISABLE=1` 可以在这台机器上模拟裸克隆（否则 `test/dsh-tools-link.mjs` 会把链接建回来，永远看不到跳过路径——CI 就是这么红的）。
 
 <a id="完整配置参考"></a>
 ## 3. 完整配置参考
