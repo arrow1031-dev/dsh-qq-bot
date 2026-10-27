@@ -12,7 +12,7 @@
  */
 import http from 'node:http';
 import net from 'node:net';
-import { createGuardProxy } from '../lib/guard-proxy.js';
+import { createGuardProxy, resolveGuardTarget } from '../lib/guard-proxy.js';
 
 let pass = 0;
 let fail = 0;
@@ -230,5 +230,18 @@ await target.close();
 await upOk.close();
 await upDeny.close();
 
+
+console.log('\n10. 解析即钉住（DNS rebinding 只在判定那一次决胜）');
+{
+  let calls = 0;
+  const rebind = async () => { calls += 1; return calls === 1 ? [{ address: '93.184.216.34', family: 4 }] : [{ address: '127.0.0.1', family: 4 }]; };
+  const first = await resolveGuardTarget('rebind.test', rebind);
+  check('判定时解析出的公网地址被一并返回（连接阶段不再解析）', first.reason === '' && first.address === '93.184.216.34', JSON.stringify(first));
+  check('一个目标只解析一次', calls === 1, 'calls=' + String(calls));
+  const priv = await resolveGuardTarget('rebind.test', async () => [{ address: '10.0.0.1', family: 4 }]);
+  check('解析出内网就拒绝（带原因）', typeof priv.reason === 'string' && priv.reason.includes('非公网') && priv.address === null, JSON.stringify(priv));
+  const noDns = await resolveGuardTarget('no-such-host.test', async () => { throw new Error('ENOTFOUND'); });
+  check('本机解析不了 → 不判内网、交给连接阶段（保留旧语义）', noDns.reason === '' && noDns.address === null, JSON.stringify(noDns));
+}
 console.log('\n' + pass + ' 通过 / ' + fail + ' 失败');
 if (fail > 0) process.exitCode = 1;
