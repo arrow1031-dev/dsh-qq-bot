@@ -36,7 +36,7 @@
 
 ### 验证情况
 
-- **自动化测试 31 个套件 / 1224 项全部通过**（`npm test` = `node test/run-all.mjs`；CI 在 Node 22 / 24 双版本上跑）：
+- **自动化测试 32 个套件 / 1239 项全部通过**（`npm test` = `node test/run-all.mjs`；CI 在 Node 22 / 24 双版本上跑）：
   - 正向 WebSocket 适配器 19 项 ／ 反向 19 项（含半开回收） ／ OneBot 12 30 项 ／ Satori 70 项 ／ Milky 83 项 ／ QQ 官方 95 项
   - Host 插件端到端 120 项（假 ctx + 真适配器 + Config 契约 + 配置热更新 + 废弃配置清理 + 默认准入 fail-closed + 入站限流；能解析到 `@deepseek-ai/dsh-tools` 时会多跑 9 个工具注册断言）
   - 安全回归 `test-security.mjs` 55 项（SSRF 公网判定与 F1 / IPv6 映射写法 / 6to4 与 Teredo 内嵌 IPv4 / 识图下载源码断言 / 跨群与撤回绑群）

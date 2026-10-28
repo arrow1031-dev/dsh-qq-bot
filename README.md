@@ -3,7 +3,7 @@
 [![CI](https://github.com/arrow1031-dev/dsh-qq-bot/actions/workflows/ci.yml/badge.svg)](https://github.com/arrow1031-dev/dsh-qq-bot/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/%40sputnikzaychik%2Fdsh-qq-bot?label=npm)](https://www.npmjs.com/package/@sputnikzaychik/dsh-qq-bot)
 [![npm downloads](https://img.shields.io/npm/dm/%40sputnikzaychik%2Fdsh-qq-bot?label=%E4%B8%8B%E8%BD%BD)](https://www.npmjs.com/package/@sputnikzaychik/dsh-qq-bot)
-[![tests](https://img.shields.io/badge/tests-1224%20passing-brightgreen)](DEVELOPMENT.md)
+[![tests](https://img.shields.io/badge/tests-1239%20passing-brightgreen)](DEVELOPMENT.md)
 [![node](https://img.shields.io/badge/node-%E2%89%A522.6-339933)](https://nodejs.org/)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
@@ -218,7 +218,7 @@ dsh plugin --profile web remove @sputnikzaychik/dsh-qq-bot          # 卸载
 
 | 文档 | 内容 |
 | --- | --- |
-| [DEVELOPMENT.md](DEVELOPMENT.md) | 本地开发与测试（31 套件 / 1224 项）、完整配置参考、工具细节、文件清单、设计取舍、发布流程、部署备注 |
+| [DEVELOPMENT.md](DEVELOPMENT.md) | 本地开发与测试（32 套件 / 1239 项）、完整配置参考、工具细节、文件清单、设计取舍、发布流程、部署备注 |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | 分层图、模块职责、关键数据流、身份契约、已知边界 |
 | [CHANGELOG.md](CHANGELOG.md) | 0.1.0 → 0.12.6 的完整演进 |
 | [AI-DISCLOSURE.md](AI-DISCLOSURE.md) | AI 生成方式、验证到什么程度、**尚未验证清单**（用前务必读） |
@@ -231,6 +231,7 @@ MIT，见 [LICENSE](LICENSE)。维护者 [@arrow1031](https://github.com/arrow10
 
 - [**NapCat**](https://napneko.github.io/) —— 提供灵感、OneBot v11 接口与文档。没有它把 NTQQ 的能力按 OneBot 规范暴露出来，这个项目根本无从起步。
 - [**dsh-moli**](https://github.com/27painter/dsh-moli) —— 本地 Moli 无头浏览器引擎与参数面。`qq_webfetch` 的渲染抓取（SPA / JS 渲染页、markdown 输出）直接借它的引擎，本插件的 `moli` 配置项也照它的命令行语义复刻（`fetch` / `-t` / `-d markdown` / `--http-proxy` / `--insecure-disable-tls-host-verification` / URL 放在 `--` 之后）。
+- [**@tencent-connect/dsh-qqbot**](https://github.com/tencent-connect/dsh-qqbot) —— 官方 QQ Bot 插件。我们没有搬它的代码，只借了它 `chunker` 的思路：长回答要按 Markdown 结构切，别把代码块和表格拦腰截断。`lib/chunk.js` 是按本仓库风格重写的纯函数实现。
 - **梁圣** —— 忠！橙！
 
 问题、PR、Discussions 都在 [arrow1031-dev/dsh-qq-bot](https://github.com/arrow1031-dev/dsh-qq-bot)；QQ 群 1091766276（报错请带上 `[dsh-qq-bot]` 开头的日志与复现步骤）。

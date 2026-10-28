@@ -17,7 +17,7 @@ node test/run-all.mjs
 裸克隆即可跑全部测试：需要 DSH 运行时才能成立的少数断言（动态工具注册、`qqgroup` 工具路径）会自动跳过而不是判失败；
 想连那部分一起跑，把 `DSH_PROFILE_MODULES` 指向一个装了 DSH 运行时的 profile 的 `node_modules`。
 
-## 2. 测试（31 个套件 / 1224 项）
+## 2. 测试（32 个套件 / 1239 项）
 
 ```sh
 node test/run-all.mjs      # 一键全量
@@ -55,6 +55,7 @@ npm test                   # 同上
 | `test-flow-wiring.mjs` | 23 | 闸门接线：一次调用只吃一个授权 / 关着原样放行 / moli_fetch 进 gatedTools 后「没码被拦、拿码放行」 |
 | `test-interim.mjs` | 14 | 中间发言：最后一条留给结论、锚点丢了不重播 |
 | `test-security.mjs` | 55 | 安全回归：帧 id 净化 / 越界复核 / 跨群重算 / 撤回绑群 / 出站公网判定与 F1 / 识图下载源码断言 |
+| `test-chunk.mjs` | 15 | 回复分条：短文本原样 / 长文本不超限且不丢行 / 代码块围栏成对 / 表格不切行 / 超长单行硬切 / 未闭合围栏兜底 |
 | `test-gate-guard.mjs` | 18 | 闸门区改动判定：关着不需要码 / 没码·错码·无 secret 拒绝 / 对码接受 / ±1 窗口 / 开关本身变更也要码 / 名单没变时清码 |
 | `test-guard-proxy.mjs` | 47 | 内网校验代理：CONNECT 与明文请求拒绝回环 / 元数据 / 私网 / IPv6 / 6to4 / Teredo / localhost；用「本地监听器 accept 计数 = 0」证明真的没有连过去（把判定改成一律放行必然变红），另覆盖上游代理链路与 403/502 语义分离、CONNECT 目标归一（尾点 / userinfo / 多冒号）、并发 start 去重、socks5 上游告警、拒绝后不崩、stop 后端口关闭 |
 
