@@ -92,7 +92,9 @@
   首帧后复用平台返回的 `stream_msg_id`）。
 - 新增 `lib/stream-bridge.js`：把增量合并成「当前全文」并按 600ms 节流推送，结束时必发 done；
   发送失败只记一行日志并停用该会话，不刷错误。计时器可注入，纯逻辑单测覆盖。
-- 接线到 DSH 的 `agent/assistant-stream` 事件留到下一步（需要真实 DSH 会话验证，避免盲接把正常回复弄丢）。
+- 接线：`runTurn` 里按 `shouldStream()`（官方 v2 + 开关 + 私聊 + 有 `msg_id`）决定是否走流式；
+  中间发言改为喂给桥（不再单独发消息），回合末补足剩余文本并发 done 帧；桥没发出任何帧时
+  退化为普通 `sendReply`，保证用户至少拿到一条。开关在设置页「连接 → 私聊流式回复」，默认关。
 
 
 ### 模型选择：自动检测，优先用宿主自己的能力
@@ -102,6 +104,8 @@
   per-chat 偏好文件（`QQ_msg/model-prefs.json`），并且如实说明「只记录、不会自动应用」。
 - 新增拥有者指令 `/model`：查看当前模型/接口来源/provider 列表；`/model set <provider> <model>`；
   `/model models <provider>`。写不进去时不假装成功：返回 applied=false 并说明原因。
+- 解析器 `parseModelCommand` 统一剥掉群里 @ 前缀与前后空格——第一版在群里被 @ 时文本是
+  `"@123456  /model"`，`startsWith('/model')` 直接漏判、指令进了模型回合（已修）。
 - `/help` 里补上 `/model` 一行。测试：`test-model-router.mjs` 17 项；套件 35 → 36，总项 1296 → 1313。
 
 ## 0.12.6 —— 渲染抓取支持 JS 页面，安全与稳定性收口（2026-10-28）

@@ -5,7 +5,7 @@
  * 守的是：同会话增量合并（每次发全文）、节流窗口内不重复发、结束时必发 done、
  * 发送失败后停用本会话、群聊/非官方协议不会被这套逻辑“假装支持”。
  */
-import { createStreamBridge } from '../lib/stream-bridge.js';
+import { createStreamBridge, shouldStream } from '../lib/stream-bridge.js';
 
 let pass = 0;
 let fail = 0;
@@ -98,6 +98,25 @@ console.log('5. 取消后不再发');
   h.bridge.cancel('k');
   await h.tick(1200);
   check('取消后没有发送', h.sent.length === 0, JSON.stringify(h.sent));
+}
+
+
+console.log('6. shouldStream：只有官方 v2 + 开关 + 私聊 + msg_id 才流');
+{
+  check('官方私聊 + 开关 + msg_id → true', shouldStream({ protocol: 'qq-official', streaming: true, isGroup: false, messageId: 'm1' }) === true);
+  check('群聊一律 false（官方流式不支持群）', shouldStream({ protocol: 'qq-official', streaming: true, isGroup: true, messageId: 'm1' }) === false);
+  check('开关没开 false', shouldStream({ protocol: 'qq-official', streaming: false, isGroup: false, messageId: 'm1' }) === false);
+  check('非官方协议 false（OneBot 没有流式）', shouldStream({ protocol: 'onebot11', streaming: true, isGroup: false, messageId: 'm1' }) === false);
+  check('没有 msg_id false（没有被动回复凭证）', shouldStream({ protocol: 'qq-official', streaming: true, isGroup: false, messageId: '' }) === false);
+}
+
+console.log('7. end() 返回是否真的发出帧（决定要不要回退普通发送）');
+{
+  const h = makeHarness();
+  h.bridge.push('k', { messageType: 'private', targetId: 'u1', msgId: 'm1' }, '完整全文');
+  const ended = await h.bridge.end('k');
+  check('发出过帧 → ok=true 且 sent>=1', ended !== null && ended.ok === true && ended.sent >= 1, JSON.stringify(ended));
+  check('end 之后状态清空', h.bridge.size() === 0);
 }
 
 console.log('\n' + pass + ' 通过 / ' + fail + ' 失败');
