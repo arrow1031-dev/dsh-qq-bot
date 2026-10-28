@@ -104,8 +104,8 @@ DSH Agent（默认每个 QQ 会话一个）
 
 | 位置 | 归谁 | 例子 |
 | --- | --- | --- |
-| `lib/tools/*.json` | 工具自己的参数 | `websearch.js` ↔ `websearch.json`（管 `webSearch`） |
-| `lib/valve/<阀门>/*.json` | 阀门自己的参数 | `valve/security/auth.json`（管 `auth`） |
+| `lib/tools/*-conf.json` | 工具自己的参数 | `websearch.js` ↔ `websearch-conf.json`（管 `webSearch`） |
+| `lib/valve/<阀门>/*-conf.json` | 阀门自己的参数 | `valve/security/auth-conf.json`（管 `auth`） |
 | `lib/config.js` 里的 `CORE_DEFAULTS` | 不属于任何工具/阀门的 | 传输、消息、网关、会话、产物投递 |
 
 `config.js` 在加载时**遍历**这两个目录，逐个读取，每个 JSON 自己声明管哪个配置组：
@@ -115,15 +115,62 @@ DSH Agent（默认每个 QQ 会话一个）
 ```
 
 于是加新工具只需要往对应目录丢一个 JSON，不用回来改 `config.js`。文件名只用于报错定位，
-不参与映射——`websearch.json` 管 `webSearch`，不用逼文件名迁就驼峰。组装链是一条：
+不参与映射——`websearch-conf.json` 管 `webSearch`，不用逼文件名迁就驼峰。组装链是一条：
 
 ```
-lib/**/*.json  →  JSON_DEFAULTS  →  DEFAULTS(+CORE)  →  Config 的 .default()  →  staleConfigPaths 判定
+lib/**/*-conf.json  →  JSON_DEFAULTS  →  DEFAULTS(+CORE)  →  Config 的 .default()  →  staleConfigPaths 判定
 ```
 
 schema 的默认值直接引用组装结果，所以「默认值」只有一处来源，改 JSON 就是改默认值。
 两道加载期护栏：**group 重复**、**group 不在 schema 里**都直接抛错——后者尤其要紧，
 因为废弃键清理正是拿 schema 判断哪些键该删，一个笔误就会把用户配置当垃圾清掉。
+
+#### 2.1.2 设置页字段也住在同一个目录，靠后缀区分
+
+默认值解决的是「值是多少」，设置页还要回答「怎么编辑它」。这部分以前写死在客户端 bundle
+（`lib/client/settings.js` 里一个上百条的 `FIELDS` 数组），于是加一个字段就要改前端、重新打包。
+现在它和默认值用**同一套归属、同一个目录、不同后缀**：
+
+| 后缀 | 管什么 | 组装成 |
+| --- | --- | --- |
+| `*-conf.json` | 默认值 | `DEFAULTS` |
+| `*-set.json` | 设置页字段（怎么显示） | `SETTINGS_FIELDS` + `SETTINGS_TABS` |
+
+```json
+{ "group": "webSearch",
+  "fields": [{ "path": ["webSearch", "maxUses"], "label": "每次搜索最多触发次数",
+               "kind": "number", "tab": "capability", "subtab": "retrieval" }] }
+```
+
+`path` 一律写绝对路径，不做「相对 group」的隐式约定。`when` 是**声明式**的
+（`{ "protocol": "onebot12", "protocols.onebot12.mode": { "$ne": "reverse" } }`），
+不是函数——JSON 里放不了函数，这也是它必须可声明的原因。
+
+不属于任何工具/阀门的字段放在 `lib/settings-core-set.json`（与 `CORE_DEFAULTS` 对称，
+这份不写 `group`，每条靠 `path[0]` 归组）；标签页骨架单独在 `lib/settings-page-set.json`。
+
+组装链：
+
+```
+lib/**/*-set.json  →  SETTINGS_FIELDS  →  GET /dsh-qq-bot/settings  →  客户端渲染
+```
+
+客户端因此变成**纯渲染器**：`FIELDS` 只剩空数组，加载时用 `applyTemplate()` 填。
+加一个字段 = 改对应 `-set.json`，`settings.js` 一行都不用动。
+
+三道加载期护栏（和 group 护栏同一套思路：写错就炸，别等运行期）：
+
+| 写错什么 | 后果（不拦的话） | 护栏 |
+| --- | --- | --- |
+| `path` 指向不存在的配置项 | 字段永远编辑不到真实配置；更糟的是 `staleConfigPaths` 会把用户存进去的值当废弃键删掉 | `schemaHasPath()` 逐段走 `Config.dict` |
+| `tab` / `subtab` 写错 | 字段掉进谁也点不到的页 | 与 `settings-page-set.json` 的骨架比对 |
+| `group` 重复 | 两份模板抢同一组，渲染顺序不确定 | 按 group 去重 |
+
+两个例外标记：`virtual: true`（纯界面锚点，例如扫码绑定，不对应任何配置项，跳过路径校验）、
+`in: "moli-card"`（渲染在 moli 卡片内部，不占外层位置，但保存/还原仍按普通字段处理）。
+
+`schemaHasPath` 有个坑值得记：schemastery 的 `schema.dict[key]` 存的是 **Schema 构造器本身**
+（`typeof` 是 `'function'`），只判 `typeof === 'object'` 会把每一层都判成不存在。
 
 ### 2.2 阀门层 `lib/valve/`
 

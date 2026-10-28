@@ -1,0 +1,49 @@
+{
+  "group": "imgSearch",
+  "fields": [
+    {
+      "path": [
+        "imgSearch",
+        "enabled"
+      ],
+      "label": "图片反搜（qq_imgsearch 多引擎）",
+      "kind": "bool",
+      "hint": "默认开；请求受上面的联网搜索 HTTP 代理管控，留空直连",
+      "tab": "capability",
+      "subtab": "retrieval"
+    },
+    {
+      "path": [
+        "imgSearch",
+        "maxResults"
+      ],
+      "label": "每次反搜最多返回结果数",
+      "kind": "number",
+      "tab": "capability",
+      "subtab": "retrieval"
+    },
+    {
+      "path": [
+        "imgSearch",
+        "saucenaoKey"
+      ],
+      "label": "SauceNAO API key（可选）",
+      "kind": "text",
+      "hint": "saucenao.com 注册可得；填入后反搜会带上 SauceNAO",
+      "placeholder": "（留空 = 不启用 SauceNAO）",
+      "tab": "capability",
+      "subtab": "retrieval"
+    },
+    {
+      "path": [
+        "imgSearch",
+        "weightedShuffle"
+      ],
+      "label": "有代理时按权重随机重排引擎",
+      "kind": "bool",
+      "hint": "加权随机：Yandex/Tineye/Copyseeker 权重高，避免固定引擎一直打头",
+      "tab": "capability",
+      "subtab": "retrieval"
+    }
+  ]
+}

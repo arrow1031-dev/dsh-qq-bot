@@ -1,6 +1,6 @@
 /** 单元测试：lib/config.js —— DEFAULTS / plainConfig（volatile 还原）/ mergeConfig / describeError */
 import { DEFAULTS, DEFAULTS_SOURCES, Config, plainConfig, mergeConfig, staleConfigPaths, describeError } from '../lib/config.js';
-import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -111,19 +111,53 @@ console.log('\n10. 默认值 JSON：自动发现 / 与 schema 一致 / 邪门输
     try { runImport(); } catch (error) { okFirst = false; }
     check('干净副本可以正常装载', okFirst === true);
 
-    writeFileSync(path.join(scratch, 'lib', 'tools', 'dup.json'),
+    writeFileSync(path.join(scratch, 'lib', 'tools', 'dup-conf.json'),
       JSON.stringify({ group: 'vision', defaults: { enabled: false } }), 'utf8');
     let dupError = '';
     try { runImport(); } catch (error) { dupError = String((error.stderr || '') + (error.message || '')); }
     check('重复的 group 在加载时报错', dupError.includes('默认配置组重复'), dupError.slice(0, 120));
 
-    rmSync(path.join(scratch, 'lib', 'tools', 'dup.json'));
-    writeFileSync(path.join(scratch, 'lib', 'tools', 'typo.json'),
+    rmSync(path.join(scratch, 'lib', 'tools', 'dup-conf.json'));
+    writeFileSync(path.join(scratch, 'lib', 'tools', 'typo-conf.json'),
       JSON.stringify({ group: 'webSerach', defaults: { maxUses: 5 } }), 'utf8');
     let typoError = '';
     try { runImport(); } catch (error) { typoError = String((error.stderr || '') + (error.message || '')); }
     check('schema 里没有的 group 在加载时报错（否则清理会删用户配置）',
       typoError.includes('不在 Config schema 里'), typoError.slice(0, 120));
+
+    // 设置页模板的三道护栏：路径写错、标签页写错、后缀写错，都必须在加载时炸掉。
+    rmSync(path.join(scratch, 'lib', 'tools', 'typo-conf.json'));
+
+    // 覆盖已有的那份，而不是新增：新增会和现成的模板撞 group，先触发「组重复」那条。
+    const setFile = path.join(scratch, 'lib', 'tools', 'websearch-set.json');
+    const setFileBackup = readFileSync(setFile, 'utf8');
+    writeFileSync(setFile, JSON.stringify({
+      group: 'webSearch',
+      fields: [{ path: ['webSearch', 'maxUse'], label: '拼错的字段', kind: 'number', tab: 'capability', subtab: 'retrieval' }],
+    }), 'utf8');
+    let badPathError = '';
+    try { runImport(); } catch (error) { badPathError = String((error.stderr || '') + (error.message || '')); }
+    check('设置页模板里拼错的路径在加载时报错（否则配置永远读不到）',
+      badPathError.includes('路径不在 Config schema 里'), badPathError.slice(0, 160));
+
+    writeFileSync(setFile, JSON.stringify({
+      group: 'webSearch',
+      fields: [{ path: ['webSearch', 'maxUses'], label: '标签页写错', kind: 'number', tab: 'nope', subtab: 'retrieval' }],
+    }), 'utf8');
+    let badTabError = '';
+    try { runImport(); } catch (error) { badTabError = String((error.stderr || '') + (error.message || '')); }
+    check('设置页模板里不存在的标签页在加载时报错（否则字段掉进谁也点不到的页）',
+      badTabError.includes('不在设置页骨架里'), badTabError.slice(0, 160));
+
+    writeFileSync(setFile, setFileBackup, 'utf8');
+
+    // 后缀是「这份 JSON 归谁管」的区分：没后缀的文件两类扫描都不该收。
+    writeFileSync(path.join(scratch, 'lib', 'tools', 'nosuffix.json'),
+      JSON.stringify({ group: 'vision', defaults: { enabled: false } }), 'utf8');
+    let suffixOk = true;
+    try { runImport(); } catch (error) { suffixOk = false; }
+    check('没有 -conf/-set 后缀的 JSON 被忽略（不会被当成默认值）', suffixOk === true);
+    rmSync(path.join(scratch, 'lib', 'tools', 'nosuffix.json'));
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }

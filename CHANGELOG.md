@@ -1,3 +1,69 @@
+## 未发布 —— 设置页字段模板化 + TypeScript 类型检查（2026-10-28）
+
+承接上一轮的「默认值拆到各目录」，这一轮把**设置页字段本身**也搬出客户端 bundle，
+并给整个仓库加上类型检查。对外契约（包名、`main`/`exports`、配置键名、九个工具名）没变，
+新增一条只读路由 `GET /dsh-qq-bot/settings`。
+
+### 1. 后缀区分两类 JSON：`-conf.json` / `-set.json`
+
+同一套归属、同一个目录、不同后缀：
+
+| 后缀 | 管什么 | 组装成 |
+| --- | --- | --- |
+| `*-conf.json` | 默认值（上一轮的 `websearch.json` 等全部改名） | `DEFAULTS` |
+| `*-set.json` | 设置页字段：显示成什么样 | `SETTINGS_FIELDS` + `SETTINGS_TABS` |
+
+```json
+{ "group": "webSearch",
+  "fields": [{ "path": ["webSearch", "maxUses"], "label": "每次搜索最多触发次数",
+               "kind": "number", "tab": "capability", "subtab": "retrieval" }] }
+```
+
+`when` 是**声明式**的（`{ "protocol": "onebot12", "protocols.onebot12.mode": { "$ne": "reverse" } }`），
+因为 JSON 放不了函数——22 个原本是闭包的条件全部改写成了数据。
+
+不属于任何工具/阀门的字段在 `lib/settings-core-set.json`（与 `CORE_DEFAULTS` 对称），
+标签页骨架在 `lib/settings-page-set.json`。
+
+**客户端变成纯渲染器**：`lib/client/settings.js` 里那个 180 行的 `FIELDS` 数组、
+四张分组映射表、以及 `MOLI_ADVANCED_FIELDS` 全部删除，改为加载时 `applyTemplate()` 填充。
+加一个字段 = 改对应 `-set.json`，前端一行都不用动，也不用重新打包。
+
+### 2. 三道加载期护栏
+
+写错就在启动时炸掉，不留到运行期：
+
+| 写错什么 | 不拦的后果 | 护栏 |
+| --- | --- | --- |
+| `path` 指向不存在的配置项 | 字段编辑不到真实配置；`staleConfigPaths` 还会把用户存的值当废弃键删掉 | `schemaHasPath()` 逐段走 `Config.dict` |
+| `tab` / `subtab` 写错 | 字段掉进谁也点不到的页 | 与页面骨架比对 |
+| `group` 重复 | 两份模板抢同一组 | 按 group 去重 |
+
+两个例外标记：`virtual: true`（纯界面锚点，如扫码绑定，不对应配置项）、
+`in: "moli-card"`（渲染在 moli 卡片内部，但保存/还原仍按普通字段处理）。
+
+### 3. TypeScript：JSDoc + `checkJs`，不引入构建
+
+`tsconfig.json` 用 `allowJs` + `checkJs` + `noEmit`：**源码仍是 `.js` / `.mjs`，类型写在 JSDoc 里**，
+发布出去的还是原样源码，`engines.node` 仍是 `>=22.6`。
+
+为什么不迁 `.ts`：DSH 是把本插件 import 进它自己的进程跑的，没法给那个进程加
+`--experimental-strip-types`；全量迁 `.ts` 要么把 `engines.node` 抬到 `>=23.6`，
+要么引入构建步骤——前者挡用户，后者违反「零构建」。
+
+清理 42 条报错，全部是 JSDoc 漏声明或声明与运行时不符，**没有一条指向会坏掉的逻辑**。
+期间修掉一个真 bug：`lib/tools/index.js` 的 `classifyMoliFailure` 用了 `describeError`
+但只在 `apply(deps)` 里解构过，模块级调用必然 `ReferenceError`（moli 失败路径 100% 崩）。
+
+`npm run typecheck` 已进 CI（Node 22 / 24 双版本都跑）。
+
+### 4. 测试
+
+37 个套件 / 1401 项（+16）：`test-client` 125 → 130（字段断言改到组装后的模板上，
+另加一条「bundle 里不再写死字段定义」的迁移护栏）、`test-config` 32 → 35
+（新增三条护栏断言：路径写错 / 标签页写错 / 没有后缀的 JSON 被忽略）、
+`test-plugin` 124 → 132（新增模板路由段落：200 / 405 / 只回模板不回配置 / 注销）。
+
 ## 未发布 —— 默认值拆到各目录的 JSON + 设置页三处改进（2026-10-28）
 
 这一轮改的是「默认值住在哪」和设置页的可用性，对外契约（包名、`main`/`exports`、配置键名、九个
@@ -10,8 +76,8 @@
 
 | 目录 | 归谁 |
 | --- | --- |
-| `lib/tools/*.json` | 工具自己的参数（`websearch.js` ↔ `websearch.json`） |
-| `lib/valve/<阀门>/*.json` | 阀门自己的参数（如 `valve/security/auth.json`） |
+| `lib/tools/*-conf.json` | 工具自己的参数（`websearch.js` ↔ `websearch-conf.json`） |
+| `lib/valve/<阀门>/*-conf.json` | 阀门自己的参数（如 `valve/security/auth-conf.json`） |
 
 **路径不写死**：`lib/config.js` 在加载时遍历这两个目录，每个 JSON 自己声明管哪个配置组：
 
