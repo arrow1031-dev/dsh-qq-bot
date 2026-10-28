@@ -104,6 +104,8 @@
   per-chat 偏好文件（`QQ_msg/model-prefs.json`），并且如实说明「只记录、不会自动应用」。
 - 新增拥有者指令 `/model`：查看当前模型/接口来源/provider 列表；`/model set <provider> <model>`；
   `/model models <provider>`。写不进去时不假装成功：返回 applied=false 并说明原因。
+- 端到端模拟：`test-plugin` 新增两条场景——同一 `message_id` 重投只回一次；群里 `@机器人 /model`
+  被截获、不进模型回合。
 - 解析器 `parseModelCommand` 统一剥掉群里 @ 前缀与前后空格——第一版在群里被 @ 时文本是
   `"@123456  /model"`，`startsWith('/model')` 直接漏判、指令进了模型回合（已修）。
 - `/help` 里补上 `/model` 一行。测试：`test-model-router.mjs` 17 项；套件 35 → 36，总项 1296 → 1313。

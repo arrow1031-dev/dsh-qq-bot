@@ -414,6 +414,39 @@ try {
     // 0.12 起接管只在流程授权开启时发生：关着的时候必须与 0.11 完全一致（既不遮蔽也不摘除）。
     check('流程授权关着时不动工具面（0.11 行为）', touched === 0, JSON.stringify({ restricts: ownerAgent === undefined ? -1 : ownerAgent.restricts.length, registers: ownerAgent === undefined ? -1 : ownerAgent.registers.length }));
   }
+  console.log('\n3a. 入站去重（模拟重连/重投同一条消息）');
+  {
+    mock.sent.length = 0;
+    const body = {
+      message_type: 'group', group_id: 33333, user_id: 22222, nickname: '小明',
+      message_id: 777001,
+      message: [{ type: 'at', data: { qq: '10000' } }, { type: 'text', data: { text: '[dedupe-test] 只应回一次' } }],
+    };
+    await fetch(mock.httpUrl + '/__inject', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    await waitFor(() => (mock.sent.length > 0 ? mock.sent : null), 15000, '第一次回复');
+    // 同一条 message_id 再投一次（模拟 WS resume 重放 / webhook 重投）
+    await fetch(mock.httpUrl + '/__inject', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    await sleep(1200);
+    check('重复 message_id 只回一次', mock.sent.length === 1, 'sent=' + mock.sent.length);
+    check('重复消息对应的是 dedupe-test 那一轮', textOf(mock.sent[0]).includes('dedupe-test'), textOf(mock.sent[0]).slice(0, 80));
+  }
+
+  console.log('\n3c. /model 指令在群里被 @ 时也要被截获（不进模型回合）');
+  {
+    mock.sent.length = 0;
+    await fetch(mock.httpUrl + '/__inject', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        message_type: 'group', group_id: 33333, user_id: 22222, nickname: '小明',
+        message: [{ type: 'at', data: { qq: '10000' } }, { type: 'text', data: { text: ' /model' } }],
+      }),
+    });
+    const modelSends = await waitFor(() => (mock.sent.length > 0 ? mock.sent.slice() : null), 15000, '/model 回复');
+    const modelText = textOf(modelSends[0]);
+    check('/model 走到了指令分支（回复里有模型/接口字样）', modelText.includes('模型') || modelText.includes('provider'), modelText.slice(0, 80));
+    check('/model 没有进模型回合（回复不是 Agent 的 REPLY: 信封）', modelText.startsWith('REPLY:') === false, modelText.slice(0, 80));
+  }
+
   console.log('\n3b. 中间发言：先发一句（不引用），结论照常引用回复');
 {
   const beforeInterim = mock.sent.length;
