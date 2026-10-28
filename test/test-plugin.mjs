@@ -355,6 +355,49 @@ try {
   let schemaJson = null;
   try { schemaJson = mod.Config.toJSON(); JSON.stringify(schemaJson); } catch (error) { schemaJson = null; }
   check('Config.toJSON() 可 JSON 序列化（describe 需要）', schemaJson !== null && typeof schemaJson === 'object');
+
+  // ---------------------------------------------------------------- 设置页模板路由
+  // 客户端 bundle 读不到 lib/ 下的文件，模板只能由服务端下发。这条路由是设置页的命脉：
+  // 挂了就是整页空白，所以要在假 webServer 上真的走一遍请求/响应。
+  const { registerSettingsRoutes, SETTINGS_PATH } = await import(pathToFileURL(path.join(PKG_ROOT, 'lib', 'gateway', 'routes-settings.js')).href);
+  const { registerDefaultsRoutes, DEFAULTS_PATH } = await import(pathToFileURL(path.join(PKG_ROOT, 'lib', 'gateway', 'routes-defaults.js')).href);
+
+  const mounted = new Map();
+  const fakeServer = { register: (route) => { mounted.set(route.path, route.handler); return () => mounted.delete(route.path); } };
+  const capture = () => {
+    const res = { status: 0, headers: null, body: '' };
+    res.writeHead = (status, headers) => { res.status = status; res.headers = headers; };
+    res.end = (body) => { res.body = body; };
+    return res;
+  };
+
+  const settingsMount = registerSettingsRoutes({ webServer: fakeServer });
+  check('设置页模板路由挂上了', settingsMount.ok === true && mounted.has(SETTINGS_PATH), JSON.stringify(settingsMount));
+
+  const settingsRes = capture();
+  await mounted.get(SETTINGS_PATH)({ method: 'GET' }, settingsRes);
+  let settingsBody = null;
+  try { settingsBody = JSON.parse(settingsRes.body); } catch { settingsBody = null; }
+  check('模板路由回 200 且是合法 JSON', settingsRes.status === 200 && settingsBody !== null, String(settingsRes.status));
+  check('模板路由不回用户配置（只有模板与来源）',
+    settingsBody !== null && Object.keys(settingsBody).sort().join(',') === 'fields,ok,sources,tabs',
+    settingsBody === null ? '' : Object.keys(settingsBody).join(','));
+  check('模板里有标签页与字段',
+    settingsBody !== null && settingsBody.tabs.length === 4 && settingsBody.fields.length === configMod.SETTINGS_FIELDS.length,
+    settingsBody === null ? '' : settingsBody.tabs.length + ' 页 / ' + settingsBody.fields.length + ' 字段');
+  check('模板响应禁止缓存（改 JSON 后要能立刻看到）',
+    settingsRes.headers !== null && String(settingsRes.headers['cache-control']).includes('no-store'));
+
+  const methodRes = capture();
+  await mounted.get(SETTINGS_PATH)({ method: 'POST' }, methodRes);
+  check('模板路由只认 GET', methodRes.status === 405, String(methodRes.status));
+
+  const defaultsMount = registerDefaultsRoutes({ webServer: fakeServer });
+  check('默认值路由仍然挂着', defaultsMount.ok === true && mounted.has(DEFAULTS_PATH));
+
+  const unmounted = settingsMount.unregister;
+  unmounted();
+  check('注销后路由从服务端摘掉', !mounted.has(SETTINGS_PATH));
   check('工作目录配置项已移除（工作区自动管理）', liveConfig.workspace === undefined || liveConfig.workspace === null);
   check('访客默认白名单含 qq_websearch/qq_history 且不含 web_fetch（联网统一走 qq_websearch 代理，历史自取走 qq_history）',
     Array.isArray(liveConfig.auth.guestToolAllow.get()) && liveConfig.auth.guestToolAllow.get().includes('qq_websearch') && liveConfig.auth.guestToolAllow.get().includes('qq_history') && !liveConfig.auth.guestToolAllow.get().includes('web_fetch'),
