@@ -19,8 +19,8 @@ async function check(name, fn) {
 }
 
 const { STAGE, orderedValves, createNetworkValve, createSecurityValve, createToolValve } = await import('../lib/valve/index.js');
-const { currentProxy } = await import('../lib/shared/http.js');
-const { multiEngineRequest } = await import('../lib/shared/http.js');
+const { currentProxy, multiEngineRequest } = await import('../lib/shared/http.js');
+const { __setNetworkHooks } = await import('../lib/valve/network/policy.js');
 const { assembleValves, describeAssembly, ASSEMBLY_ORDER } = await import('../lib/assemble.js');
 const { assembleReply, ASSEMBLY_STEPS } = await import('../lib/message/index.js');
 const { resolveAdapterPath, supportedProtocols } = await import('../lib/transport/index.js');
@@ -158,53 +158,121 @@ await check('未知协议回退 OneBot 11 入口', () => {
 });
 
 console.log('\n7. 代理归属：阀门决定，工具不持有');
+// 阀门会改传输层的模块级状态，用完必须还原：断言中途抛错也要还原，
+// 否则同一套件后面的断言会跑在「上一个阀门」的代理上。
+const withValve = async (configured, body) => {
+  const valve = createNetworkValve({ proxy: () => configured.value });
+  try { return await body(valve); } finally { valve.uninstall(); }
+};
+
 await check('阀门成型后接管传输层的代理策略', async () => {
-  // 成型前：默认直连
-  assert.equal(currentProxy(), '');
-  let configured = 'http://127.0.0.1:7890';
-  const valve = createNetworkValve({ proxy: () => configured });
-  // 成型即安装解析器：传输层跟着阀门走
-  assert.equal(currentProxy(), 'http://127.0.0.1:7890');
-  configured = 'http://10.0.0.9:1080';
-  assert.equal(currentProxy(), 'http://10.0.0.9:1080', '配置改了，传输层立刻跟着变');
-  configured = '';
-  assert.equal(currentProxy(), '', '配置清空即直连');
-  valve.uninstall();
+  const configured = { value: 'http://127.0.0.1:7890' };
+  await withValve(configured, async () => {
+    // 成型即安装解析器：传输层跟着阀门走
+    assert.equal(currentProxy(), 'http://127.0.0.1:7890');
+    configured.value = 'http://10.0.0.9:1080';
+    assert.equal(currentProxy(), 'http://10.0.0.9:1080', '配置改了，传输层立刻跟着变');
+    configured.value = '';
+    assert.equal(currentProxy(), '', '配置清空即直连');
+  });
   assert.equal(currentProxy(), '', '卸下后回到默认直连');
 });
 await check('hasProxy 反映当前是否配了代理', async () => {
-  let configured = '';
-  const valve = createNetworkValve({ proxy: () => configured });
-  assert.equal(valve.hasProxy(), false);
-  configured = 'http://127.0.0.1:7890';
-  assert.equal(valve.hasProxy(), true);
-  valve.uninstall();
+  const configured = { value: '' };
+  await withValve(configured, async (valve) => {
+    assert.equal(valve.hasProxy(), false);
+    configured.value = 'http://127.0.0.1:7890';
+    assert.equal(valve.hasProxy(), true);
+  });
+});
+
+// 关键断言：代理**确实被用到网络上**，而不只是「内网目标被拒」。
+// 内网目标在直连与代理两个分支都会被 assertPublicHost 拒掉，那种写法区分不了两条路径；
+// 这里用一个必然连不上的死代理 + 公网目标：只有真的走了代理分支才会 ECONNREFUSED。
+await check('配了代理时请求公网目标确实走代理分支（死代理必连不上）', async () => {
+  const configured = { value: 'http://127.0.0.1:9' };
+  let directHits = 0;
+  __setNetworkHooks({
+    lookup: async () => [{ address: '93.184.216.34', family: 4 }],
+    request: async () => { directHits += 1; return { status: 200, body: '{"ok":1}', headers: {} }; },
+  });
+  try {
+    await withValve(configured, async () => {
+      let failure = '';
+      try { await multiEngineRequest('GET', 'https://probe.example/x', {}, null); }
+      catch (error) { failure = String(error && error.message ? error.message : error); }
+      assert.ok(failure !== '', '死代理必须连不上（若成功说明根本没走代理）');
+      assert.ok(/ECONNREFUSED|127\.0\.0\.1:9|连接|refused/i.test(failure), '应当是「连代理失败」而不是别的错误：' + failure);
+      assert.equal(directHits, 0, '走代理分支时不该落到直连的 request 钩子');
+    });
+    // 对照组：清空代理后同样的请求应当走直连并命中注入的钩子
+    directHits = 0;
+    const ok = await multiEngineRequest('GET', 'https://probe.example/x', {}, null);
+    assert.equal(ok.status, 200, '没配代理就该直连成功');
+    assert.equal(directHits, 1, '直连分支应当命中 request 钩子');
+  } finally { __setNetworkHooks(null); }
+});
+// 门面自己的出网方法也得测：qq_webfetch 走的就是 net.fetchText，
+// 只测传输层的话「阀门把代理丢了」这类回归一条断言都抓不到。
+await check('net.fetchText：配了代理走代理，没配代理走直连', async () => {
+  let directHits = 0;
+  __setNetworkHooks({
+    lookup: async () => [{ address: '93.184.216.34', family: 4 }],
+    request: async () => { directHits += 1; return { status: 200, body: 'hello', headers: {} }; },
+  });
+  try {
+    // 配死代理：必须连不上代理（证明走的是代理分支，而不是偷偷直连）
+    const dead = { value: 'http://127.0.0.1:9' };
+    await withValve(dead, async (valve) => {
+      let failure = '';
+      try { await valve.fetchText('https://probe.example/x', { useProxy: true, timeoutMs: 4000 }); }
+      catch (error) { failure = String(error && error.message ? error.message : error); }
+      assert.ok(failure !== '', '死代理必须抓取失败（成功说明没走代理）');
+      assert.equal(directHits, 0, '走代理时不该落到直连');
+    });
+    // 不配代理：应走直连并命中钩子
+    directHits = 0;
+    const plain = { value: '' };
+    await withValve(plain, async (valve) => {
+      const got = await valve.fetchText('https://probe.example/x', { useProxy: true, timeoutMs: 4000 });
+      assert.equal(got.status, 200, '没配代理就该直连成功');
+      assert.equal(directHits, 1, '直连分支应当命中 request 钩子');
+    });
+    // 显式 useProxy:false：即使配了代理也必须直连
+    directHits = 0;
+    const configured = { value: 'http://127.0.0.1:9' };
+    await withValve(configured, async (valve) => {
+      const got = await valve.fetchText('https://probe.example/x', { useProxy: false, timeoutMs: 4000 });
+      assert.equal(got.status, 200, 'useProxy:false 必须直连');
+      assert.equal(directHits, 1);
+    });
+  } finally { __setNetworkHooks(null); }
 });
 await check('工具源码里不再读 webSearch.proxy（只有 moli 分支例外）', async () => {
   const fs = await import('node:fs/promises');
   const read = (p) => fs.readFile(new URL('../lib/tools/' + p, import.meta.url), 'utf8');
   const websearch = await read('websearch.js');
   const imgsearch = await read('imgsearch.js');
-  assert.ok(!/webSearch\.proxy|\.proxy\b/.test(websearch), 'websearch 不该出现 proxy');
-  assert.ok(!/webSearch\.proxy|\.proxy\b/.test(imgsearch), 'imgsearch 不该出现 proxy');
+  // 这两个文件整份都不该出现 proxy（含注释）。hasProxy() 是「问阀门有没有配代理」，
+  // 属于合法用法，先剔掉再查，免得把正解当成违规。
+  const strip = (src) => src.replace(/hasProxy/g, '');
+  assert.ok(!/proxy/i.test(strip(websearch)), 'websearch 不该出现 proxy');
+  assert.ok(!/proxy/i.test(strip(imgsearch)), 'imgsearch 不该出现 proxy');
   const index = await read('index.js');
-  // index.js 里仅 moli 分支保留代理串（moli 自己的 proxy 语义不归阀门管）
+  // index.js 里只允许 moli 分支保留代理串：凡是提到 proxy 的非注释、非 import 行，
+  // 必须同时提到 moli/guard（否则就是「工具自己决定代理」复活了）。
+  // 注意：不能把 wsCfg 之类写进白名单——那样原来那行违规代码自己就能过。
   const lines = index.split('\n').filter((l) => /\bproxy\b/i.test(l)
-    && !/^\s*\/\//.test(l)          // 注释
-    && !/^\s*import\b/.test(l));     // import 行
+    && !/^\s*\/\//.test(l)
+    && !/^\s*import\b/.test(l)
+    && !/^\s*\*/.test(l));
+  // 允许的两种：moli 自己的上游代理、以及 guard-proxy（本地校验代理，不是出口代理）。
+  // 注意白名单里绝不能出现 wsCfg / webSearch 这类「读配置」的线索——
+  // 否则原来那行 `const proxy = wsCfg.proxy.trim()` 自己就能过。
   for (const line of lines) {
-    assert.ok(/moli|guard-?proxy|ensureGuardProxy|wsCfg/i.test(line),
-      '非 moli 分支不该碰代理串：' + line.trim().slice(0, 80));
+    assert.ok(/moli|guard-?proxy/i.test(line),
+      '非 moli 分支不该碰代理串：' + line.trim().slice(0, 90));
   }
-});
-await check('multiEngineRequest 不传代理时按阀门策略走', async () => {
-  // 阀门配了代理 → 走代理分支；内网目标仍被拒（说明策略没被绕过）
-  const valve = createNetworkValve({ proxy: () => 'http://127.0.0.1:7890' });
-  assert.equal(currentProxy(), 'http://127.0.0.1:7890');
-  let blocked = false;
-  try { await multiEngineRequest('GET', 'http://127.0.0.1:1/x', {}, null); } catch (error) { blocked = true; }
-  assert.ok(blocked, '配了代理也不能打内网');
-  valve.uninstall();
 });
 
 console.log('\n' + pass + ' 通过 / ' + fail + ' 失败');

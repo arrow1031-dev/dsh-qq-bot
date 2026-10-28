@@ -52,6 +52,11 @@ DSH Agent（默认每个 QQ 会话一个）
 顺序写在一张表里（[lib/valve/index.js](../lib/valve/index.js) 的 `STAGE`），组装根
 （[lib/assemble.js](../lib/assemble.js)）照着执行；调整优先级只改那张表，不用翻调用方。
 
+**这张表分两段，别混着读**：stage 10/20/30 由 `assembleValves()` 真正装配（依赖没成型就抛错）；
+40/50/60 只登记在 `ASSEMBLY_ORDER` 里、用于启动日志说明调用次序，**实际由 `gateway/plugin.js`
+在 `apply()` 内部按同一顺序创建**（静态 import，不走装配根）。要让后三层也受装配根管控，
+得把它们改造成阀门同款工厂——目前没做，别按「六层都由 assemble.js 装配」去理解代码。
+
 | stage | 层 | 职责 | 依赖 |
 | --- | --- | --- | --- |
 | 10 | `valve/network` | 出网策略：公网判定 / 内网黑名单 / 钉地址 / 代理语义 | — |
@@ -128,7 +133,7 @@ DSH Agent（默认每个 QQ 会话一个）
 | `message/chunk.js` | 回复分条：Markdown 感知切分（代码块/表格整块搬，超长才硬切） | `chunkMarkdown` |
 | `message/stream.js` | 官方 v2 私聊流式桥（增量合并 / 节流 / done 收尾 / 失败停用），**特有能力** | `createStreamBridge` `shouldStream` |
 | `message/interim.js` | 中间发言：把「已经说完、后面还有内容」的 assistant 文本挑出来先发 | `pickInterim` |
-| `message/segments.mjs` | 统一消息段（text/at/image/reply/face/…）与摘要 | `segmentsToText` `countImages` `imageUrlsOf` `summarizeSegments` `seg` |
+| `message/segments.mjs` | 统一消息段（text/at/image/reply/face/…）与摘要 | `segmentsToText` `countImages` `imageUrlsOf` `summarizeSegments` |
 | `message/msgid-cache.js` | 入站去重：按 message_id 记最近见过的消息（有界 + TTL） | `createMsgIdCache` |
 
 ### 2.5 工具层 `lib/tools/`
@@ -169,6 +174,7 @@ DSH Agent（默认每个 QQ 会话一个）
 | `transport/adapters/milky.mjs` | Milky 1.3：`WS /event` + `POST /api/:api` | 脚本本体 |
 | `transport/adapters/qq-official.mjs` | QQ 开放平台 API v2：WS 网关或 Webhook（Ed25519 签名） | 脚本本体 |
 | `transport/onebot-adapter.mjs` | 兼容入口，仅一行 `import './adapters/onebot11.mjs'` | — |
+| `transport/bridge/CONTRACT.md` | **写新适配器的权威指南**：stdio 帧定义、消息段归一、骨架代码 | —（文档） |
 | `transport/bridge/ws.mjs` | 手写 RFC 6455：帧编解码、正向/反向 WS、链路集合、指数退避重连 | `connectForward` `startReverseServer` `createLinkSet` `decodeFrames` |
 | `transport/bridge/stdio.mjs` | stdio 帧工具：发射器、发送队列（限速）、stdin 命令循环 | `createEmitter` `createSendQueue` `installStdin` `postJson` |
 

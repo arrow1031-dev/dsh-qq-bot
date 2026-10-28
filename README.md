@@ -3,7 +3,7 @@
 [![CI](https://github.com/arrow1031-dev/dsh-qq-bot/actions/workflows/ci.yml/badge.svg)](https://github.com/arrow1031-dev/dsh-qq-bot/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/%40sputnikzaychik%2Fdsh-qq-bot?label=npm)](https://www.npmjs.com/package/@sputnikzaychik/dsh-qq-bot)
 [![npm downloads](https://img.shields.io/npm/dm/%40sputnikzaychik%2Fdsh-qq-bot?label=%E4%B8%8B%E8%BD%BD)](https://www.npmjs.com/package/@sputnikzaychik/dsh-qq-bot)
-[![tests](https://img.shields.io/badge/tests-1359%20passing-brightgreen)](docs/DEVELOPMENT.md)
+[![tests](https://img.shields.io/badge/tests-1360%20passing-brightgreen)](docs/DEVELOPMENT.md)
 [![node](https://img.shields.io/badge/node-%E2%89%A522.6-339933)](https://nodejs.org/)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
@@ -220,7 +220,7 @@ dsh plugin --profile web remove @sputnikzaychik/dsh-qq-bot          # 卸载
 
 | 文档 | 内容 |
 | --- | --- |
-| [DEVELOPMENT.md](docs/DEVELOPMENT.md) | 本地开发与测试（37 套件 / 1359 项）、完整配置参考、工具细节、文件清单、设计取舍、发布流程、部署备注 |
+| [DEVELOPMENT.md](docs/DEVELOPMENT.md) | 本地开发与测试（37 套件 / 1360 项）、完整配置参考、工具细节、文件清单、设计取舍、发布流程、部署备注 |
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | 分层图、模块职责、关键数据流、身份契约、已知边界 |
 | [CHANGELOG.md](CHANGELOG.md) | 0.1.0 → 0.12.6 的完整演进 |
 | [AI-DISCLOSURE.md](docs/AI-DISCLOSURE.md) | AI 生成方式、验证到什么程度、**尚未验证清单**（用前务必读） |

@@ -36,7 +36,7 @@
 
 ### 验证情况
 
-- **自动化测试 37 个套件 / 1359 项全部通过**（`npm test` = `node test/run-all.mjs`；CI 在 Node 22 / 24 双版本上跑）：
+- **自动化测试 37 个套件 / 1360 项全部通过**（`npm test` = `node test/run-all.mjs`；CI 在 Node 22 / 24 双版本上跑）：
   - 正向 WebSocket 适配器 19 项 ／ 反向 19 项（含半开回收） ／ OneBot 12 30 项 ／ Satori 70 项 ／ Milky 83 项 ／ QQ 官方 95 项
   - Host 插件端到端 120 项（假 ctx + 真适配器 + Config 契约 + 配置热更新 + 废弃配置清理 + 默认准入 fail-closed + 入站限流；能解析到 `@deepseek-ai/dsh-tools` 时会多跑 9 个工具注册断言）
   - 安全回归 `test-security.mjs` 55 项（SSRF 公网判定与 F1 / IPv6 映射写法 / 6to4 与 Teredo 内嵌 IPv4 / 识图下载源码断言 / 跨群与撤回绑群）
@@ -60,7 +60,7 @@
     修复后改用 `-ws<哈希>` id 重建（见 CHANGELOG 0.9.2）。
 - **0.2.1-rc.3 兼容复核**：在隔离 `DSH_HOME`（独立 profile，未连 NapCat）装 rc.3 + 本插件，
   启动日志 9 个工具注册齐全、适配器 ready、无报错；插件启动会自检并打印实际 DSH 版本与判定，
-  判定范围来自 `lib/compat.js` 的两个常量，不逐版本硬编码。
+  判定范围来自 `lib/shared/compat.js` 的两个常量，不逐版本硬编码。
 - 打包与组合校验：`dsh --profile web --dump-config` 接受插件行与 preset 行；
   解包到 profile 后 `@deepseek-ai/dsh-tools` 可解析；客户端清单通过 `dsh.client` 校验。
 - 核对过的上游文档：[OneBot 11 鉴权规范](https://github.com/botuniverse/onebot-11)、

@@ -2,7 +2,7 @@
 
 插件只认这一套 stdio 帧，与底层协议无关。适配器是独立进程（`#!/usr/bin/env node`、ESM、Node ≥ 22、零 npm 依赖），
 由插件 `subprocess.spawn` 拉起，用 stdin/stdout 换行分隔 JSON 通信；**stdout 只能出帧**，日志走 `log`/`error` 帧或 stderr。
-现有实现 `lib/adapters/{onebot11,onebot12,satori,milky,qq-official}.mjs`，共用工具 `lib/bridge/{stdio,ws,segments}.mjs`。
+现有实现 `lib/transport/adapters/{onebot11,onebot12,satori,milky,qq-official}.mjs`，共用工具 `lib/transport/bridge/{stdio,ws}.mjs` 与 `lib/message/segments.mjs`。
 
 ## 1. 出帧（适配器 → 插件）
 
@@ -46,7 +46,7 @@
 
 **按钮点击**（官方 v2 的 `INTERACTION_CREATE`）适配器会额外产出一条 `message` 帧（`sub_type: 'interaction'`，`text` 取按钮 `button_data`），原 `notice` 帧保留；插件靠 `message_id` 去重，同一次点击只起一个回合。
 
-### 统一段（`lib/bridge/segments.mjs`）
+### 统一段（`lib/message/segments.mjs`）
 
 `{ type, data }`：text(`text`) / at(`qq`，`all` 为全体) / image(`url` 或 `file`) / reply(`id`) / face / record / video / file / json / xml / forward / poke / mface。
 未知段**降级为 text**，禁止抛错；`summarizeSegments(segments)` 一次产出 `{ text, images, imageUrls, replyTo }`。
@@ -94,7 +94,7 @@
 #!/usr/bin/env node
 import { createEmitter, createSendQueue, installStdin, installCrashHandlers, postJson } from '../bridge/stdio.mjs';
 import { createLinkSet, connectForward, startReverseServer, bearerOrQueryToken } from '../bridge/ws.mjs';
-import { summarizeSegments } from '../bridge/segments.mjs';
+import { summarizeSegments } from '../../message/segments.mjs';   // 段归一层在 message/，不在 bridge/
 
 const { emit, log, fail } = createEmitter();
 const links = createLinkSet({ onStatus: (info) => emit({ type: 'status', connected: info.size > 0, links: info.size }) });

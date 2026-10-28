@@ -1,4 +1,4 @@
-/** 单元测试：lib/websearch.js —— parseWebSearchResponse 结构化解析 */
+/** 单元测试：lib/tools/websearch.js —— parseWebSearchResponse 结构化解析 */
 import { parseWebSearchResponse } from '../lib/tools/websearch.js';
 
 const results = [];

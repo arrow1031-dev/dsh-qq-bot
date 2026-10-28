@@ -1,3 +1,64 @@
+## 未发布 —— 五路对抗性审查后的修正（2026-10-28）
+
+对前两条提交做了五路独立审查（代理归属 / 阀门架构 / 目录完整性 / 测试有效性 / 文档一致性），
+交叉认证后修掉以下问题。审查里两份结论被交叉认证推翻，记在这里避免以后重犯：
+
+- 「把 resolver 删掉，37 个套件一个都不会挂」**不成立**：破坏实验实测 `test-valve-assembly` 会红 2 条
+  （`currentProxy()` 的断言守住了阀门→传输层的接管链路）。
+- 「测试数 1359 偏高 4%」**不成立**：文档 37 行逐项求和正好 1359；本机汇总只有 1161 是因为漏解析了
+  三个只打印 `SELF-TEST PASSED` 的适配器套件（19+70+109=198）。
+
+### 用户可见破损（重构漏改的直接后果）
+
+- **11 处**文案还在教用户跑 `node lib/totp-cli.mjs`，文件早已搬到 `lib/valve/security/totp-cli.mjs`，
+  照抄必 `MODULE_NOT_FOUND`，且没有 `bin`/npm script 兜底。涉及设置页提示、`qqauth` 工具报错、
+  CLI 自身 usage、插件启动日志。已全部改为新路径。
+- `lib/transport/bridge/CONTRACT.md`（写新适配器的权威指南）三处路径失效，其中第 97 行给出的
+  `import ... from '../bridge/segments.mjs'` 照抄即报错（段归一层在 `lib/message/`）。已修。
+- `lib/adapters/`、`lib/bridge/` 两个重构后留下的空目录已删。
+
+### 测试真实性（这次最要紧的一条）
+
+- **假阳性断言**：原「不传代理时按阀门策略走」用「内网目标被拒」当证据，但直连与代理两个分支
+  都会 `assertPublicHost` 拒内网，该断言恒真、区分不了路径。改为「死代理 + 公网目标必须连不上代理」
+  并断言直连钩子未被命中。
+- **补上阀门门面自身的覆盖**：`net.fetchText` 是 `qq_webfetch` 的唯一出网入口，之前零测试——
+  破坏实验证实「让阀门 fetchText 永远直连」时全套件无人报警。现补 3 条（配代理走代理 / 不配直连 /
+  `useProxy:false` 强制直连），再跑同样的破坏实验会立刻红。
+- **结构性断言的 allowlist 有洞**：原白名单含 `wsCfg`，导致它本要拦的那行
+  `const proxy = wsCfg.proxy.trim()` 自己就能过。白名单收窄为「moli / guard-proxy」，
+  并另测 `websearch.js`、`imgsearch.js` 整份不得出现代理串（`hasProxy()` 属合法用法，先剔除）。
+- 断言改为 `try/finally` 还原阀门状态，避免中途抛错把代理残留给同套件后续断言。
+
+### 契约与架构收口
+
+- **关掉代理逃生舱**：`shared/http.js` 不再接受 `{ proxy: '…' }` 自带代理——代理串只能来自网络阀门
+  安装的解析器，否则任何直接 import 传输层的模块都能绕开阀门策略与审计。要自定义代理，用
+  `__setProxyResolver` 装桩。
+- 修分层倒置：`valve/network/guard-proxy.js` 改为直接依赖 `valve/network/policy.js`（原来绕回
+  `shared/http.js` 取判定函数）。
+- `assemble.js` 补表自检：stage 重复会抛错、阀门没在 `ASSEMBLY_ORDER` 登记会抛错、
+  `tool` 拿不到 `security` 时给可读错误而不是 `TypeError`。
+- `qq_webfetch` 的代理串读取移进 moli 分支并改名 `moliUpstream`——非 moli 路径从此在源码层面
+  完全不碰代理串；`net` 未注入时给可读报错而不是 `TypeError`。
+
+### 文档与代码对齐
+
+- `docs/ARCHITECTURE.md`：组装优先级表补一段「10/20/30 由 `assembleValves()` 真装配，40/50/60 只登记
+  在 `ASSEMBLY_ORDER` 里、由 `gateway/plugin.js` 在 `apply()` 内按同一顺序创建」，不再暗示六层都由
+  装配根管；删掉 `message/segments.mjs` 那个并不存在的 `seg` 导出；2.8 传输层补上 `CONTRACT.md` 行。
+- `CHANGELOG` 里「12 个函数签名」更正为 **20 个**（`websearch.js` 8 + `imgsearch.js` 12）。
+- 批量修掉注释里的旧路径（`lib/compat.js`、`lib/totp.js`、`lib/qr.js`、`lib/bind-routes.js`、
+  `lib/bridge/CONTRACT.md` 等），共 11 个文件。
+
+### 仍未处理（需要决策）
+
+- security / tool 门面的便捷方法（`verifyToken`、`judgeHistory`、`checkCaller`、`isGated`…）在生产代码里
+  零调用，实际用的是门面暴露的 `.flowAuth` / `.flowStore` / `.gate` 底层对象。门面文件头声称的
+  「唯一入口」并不成立。
+- `shared/http.js` ↔ `valve/network/` 双向依赖（策略层被 shared 引用、门面又引用 shared）；
+  `transport/adapters/*` 反向依赖 `message/segments.mjs`。两处都与文档的分层声明相反。
+
 ## 未发布 —— 代理收归网络阀门 + 文档收进 docs/（2026-10-28）
 
 ### 代理不再由工具自己决定（行为等价，归属改变）
@@ -11,16 +72,18 @@
   - `net.fetchText(url, { useProxy: true })` —— 走统一策略（配了代理就走，没配就直连）
   - `multiEngineRequest(…, { useProxy: false })` —— 明确要求直连
   - 不传 spec 的老调用 = 按阀门策略走；显式传字符串仍照用（只留给测试与特例）
-- 连带收敛：`runWebSearch` / `runImageSearch` / `uploadToHost` / `imgSearch*File` 等 12 个
-  函数签名里的 `proxy` 形参全部删除；`qq_imgsearch` 判断「哪些引擎可用」改为问
+- 连带收敛：**20 个**函数签名里的 `proxy` 形参全部删除（`websearch.js` 8 个 +
+  `imgsearch.js` 12 个），另有 `runWebSearch` 内部不再读 `cfg.proxy`；`qq_imgsearch` 判断「哪些引擎可用」改为问
   `net.hasProxy()`，不再自己嗅探代理串。
 - **保持原样**（按需求）：识图下载与生图结果下载继续走 `publicFetch` 强制直连；
   `moli` 的 `moli.proxy` 覆盖/透传语义不动（那是用户显式配置，不归阀门管）。
 - 顺带修依赖方向：`valve/network/guard-proxy.js` 原来从 `shared/http.js` 取判定函数
   （绕一圈 re-export），改为直接依赖 `valve/network/policy.js`——阀门内部不该反向依赖传输层。
-- 测试：`test-valve-assembly` 新增 4 条（阀门接管传输层 / 配置改了立刻生效 / `hasProxy` /
-  `multiEngineRequest` 不传代理也照阀门走且仍拒内网），并加一条结构性断言锁住
-  「工具源码里不再出现代理串」（moli 分支例外）。套件 37 个 / 1359 项。
+- 测试：`test-valve-assembly` 新增 5 条，并加一条结构性断言锁住「工具源码里不再出现代理串」
+  （moli 分支例外）。**关键是让断言真的能区分代理路径**：早期版本用「内网目标被拒」来证明
+  「走了代理」，但直连与代理两个分支都会拒内网，那种断言永远为真——现在改成「死代理 + 公网
+  目标，必须连不上代理」和「阀门 `fetchText` 配代理走代理 / 不配直连 / `useProxy:false` 直连」
+  三条真断言。已用破坏实验验证：把解析器改成恒直连、或让阀门 `fetchText` 永远直连，套件立刻红。
 
 ### 文档收进 docs/
 
