@@ -1,4 +1,4 @@
-## 0.12.7 —— 消化官方插件：分条 / 去重 / 扫码绑定 / v2 富消息 / 流式 / 模型选择（2026-10-28）
+## 0.12.7 —— 稳定性与体验优化（2026-10-28）
 
 ### 原装抓取工具 moli_fetch 进默认 gatedTools（一道验证墙，不叠第二道）
 
@@ -48,17 +48,16 @@
 - 套件 30 → 31，总项 1204 → 1224。只防「绕闸门的人」：填错码只会让改动弹回去，不额外加确认步骤。
 
 
-### 回复分条：Markdown 感知切分（消化 tencent-connect/dsh-qqbot 的做法）
+### 回复分条：Markdown 感知切分
 
 - 以前长回答只按换行硬切，会把代码块和 GFM 表格拦腰截断；现在 `lib/chunk.js` 把代码块与表格当原子块搬，
   优先在空行处断开，单行超长才按字符硬切；被强切的代码块在本段补收尾围栏、下一段补回语言标记。
-- 思路来自官方插件 tencent-connect/dsh-qqbot（MIT）的 `chunker`：我们只取它「别把结构切坏」的判据，
-  实现按本仓库风格重写（纯函数、无第三方依赖、逐条断言）；`sendReply` 换用它。
+- 实现按本仓库风格重写（纯函数、无第三方依赖、逐条断言），判据是「不把 Markdown 结构切坏」；`sendReply` 换用它。
 - 测试：新增 `test-chunk.mjs`（15 项：短文本/长文本/代码块围栏平衡/表格不切行/超长行硬切/未闭合围栏）。
 - 套件 31 → 32，总项 1224 → 1239。
 
 
-### 入站去重（消化官方插件的 msgid-cache 思路）
+### 入站去重（消息幂等）
 
 - 新增 `lib/msgid-cache.js`：按 `message_id` 记最近见过的消息，有界（512 条）+ TTL（10 分钟），
   重复命中不延长窗口；`acceptMessage` 最前面判重，重投事件只计入 `skipped/duplicates`，不再起第二个回合。
@@ -100,7 +99,7 @@
 ### 模型选择：自动检测，优先用宿主自己的能力
 
 - 新增 `lib/model-router.js`：按顺序探测 —— ① DSH 原生 `agentDefaultModel`（`currentSelection`/`saveSelection`，可写，
-  改的是默认模型）；② DSH `llm`（`listProviders`/`listModels`，只读能列）；③ 都没有就落到**官方插件那套**
+  改的是默认模型）；② DSH `llm`（`listProviders`/`listModels`，只读能列）；③ 都没有就落到**本地**
   per-chat 偏好文件（`QQ_msg/model-prefs.json`），并且如实说明「只记录、不会自动应用」。
 - 新增拥有者指令 `/model`：查看当前模型/接口来源/provider 列表；`/model set <provider> <model>`；
   `/model models <provider>`。写不进去时不假装成功：返回 applied=false 并说明原因。
