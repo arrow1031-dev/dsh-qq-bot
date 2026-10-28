@@ -437,8 +437,7 @@ node -e "fetch('http://127.0.0.1:3000/__sent').then(r=>r.json()).then(j=>console
 | `lib/gateway/routes-defaults.js` / `routes-settings.js` | `GET /dsh-qq-bot/defaults`（默认值）与 `GET /dsh-qq-bot/settings`（设置页模板：标签页 + 字段）。都只回模板/常量，不含任何配置值 |
 | `lib/gateway/commands.js` | `/auth` `/flow` 解析、拦截判定、产物输入归一 |
 | **消息组装层** | |
-| `lib/message/index.js` | 组装入口：中间发言 → 正文分条 → 流式合并（`assembleReply` 纯函数） |
-| `lib/message/` | `chunk.js` 分条、`stream.js` 流式桥、`interim.js` 中间发言、`segments.mjs` 统一段、`msgid-cache.js` 入站去重 |
+| `lib/message/` | 组装全部在 `gateway/plugin.js` 的回复链路里；本目录只有纯函数：`chunk.js` 分条、`stream.js` 流式桥、`interim.js` 中间发言、`segments.mjs` 统一段、`msgid-cache.js` 入站去重 |
 | **工具层** | |
 | `lib/tools/index.js` | 9 个模型工具（统一走 `registerTool`，DSH 0.2 契约） |
 | `lib/tools/` | `websearch.js` 组合搜索、`imgsearch.js` 反搜 + 图床、`imagegen.js` 生图、`moli.js` 引擎封装、`qr.js` 二维码编码器；同目录的 `*-conf.json`（默认值）/ `*-set.json`（设置页字段）归各自工具所有 |

@@ -242,8 +242,24 @@ try {
   r = await say(33333, 44444, '/notacommand 你好');
   check('未知指令 -> 交给模型', r === 'REPLY' && mutations() === beforeUnknown, r);
 
+  console.log('\n4b. 指令表自洽 + /model 委派（注释审查修的两个洞）');
+  const { createAdmin } = await import(pathToFileURL(path.join(here, '..', 'lib', 'api', 'group-admin.js')).href);
+  const unitAdmin = createAdmin({
+    getConfig: () => ({ admin: { enabled: true, prefix: '/', dryRun: true }, auth: { owners: ['456'] }, group: { allow: [], manageGroups: [] } }),
+    callAdapterAction: async () => ({ ok: true, data: {} }),
+    sendReply: () => {},
+    state: { stats: { admin: 0 } },
+  });
+  check('createAdmin 不抛异常（/help 里每条指令都有 arity + permission）', unitAdmin !== null && typeof unitAdmin.handleAdminCommand === 'function');
+  let modelThrew = '';
+  let modelHandled = null;
+  try {
+    modelHandled = await unitAdmin.handleAdminCommand({ message_type: 'group', group_id: '123', user_id: '456', text: '/model show' }, '/model show');
+  } catch (error) { modelThrew = String(error && error.message); }
+  check('/model 不抛异常且不被指令层认领（交给专门处理器）', modelThrew === '' && modelHandled === false, modelThrew || String(modelHandled));
+
   console.log('\n5. /recall 靠 reply 透传');
-  // 撤回前插件会用 get_msg 核对消息归属，先在假 OneBot 里把这条消息登记进群 44444。
+  // 撤回前插件会用 get_msg 核对消息归属，先在假 OneBot 里把这条消息登记进群 33333。
   mock.extraMessages.push({ message_id: 98765, time: 0, user_id: 55555, group_id: 33333, message: [], raw_message: '', sender: {} });
   const beforeRecall = actionsOf('delete_msg').length;
   r = await say(33333, 44444, '/recall', { replyTo: 98765 });

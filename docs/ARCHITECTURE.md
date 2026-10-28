@@ -446,6 +446,6 @@ lib/**/*-set.json  →  SETTINGS_FIELDS  →  GET /dsh-qq-bot/settings  →  客
 
 ### 5.6 门面的「薄包装」现状
 
-`valve/security` 与 `valve/tool` 的门面里有一批便捷方法（`verifyToken` `verifyRecovery` `judgeHistory` `checkOwnerCaller` / `isGated` `check` `remember` `forget` `blockedText` `noteBlocked` `decideEdit`），它们是对门面已暴露的 `flowAuth` / `gate` 同名方法的**薄包装**，目前只有测试在调；生产代码直接用底层对象，另有一处 `gateway/plugin.js` 直接 import `decideGateEdit`。
+`valve/security` 与 `valve/tool` 的门面里有一批便捷方法（`verifyToken` `verifyRecovery` `judgeHistory` `checkOwnerCaller` / `isGated` `check` `remember` `forget` `blockedText` `noteBlocked`），它们是对门面已暴露的 `flowAuth` / `gate` 同名方法的**薄包装**，目前只有测试在调；生产代码直接用底层对象。闸门本身的判定（`decideGateEdit`）不在这些包装里：`gateway/plugin.js` 直接从 `gate-guard.js` import 它。
 
 所以这两个阀门的定位是「**判定与状态集中在这一层**」，不是「所有调用都必须穿过这些包装方法」。要真正收成单一入口，得把 `tools/` 与 `gateway/` 里的直接 import 一并改过来——那是另一次重构，不是补丁。

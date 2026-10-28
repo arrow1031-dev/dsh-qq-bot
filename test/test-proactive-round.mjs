@@ -60,7 +60,7 @@ const realLog = console.log;
 console.log = (...args) => { logLines.push(args.map(String).join(' ')); realLog(...args); };
 
 // 假模型的三句台词：判断模型的正常正文、以及「整句英文拒绝语」——后者是 requireCjk 要拦的东西。
-// 一句 59 字符、一个 CJK 都没有，正好落在「> 12 字且无 CJK」这个判据里。
+// 一句 61 字符、一个 CJK 都没有，正好落在「> 12 字且无 CJK」这个判据里。
 const JUDGE_TEXT = '那就下午三点老地方见';
 const ENGLISH_REJECT = "Sorry, it looks like I can't chat about this topic right now.";
 

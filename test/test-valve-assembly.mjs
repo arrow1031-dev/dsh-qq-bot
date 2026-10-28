@@ -139,7 +139,7 @@ await check('assembleValves 返回三道阀门且顺序正确', () => {
   assert.equal(a.tool.stage, STAGE.TOOL);
   assert.equal(a.tool.isGated('qqbot'), true);
 });
-await check('安全阀没成型时工具阀拿不到授权对象（依赖顺序被强制）', () => {
+await check('组装后工具阀能拿到 gate 对象（安全阀在它之前成型）', () => {
   const a = assembleValves({ config: () => ({}) });
   assert.ok(a.tool.gate !== undefined);
   assert.equal(typeof a.security.flowAuth.takeGrant, 'function');
