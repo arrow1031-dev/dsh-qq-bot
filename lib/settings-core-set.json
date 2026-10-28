@@ -480,6 +480,43 @@
     },
     {
       "path": [
+        "group",
+        "joinReview",
+        "groups"
+      ],
+      "label": "自动审核加群请求的群号",
+      "kind": "list",
+      "numeric": true,
+      "hint": "这些群的加群请求由 bot 审核：申请理由包含下面任一答案才自动通过；留空 = 不启用",
+      "tab": "basic",
+      "subtab": "access"
+    },
+    {
+      "path": [
+        "group",
+        "joinReview",
+        "answers"
+      ],
+      "label": "加群问题的可接受答案",
+      "kind": "list",
+      "hint": "申请理由包含任一答案即通过；留空 = 全部留人工审核",
+      "tab": "basic",
+      "subtab": "access"
+    },
+    {
+      "path": [
+        "group",
+        "joinReview",
+        "question"
+      ],
+      "label": "加群问题文案（仅记录）",
+      "kind": "text",
+      "hint": "写在这里方便对照；bot 不根据它判分，只匹配答案",
+      "tab": "basic",
+      "subtab": "access"
+    },
+    {
+      "path": [
         "private",
         "enabled"
       ],

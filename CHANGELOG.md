@@ -1,5 +1,11 @@
 ## 未发布 —— 注释审计 + 四处真缺陷（2026-10-29）
 
+### 加群请求自动审核（只认答对的）
+
+- `group.joinReview`：`groups` 指定生效的群，`answers` 是可接受答案；申请理由包含任一答案才自动调 `set_group_add_request` 通过，答错/空理由保持待人工（不自动拒绝）。
+- 设置页「基本 → 准入与名单」三行；适配器侧沿用 OneBot 11 的 `request/group/add` 帧（其它协议没有等价事件时不受影响）。
+- 测试：新增 `test-join-review.mjs` 14 项；套件 40 → 41，总项 1510 → 1524。
+
 ### gateway/plugin.js 第一阶段：无状态块搬出（P3 2.4，只搬不改）
 
 - `buildPersonaHint` / `dropConfigPaths` / `sanitizeDisplayName` / `summarizeTurnReason` / `idValue` 搬到 `lib/gateway/turn-text.js`；`/model` 的路由与指令搬到 `lib/gateway/model-pick.js`（依赖由插件注入，不持有全局状态）。
