@@ -444,6 +444,8 @@ node -e "fetch('http://127.0.0.1:3000/__sent').then(r=>r.json()).then(j=>console
 | `lib/valve/tool/` | 工具阀：`index.js` 门面（名单 / 拦截 / 改闸门要码）+ `gate-guard.js` |
 | **网关层** | |
 | `lib/gateway/plugin.js` | Cordis 插件主体：适配器生命周期、帧分发、回合/回复/视觉、主动发言、配置热更新 |
+| `lib/gateway/turn-text.js` | 无状态回合文本工具（人格段 / 配置脱敏 / 昵称清洗 / 失败原因 / id 归一），P3 2.4 第一阶段搬出 |
+| `lib/gateway/model-pick.js` | 模型选择：构建 `modelRouter` + `/model` 指令，依赖由插件注入 |
 | `lib/gateway/index.js` | HTTP 路由统一挂载（`ROUTE_MOUNTS` 表 + webServer 就绪 + 逆序注销） |
 | `lib/gateway/routes-bind.js` | 扫码绑定的两条具名路由 |
 | `lib/gateway/routes-defaults.js` / `routes-settings.js` | `GET /dsh-qq-bot/defaults`（默认值）与 `GET /dsh-qq-bot/settings`（设置页模板：标签页 + 字段）。都只回模板/常量，不含任何配置值 |
