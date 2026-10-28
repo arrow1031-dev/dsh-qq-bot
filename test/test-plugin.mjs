@@ -379,8 +379,10 @@ try {
   let settingsBody = null;
   try { settingsBody = JSON.parse(settingsRes.body); } catch { settingsBody = null; }
   check('模板路由回 200 且是合法 JSON', settingsRes.status === 200 && settingsBody !== null, String(settingsRes.status));
-  check('模板路由不回用户配置（只有模板与来源）',
-    settingsBody !== null && Object.keys(settingsBody).sort().join(',') === 'fields,ok,sources,tabs',
+  // update 只是「有没有新版本」的状态（版本号/兼容位），不含任何用户配置值。
+  check('模板路由不回用户配置（模板 + 来源 + 更新状态）',
+    settingsBody !== null && Object.keys(settingsBody).sort().join(',') === 'fields,ok,sources,tabs,update'
+      && (settingsBody.update === null || typeof settingsBody.update === 'object'),
     settingsBody === null ? '' : Object.keys(settingsBody).join(','));
   check('模板里有标签页与字段',
     settingsBody !== null && settingsBody.tabs.length === 4 && settingsBody.fields.length === configMod.SETTINGS_FIELDS.length,

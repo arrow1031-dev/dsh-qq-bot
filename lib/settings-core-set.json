@@ -588,6 +588,17 @@
     },
     {
       "path": [
+        "updateCheck",
+        "enabled"
+      ],
+      "label": "探测新版本（设置页提示）",
+      "kind": "bool",
+      "hint": "启动后最多 6 小时拉一次 npm registry；只提示，不自动升级",
+      "tab": "advanced",
+      "subtab": "session"
+    },
+    {
+      "path": [
         "logAdapterFrames"
       ],
       "label": "日志打印每一帧（排错）",
