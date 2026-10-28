@@ -18,7 +18,7 @@ const suites = [
   'test-totp.mjs', 'test-totp-cli.mjs', 'test-qr.mjs', 'test-flow-auth.mjs', 'test-flow-store.mjs', 'test-flow-commands.mjs', 'test-flow-gate.mjs', 'test-flow-wiring.mjs', 'test-interim.mjs',
   'test-security.mjs', 'test-guard-proxy.mjs', 'test-gate-guard.mjs', 'test-chunk.mjs', 'test-msgid-cache.mjs', 'test-qq-bind.mjs', 'test-stream-bridge.mjs', 'test-model-router.mjs',
   'test-adapter-onebot12.mjs', 'test-adapter-milky.mjs', 'test-adapter-satori.mjs', 'test-adapter-qq-official.mjs',
-  'test-valve-assembly.mjs', 'test-group-actions.mjs', 'test-update-check.mjs',
+  'test-valve-assembly.mjs', 'test-group-actions.mjs', 'test-qr-consistency.mjs', 'test-update-check.mjs',
 ];
 
 // 单套间超时：卡死的套间以前会让整个 CI 一起挂到 workflow 上限，看不出是谁卡住。

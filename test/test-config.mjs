@@ -88,16 +88,34 @@ console.log('\n10. 默认值 JSON：自动发现 / 与 schema 一致 / 邪门输
   check('每个 group 都在 Config schema 里', unknown.length === 0, JSON.stringify(unknown));
 
   // 默认值只有一个来源：JSON 改了，schema 求值结果必须跟着变（这里是反向核对）。
+  // 比对下沉到**叶子级**：以前只比 group 下的一层键，嵌套对象靠 JSON.stringify
+  // 整体比较，schema 多出一片默认值（JSON 没写）时不会被发现。
   const evaluated = plainConfig(new Config({}));
+  const flattenLeaves = (value, prefix, out) => {
+    if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+      for (const key of Object.keys(value)) flattenLeaves(value[key], prefix === '' ? key : prefix + '.' + key, out);
+      return out;
+    }
+    out.set(prefix, value);
+    return out;
+  };
+  const jsonLeaves = new Map();
+  const schemaLeaves = new Map();
+  // 全量比对（含 CORE_DEFAULTS 的核心分组）：只比 8 份 -conf.json 覆盖的分组会漏掉
+  // config.js 里手写的核心默认值——那正是「同一份知识写两遍」的另一半。
+  flattenLeaves(DEFAULTS, '', jsonLeaves);
+  flattenLeaves(evaluated, '', schemaLeaves);
   const drift = [];
-  for (const source of DEFAULTS_SOURCES) {
-    for (const key of Object.keys(DEFAULTS[source.group])) {
-      const a = JSON.stringify(DEFAULTS[source.group][key]);
-      const b = JSON.stringify(evaluated[source.group] === undefined ? undefined : evaluated[source.group][key]);
-      if (a !== b) drift.push(source.group + '.' + key + ': ' + a + ' vs ' + b);
+  for (const [path, value] of jsonLeaves) {
+    if (!schemaLeaves.has(path)) { drift.push(path + ': JSON 有、schema 没有'); continue; }
+    if (JSON.stringify(schemaLeaves.get(path)) !== JSON.stringify(value)) {
+      drift.push(path + ': ' + JSON.stringify(value) + ' vs ' + JSON.stringify(schemaLeaves.get(path)));
     }
   }
-  check('JSON 默认值与 schema 求值一致（改 JSON 就是改默认值）', drift.length === 0, drift.slice(0, 4).join('；'));
+  for (const path of schemaLeaves.keys()) {
+    if (!jsonLeaves.has(path)) drift.push(path + ': schema 有、JSON 没写');
+  }
+  check('JSON 默认值与 schema 求值逐叶子一致（嵌套也能抓到）', drift.length === 0, drift.slice(0, 4).join('；'));
 
   // 设置页顺序由模板自己声明的 priority 决定，不再由文件名排序决定。
   // 以前按路径排：图片反搜排在 moli 前面、moli 卡片卡在分区中间，改个文件名就换一次版面。

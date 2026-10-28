@@ -46,7 +46,7 @@ node test/run-all.mjs
 - 用 `@param {X} deps.foo` 这类**限定名**时，父参数必须保持 `@param {object} deps`；
   把它换成 `Record<string, any>` 会报 TS8032（「限定名不能没有前导的 @param {object}」）
 
-## 2. 测试（39 个套件 / 1503 项）
+## 2. 测试（40 个套件 / 1510 项）
 
 ```sh
 node test/run-all.mjs      # 一键全量（套件失败会自动重试一次，重试通过会标注）
@@ -89,6 +89,7 @@ npm test                   # 同上
 | `test-stream-bridge.mjs` | 18 | 官方 v2 私聊流式桥：增量合并、节流、done 收尾、失败停用、取消 |
 | `test-msgid-cache.mjs` | 13 | 入站去重：首见/复见、TTL 过期、有界淘汰、空 id、重复不延 TTL |
 | `test-group-actions.mjs` | 27 | 群管理动作表：权限必填（缺字段/非法档位/缺 build 必须加载期报错）、13 个动作的请求构造、工具与指令两条路径不再各自硬编码 |
+| `test-qr-consistency.mjs` | 7 | 客户端 QR 副本与服务端编码器逐位比对矩阵（11 组输入 / 多版本 / 超长拒绝）；删副本一行会红 |
 | `test-valve-assembly.mjs` | 27 | 三道阀门的契约字段（含「已删的薄包装不该再出现」）、装配顺序与依赖、网络判定口径（编码变体 / 云元数据 / 本机保留名 / 域名不误判）、**代理归属**（阀门接管传输层、工具不持有代理串）、工具阀一次性消费、传输层注册表 |
 | `test-qq-bind.mjs` | 20 | 扫码绑定状态机：二维码等待 / 凭据只经回调一次 / 失败与刷新 / 异步工厂 / 路由不泄露 appSecret / 状态路由只认 GET |
 | `test-chunk.mjs` | 15 | 回复分条：短文本原样 / 长文本不超限且不丢行 / 代码块围栏成对 / 表格不切行 / 超长单行硬切 / 未闭合围栏兜底 |
@@ -105,10 +106,20 @@ node -e "fetch('http://127.0.0.1:3000/__inject',{method:'POST',headers:{'content
 node -e "fetch('http://127.0.0.1:3000/__sent').then(r=>r.json()).then(j=>console.log(JSON.stringify(j.messages,null,2)))"
 ```
 
-> **文档里的测试数必须自洽**：改测试就同步本表、README 的「39 套件 / 1503 项」与顶部 `tests` 徽章（`tests-1503%20passing`）、`AI-DISCLOSURE.md` 的验证情况。数字以裸克隆跑 `npm test` 的输出为准；能解析到 `@deepseek-ai/dsh-tools` 的环境里 `test-plugin` 与 `test-admin` 会多跑工具注册段落，总数随之更多。跳过项按 `[SKIP]` 单列，不计入通过数；设 `DSH_TOOLS_DISABLE=1` 可以在这台机器上模拟裸克隆（否则 `test/dsh-tools-link.mjs` 会把链接建回来，永远看不到跳过路径——CI 就是这么红的）。
+> **文档里的测试数必须自洽**：改测试就同步本表、README 的「40 套件 / 1510 项」与顶部 `tests` 徽章（`tests-1510%20passing`）、`AI-DISCLOSURE.md` 的验证情况。数字以裸克隆跑 `npm test` 的输出为准；能解析到 `@deepseek-ai/dsh-tools` 的环境里 `test-plugin` 与 `test-admin` 会多跑工具注册段落，总数随之更多。跳过项按 `[SKIP]` 单列，不计入通过数；设 `DSH_TOOLS_DISABLE=1` 可以在这台机器上模拟裸克隆（否则 `test/dsh-tools-link.mjs` 会把链接建回来，永远看不到跳过路径——CI 就是这么红的）。
 
 <a id="完整配置参考"></a>
 ## 3. 完整配置参考
+
+### 新增配置项时改哪几处
+
+同一项配置会出现在几个地方，漏一处不会加载期报错，所以列成必做项：
+
+1. **默认值**：归属工具/阀门的加在 `lib/<能力目录>/*-conf.json` 的 `defaults`；不归属的（传输/消息/网关/会话等）加在 `lib/config.js` 的 `CORE_DEFAULTS`。schema 的 `.default()` 用 `defaultsOf('组名')` 引用它，**不要再写一遍字面量**。
+2. **schema**：`lib/config.js` 的 `Config`：字段类型、`volatile()`、描述。核心分组（CORE_DEFAULTS）目前仍是双写，逐叶子测试会抓漂移。
+3. **设置页**：`lib/<能力目录>/*-set.json`（或核心的 `lib/settings-core-set.json`）加字段：`path` / `label` / `tab` / `subtab` / 可选 `priority`。
+
+跑 `node test/test-config.mjs`：`DEFAULTS` 与 `new Config({})` 现在**逐叶子双向比对**（嵌套也能抓），任何一边改了另一边没跟上都会红；`path` 落不到 schema、组不存在、标签页不存在也会红。
 
 下面是全部字段与默认值（等价于「设置页什么都不改」的状态）。落点是 profile 的 `cordis.patch.yml`，**不要改包内的同名文件**。
 
