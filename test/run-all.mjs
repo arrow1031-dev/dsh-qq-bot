@@ -12,7 +12,7 @@ const suites = [
   'test-adapter.mjs', 'test-adapter-reverse.mjs', 'test-plugin.mjs', 'test-client.mjs',
   'test-admin.mjs', 'test-http.mjs', 'test-config.mjs', 'test-websearch.mjs', 'test-imagegen.mjs', 'test-session-id.mjs', 'test-compat.mjs', 'test-history.mjs', 'test-proactive.mjs', 'test-proactive-round.mjs', 'test-owner-settings.mjs',
   'test-totp.mjs', 'test-totp-cli.mjs', 'test-qr.mjs', 'test-flow-auth.mjs', 'test-flow-store.mjs', 'test-flow-commands.mjs', 'test-flow-gate.mjs', 'test-flow-wiring.mjs', 'test-interim.mjs',
-  'test-security.mjs', 'test-guard-proxy.mjs', 'test-gate-guard.mjs', 'test-chunk.mjs',
+  'test-security.mjs', 'test-guard-proxy.mjs', 'test-gate-guard.mjs', 'test-chunk.mjs', 'test-msgid-cache.mjs', 'test-qq-bind.mjs',
   'test-adapter-onebot12.mjs', 'test-adapter-milky.mjs', 'test-adapter-satori.mjs', 'test-adapter-qq-official.mjs',
 ];
 

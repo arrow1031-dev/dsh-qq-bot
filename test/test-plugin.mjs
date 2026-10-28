@@ -315,7 +315,9 @@ try {
   // 所以直接从 lib/client.js 里抠出 FIELDS 的 path 逐条核对，避免两边各写一份而漂移。
   const clientSource = fs.readFileSync(path.join(PKG_ROOT, 'lib', 'client.js'), 'utf-8');
   const fieldPaths = [];
-  for (const match of clientSource.matchAll(/\{\s*path:\s*\[([^\]]+)\]/g)) {
+  for (const match of clientSource.matchAll(/\{\s*path:\s*\[([^\]]+)\]([\s\S]{0,240})/g)) {
+    // virtual: true 的是纯界面卡片（例如扫码绑定），不对应 schema 字段，不参与 volatile 核对。
+    if (/virtual:\s*true/.test(match[2])) continue;
     const parts = [...match[1].matchAll(/'([^']*)'/g)].map((x) => x[1]);
     if (parts.length > 0) fieldPaths.push(parts);
   }

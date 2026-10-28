@@ -57,6 +57,22 @@
 - 测试：新增 `test-chunk.mjs`（15 项：短文本/长文本/代码块围栏平衡/表格不切行/超长行硬切/未闭合围栏）。
 - 套件 31 → 32，总项 1224 → 1239。
 
+
+### 入站去重（消化官方插件的 msgid-cache 思路）
+
+- 新增 `lib/msgid-cache.js`：按 `message_id` 记最近见过的消息，有界（512 条）+ TTL（10 分钟），
+  重复命中不延长窗口；`acceptMessage` 最前面判重，重投事件只计入 `skipped/duplicates`，不再起第二个回合。
+- 触发场景：官方 WS 的 resume/重连会重放少量事件、webhook 可能重投；以前会对同一条消息回两次。
+
+### 官方 Bot 扫码绑定（服务端 + 设置页卡片）
+
+- 新增 `lib/qq-bind.js` + `lib/bind-routes.js`：`@tencent-connect/qqbot-connector` **动态 import**（装了就可用，
+  没装退回手动填 AppID/AppSecret），走 SDK 的 `startQrConnect` 回调拿二维码 URL 与凭据；凭据经设置服务落盘，
+  `appSecret` 只在回调里经过一次、不进任何 HTTP 响应。
+- 路由挂在 DSH `webServer` 上（同源）：`GET /dsh-qq-bot/bind`、`POST /dsh-qq-bot/bind/refresh`；
+  设置页「连接」里新增「扫码绑定（手机 QQ）」卡片：显示二维码、2 秒轮询状态、可刷新/重新扫码。
+- 既有的 qq-official 适配器 **webhook / ws 两条路径都保留**，扫码只是把 AppID/AppSecret 填进去。
+
 ## 0.12.6 —— 渲染抓取支持 JS 页面，安全与稳定性收口（2026-10-28）
 
 > 主语料来自四条并行的只读复审（网络与外部输入 / 权限与凭据 / 并发与资源 / 死代码），

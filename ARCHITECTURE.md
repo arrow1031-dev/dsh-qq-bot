@@ -71,6 +71,9 @@ DSH Agent（默认每个 QQ 会话一个）
 | `lib/totp-cli.mjs` | 终端绑定：打印 base32 secret / otpauth URI / 终端二维码 / 恢复码（密钥不经 QQ） | —（命令行入口） | 运维手动执行 |
 | `lib/qr.js` | 自研二维码编码器（字节模式、纠错等级 M、版本 1..9），零依赖 | `encode` `chooseVersion` `toTerminal` `MAX_VERSION` | `totp-cli.mjs`、`lib/client.js`（浏览器版同算法副本） |
 | `lib/flow-auth.js` | 授权状态机 + 闸门：申请 / 验码 / grant / 一次性消费 / 连错锁定 / 审计 | `createFlowAuth` `createFlowGate` | `index.js`、`session.js` |
+| `lib/msgid-cache.js` | 入站去重：按 message_id 记最近见过的消息（有界 + TTL），重连重投只起一个回合 | `createMsgIdCache` | `index.js` |
+| `lib/qq-bind.js` | 官方 Bot 扫码绑定状态机：二维码回调、凭据回调、刷新/取消（SDK 动态 import） | `createQqBind` `loadOfficialConnect` | `index.js` |
+| `lib/bind-routes.js` | 扫码绑定的 HTTP 路由（webServer 具名路由）：只回状态与脱敏 appId，不碰密钥 | `registerBindRoutes` | `index.js` |
 | `lib/chunk.js` | 回复分条：Markdown 感知切分（代码块/表格整块搬，超长才硬切），`sendReply` 使用 | `chunkMarkdown` | `index.js` |
 | `lib/gate-guard.js` | 闸门区名单改动的判定：填码解锁、保存即消费；动态码开着时名单改动必须带一次有效码 | `decideGateEdit` `sameToolList` | `index.js` |
 | `lib/flow-store.js` | 流程脚本存取：名字白名单、sha256、路径穿越与覆盖防护 | `createFlowStore` `isValidFlowName` `sha256` | `index.js`（/flow 指令） |
