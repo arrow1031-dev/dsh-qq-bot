@@ -1,5 +1,10 @@
 ## 未发布 —— 注释审计 + 四处真缺陷（2026-10-29）
 
+### gateway/plugin.js 第一阶段：无状态块搬出（P3 2.4，只搬不改）
+
+- `buildPersonaHint` / `dropConfigPaths` / `sanitizeDisplayName` / `summarizeTurnReason` / `idValue` 搬到 `lib/gateway/turn-text.js`；`/model` 的路由与指令搬到 `lib/gateway/model-pick.js`（依赖由插件注入，不持有全局状态）。
+- 行为不变：现有断言一条不改全绿（`plugin.js` 2395 → 2291 行，行数只作参考，不设目标）；套件/项数不变：40 / 1510。
+
 ### 一致性测试：二维码副本 + 默认值叶子级（P3 2.2 / 2.3A）
 
 - 新增 `test-qr-consistency.mjs`：把客户端 `QR_BUNDLE` 区块抽出来求值，与服务端 `lib/tools/qr.js` 对 11 组输入逐位比对版本/掩码/矩阵；删客户端副本任意关键行 → 测试变红（已实测）。

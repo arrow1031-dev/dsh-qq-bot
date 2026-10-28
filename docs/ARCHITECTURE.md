@@ -237,6 +237,8 @@ lib/**/*-set.json  →  SETTINGS_FIELDS  →  GET /dsh-qq-bot/settings  →  客
 | 文件 | 职责 | 关键导出 |
 | --- | --- | --- |
 | `gateway/plugin.js` | Cordis 插件主体：适配器生命周期、帧分发、回合/回复/视觉、主动发言、配置热更新 | `apply` `name` `inject` `cleanupStaleConfig` |
+| `gateway/turn-text.js` | 无状态回合文本工具：人格段、配置脱敏、昵称清洗、turn 失败原因归一、协议 id 归一（P3 2.4 第一阶段搬出） | `buildPersonaHint` `dropConfigPaths` `sanitizeDisplayName` `summarizeTurnReason` `idValue` |
+| `gateway/model-pick.js` | 模型选择：构建 `modelRouter` + `/model` 指令；依赖（ctx.get / 前缀 / 日志）由插件注入 | `createModelPicker` |
 | `gateway/index.js` | **HTTP 路由统一挂载**：ROUTE_MOUNTS 表 + 等 webServer 就绪 + 逆序注销 + 失败降级 | `mountHttpRoutes` `mountRoutesWhenReady` |
 | `gateway/route-auth.js` | **路由鉴权闸门**：插件具名路由在 DSH 鉴权层**之前**被处理（`GET /` 回 401，`GET /dsh-qq-bot/settings` 回 200），所以自己过一遍 `client-connection` 的浏览器 cookie 校验 + Origin/Referer 同源校验；拿不到该服务时降级放行（那种环境里 DSH 自己也没鉴权） | `createRouteGuard` |
 | `gateway/routes-bind.js` | 扫码绑定的两条具名路由：只回状态与脱敏 appId，不碰密钥；`waiting` 期会给登录 URL，必须先过 `guard` | `registerBindRoutes` `BIND_STATE_PATH` `BIND_REFRESH_PATH` |
