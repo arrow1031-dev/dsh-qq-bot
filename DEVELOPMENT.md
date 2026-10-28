@@ -17,7 +17,7 @@ node test/run-all.mjs
 裸克隆即可跑全部测试：需要 DSH 运行时才能成立的少数断言（动态工具注册、`qqgroup` 工具路径）会自动跳过而不是判失败；
 想连那部分一起跑，把 `DSH_PROFILE_MODULES` 指向一个装了 DSH 运行时的 profile 的 `node_modules`。
 
-## 2. 测试（35 个套件 / 1296 项）
+## 2. 测试（36 个套件 / 1313 项）
 
 ```sh
 node test/run-all.mjs      # 一键全量
@@ -55,6 +55,7 @@ npm test                   # 同上
 | `test-flow-wiring.mjs` | 23 | 闸门接线：一次调用只吃一个授权 / 关着原样放行 / moli_fetch 进 gatedTools 后「没码被拦、拿码放行」 |
 | `test-interim.mjs` | 14 | 中间发言：最后一条留给结论、锚点丢了不重播 |
 | `test-security.mjs` | 55 | 安全回归：帧 id 净化 / 越界复核 / 跨群重算 / 撤回绑群 / 出站公网判定与 F1 / 识图下载源码断言 |
+| `test-model-router.mjs` | 17 | 模型路由自动检测：agentDefaultModel 优先 / llm 只读 / 都没有不假装；偏好文件 fallback |
 | `test-stream-bridge.mjs` | 11 | 官方 v2 私聊流式桥：增量合并、节流、done 收尾、失败停用、取消 |
 | `test-msgid-cache.mjs` | 13 | 入站去重：首见/复见、TTL 过期、有界淘汰、空 id、重复不延 TTL |
 | `test-qq-bind.mjs` | 19 | 扫码绑定状态机：二维码等待 / 凭据只经回调一次 / 失败与刷新 / 异步工厂 / 路由不泄露 appSecret |

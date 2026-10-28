@@ -71,6 +71,7 @@ DSH Agent（默认每个 QQ 会话一个）
 | `lib/totp-cli.mjs` | 终端绑定：打印 base32 secret / otpauth URI / 终端二维码 / 恢复码（密钥不经 QQ） | —（命令行入口） | 运维手动执行 |
 | `lib/qr.js` | 自研二维码编码器（字节模式、纠错等级 M、版本 1..9），零依赖 | `encode` `chooseVersion` `toTerminal` `MAX_VERSION` | `totp-cli.mjs`、`lib/client.js`（浏览器版同算法副本） |
 | `lib/flow-auth.js` | 授权状态机 + 闸门：申请 / 验码 / grant / 一次性消费 / 连错锁定 / 审计 | `createFlowAuth` `createFlowGate` | `index.js`、`session.js` |
+| `lib/model-router.js` | 模型选择自动检测：优先 DSH `agentDefaultModel`（可写），其次 `llm`（只读），再退到官方插件式 per-chat 偏好；`/model` 命令入口 | `createModelRouter` `createPrefsFile` | `index.js` |
 | `lib/stream-bridge.js` | 官方 v2 私聊流式桥（增量合并 / 节流 / done 收尾 / 失败停用），**特有能力**、非通用路径 | `createStreamBridge` | `index.js`（待接线） |
 | `lib/msgid-cache.js` | 入站去重：按 message_id 记最近见过的消息（有界 + TTL），重连重投只起一个回合 | `createMsgIdCache` | `index.js` |
 | `lib/qq-bind.js` | 官方 Bot 扫码绑定状态机：二维码回调、凭据回调、刷新/取消（SDK 动态 import） | `createQqBind` `loadOfficialConnect` | `index.js` |

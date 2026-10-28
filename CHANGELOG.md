@@ -94,6 +94,16 @@
   发送失败只记一行日志并停用该会话，不刷错误。计时器可注入，纯逻辑单测覆盖。
 - 接线到 DSH 的 `agent/assistant-stream` 事件留到下一步（需要真实 DSH 会话验证，避免盲接把正常回复弄丢）。
 
+
+### 模型选择：自动检测，优先用宿主自己的能力
+
+- 新增 `lib/model-router.js`：按顺序探测 —— ① DSH 原生 `agentDefaultModel`（`currentSelection`/`saveSelection`，可写，
+  改的是默认模型）；② DSH `llm`（`listProviders`/`listModels`，只读能列）；③ 都没有就落到**官方插件那套**
+  per-chat 偏好文件（`QQ_msg/model-prefs.json`），并且如实说明「只记录、不会自动应用」。
+- 新增拥有者指令 `/model`：查看当前模型/接口来源/provider 列表；`/model set <provider> <model>`；
+  `/model models <provider>`。写不进去时不假装成功：返回 applied=false 并说明原因。
+- `/help` 里补上 `/model` 一行。测试：`test-model-router.mjs` 17 项；套件 35 → 36，总项 1296 → 1313。
+
 ## 0.12.6 —— 渲染抓取支持 JS 页面，安全与稳定性收口（2026-10-28）
 
 > 主语料来自四条并行的只读复审（网络与外部输入 / 权限与凭据 / 并发与资源 / 死代码），
