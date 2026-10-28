@@ -73,6 +73,17 @@
   设置页「连接」里新增「扫码绑定（手机 QQ）」卡片：显示二维码、2 秒轮询状态、可刷新/重新扫码。
 - 既有的 qq-official 适配器 **webhook / ws 两条路径都保留**，扫码只是把 AppID/AppSecret 填进去。
 
+
+### 官方 API v2 富消息：markdown / keyboard / 输入中 / 按钮回传
+
+- `qq-official` 适配器的 `send` 增加三个可选字段：`markdown`（走 msg_type=2，可带 `keyboard` 按钮）、
+  `keyboard`（原样透传；只给 keyboard 时正文包成 markdown）、`typing`（msg_type=6 输入中，只尽力而为）。
+  被动回复的 `msg_id` / 递增 `msg_seq` 对 markdown 与输入中同样生效。
+- `INTERACTION_CREATE` 现在**同时**产出 `notice`（原有行为）与一条 `message` 帧（`sub_type: 'interaction'`，
+  `text` 取按钮 `button_data`）——以前用户点按钮只有一条 notice，模型看不见，像石沉大海。
+- 测试：`test-adapter-qq-official` 95 → 102 项（markdown/keyboard/msg_seq、msg_type=6、按钮点击回传与身份保留）。
+- 套件 34 / 1271 → 1278 项。
+
 ## 0.12.6 —— 渲染抓取支持 JS 页面，安全与稳定性收口（2026-10-28）
 
 > 主语料来自四条并行的只读复审（网络与外部输入 / 权限与凭据 / 并发与资源 / 死代码），

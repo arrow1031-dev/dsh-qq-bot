@@ -44,6 +44,8 @@
 
 插件实际读取：`message_type` `group_id` `user_id` `self_id` `text` `images` `image_urls` `reply_to` `sender` `message_id`，其余字段不参与逻辑。
 
+**按钮点击**（官方 v2 的 `INTERACTION_CREATE`）适配器会额外产出一条 `message` 帧（`sub_type: 'interaction'`，`text` 取按钮 `button_data`），原 `notice` 帧保留；插件靠 `message_id` 去重，同一次点击只起一个回合。
+
 ### 统一段（`lib/bridge/segments.mjs`）
 
 `{ type, data }`：text(`text`) / at(`qq`，`all` 为全体) / image(`url` 或 `file`) / reply(`id`) / face / record / video / file / json / xml / forward / poke / mface。
@@ -53,7 +55,7 @@
 
 | type | 字段 | 说明 |
 | --- | --- | --- |
-| `send` | `message_type`, `target_id`, `text`, `message?`, `reply_to?`, `echo?`, `channel_id?` | `message` 段数组优先，无则发 `text`；必须回 `send_result`（`echo` 原样回传） |
+| `send` | `message_type`, `target_id`, `text`, `message?`, `reply_to?`, `echo?`, `channel_id?`, `markdown?`, `keyboard?`, `typing?` | `message` 段数组优先，无则发 `text`；`markdown` 走官方 v2 的 msg_type=2（可带 `keyboard` 按钮）；`typing` 只尽力而为；必须回 `send_result`（`echo` 原样回传） |
 | `action` | `action`, `params`, `echo` | OneBot 11 风格动作名；插件 12s 超时即判失败 |
 | `ping` / `shutdown` | — | 回 `pong` / 退出码 0 |
 

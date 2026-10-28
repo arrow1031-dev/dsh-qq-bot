@@ -17,7 +17,7 @@ node test/run-all.mjs
 裸克隆即可跑全部测试：需要 DSH 运行时才能成立的少数断言（动态工具注册、`qqgroup` 工具路径）会自动跳过而不是判失败；
 想连那部分一起跑，把 `DSH_PROFILE_MODULES` 指向一个装了 DSH 运行时的 profile 的 `node_modules`。
 
-## 2. 测试（34 个套件 / 1271 项）
+## 2. 测试（34 个套件 / 1278 项）
 
 ```sh
 node test/run-all.mjs      # 一键全量
@@ -31,7 +31,7 @@ npm test                   # 同上
 | `test-adapter-onebot12.mjs` | 30 | OneBot 12 适配器 |
 | `test-adapter-satori.mjs` | 70 | Satori 适配器 |
 | `test-adapter-milky.mjs` | 83 | Milky 适配器（含 WebHook 默认准入与读体上限） |
-| `test-adapter-qq-official.mjs` | 95 | QQ 官方适配器（含回调重放防护） |
+| `test-adapter-qq-official.mjs` | 102 | QQ 官方适配器（含回调重放防护） |
 | `test-plugin.mjs` | 120 | Host 半边：假 ctx + 真适配器 + 真 `lib/index.js`，含 Config 契约、热更新、9 个工具、适配器重启、默认准入 fail-closed 与入站限制（120 项含工具注册段落；解析不到 `@deepseek-ai/dsh-tools` 的裸克隆里为 94 项 + 6 项 `[SKIP]`） |
 | `test-client.mjs` | 109 | 客户端设置页：模拟模块加载器 + 最小 React 渲染 + 四档标签 + 只写密钥护栏 |
 | `test-admin.mjs` | 38 | 权限 · 群管理 · 访客工具闸 |
