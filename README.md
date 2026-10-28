@@ -1,5 +1,7 @@
 # dsh-qq-bot —— 把 QQ 接到 DSH
 
+<p align="center"><img src="assets/banner.svg" alt="dsh-qq-bot：把 QQ 接到 DSH Agent（五种协议 / 群聊私聊 / 动态码工具授权 / 记忆人设）" width="100%"></p>
+
 [![CI](https://github.com/arrow1031-dev/dsh-qq-bot/actions/workflows/ci.yml/badge.svg)](https://github.com/arrow1031-dev/dsh-qq-bot/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/%40sputnikzaychik%2Fdsh-qq-bot?label=npm)](https://www.npmjs.com/package/@sputnikzaychik/dsh-qq-bot)
 [![npm downloads](https://img.shields.io/npm/dm/%40sputnikzaychik%2Fdsh-qq-bot?label=%E4%B8%8B%E8%BD%BD)](https://www.npmjs.com/package/@sputnikzaychik/dsh-qq-bot)

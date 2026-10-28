@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 320" width="1200" height="320" role="img" aria-label="dsh-qq-bot — 把 QQ 接到 DSH Agent">
+  <title>dsh-qq-bot — 把 QQ 接到 DSH Agent</title>
+  <rect width="1200" height="320" rx="36" fill="#0B1220"/>
+  <circle cx="980" cy="70" r="210" fill="#0F1B2E"/>
+  <circle cx="1120" cy="300" r="160" fill="#0E2233"/>
+  <g transform="translate(64 64)">
+    <rect width="192" height="192" rx="42" fill="#101C30"/>
+    <circle cx="96" cy="94" r="62" fill="none" stroke="#7CF2C1" stroke-opacity="0.25" stroke-width="2"/>
+    <path d="M48 74c0-12.4 10.1-22.5 22.5-22.5h51C133.9 51.5 144 61.6 144 74v36c0 12.4-10.1 22.5-22.5 22.5H90l-22 17.5v-17.5h-1.5c-8.3 0-15-6.7-15-15z" fill="#12B7F5"/>
+    <circle cx="75" cy="91" r="6" fill="#0B1220"/>
+    <circle cx="96" cy="91" r="6" fill="#0B1220"/>
+    <circle cx="117" cy="91" r="6" fill="#0B1220"/>
+  </g>
+  <text x="300" y="146" font-family="'Segoe UI', 'Noto Sans', system-ui, sans-serif" font-size="72" font-weight="700" fill="#F4F8FF">dsh-qq-bot</text>
+  <text x="304" y="200" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', system-ui, sans-serif" font-size="24" fill="#9FB0C8">把 QQ 接到 DSH Agent · 五种协议 · 动态码工具授权</text>
+  <g font-family="'Segoe UI', 'Noto Sans CJK SC', system-ui, sans-serif" font-size="19" fill="#7CF2C1">
+    <rect x="304" y="238" width="140" height="38" rx="19" fill="#11283A"/>
+    <text x="326" y="264">群聊 / 私聊</text>
+    <rect x="460" y="238" width="170" height="38" rx="19" fill="#11283A"/>
+    <text x="482" y="264">动态码工具授权</text>
+    <rect x="646" y="238" width="130" height="38" rx="19" fill="#11283A"/>
+    <text x="668" y="264">记忆与人设</text>
+  </g>
+  <text x="808" y="264" font-family="'Segoe UI', system-ui, sans-serif" font-size="18" fill="#5C6F8A">MIT · 零运行时依赖</text>
+</svg>
