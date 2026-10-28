@@ -84,6 +84,16 @@
 - 测试：`test-adapter-qq-official` 95 → 102 项（markdown/keyboard/msg_seq、msg_type=6、按钮点击回传与身份保留）。
 - 套件 34 / 1271 → 1278 项。
 
+
+### 官方 v2 私聊流式（特有能力，适配层就绪）
+
+- 开放平台只对 C2C 私聊开放 `stream_messages`，所以按**特有能力**做：`qq-official` 适配器新增
+  `stream` 命令（`input_mode=replace` + 同一 `msg_seq` + 递增 `index`，结束帧 `input_state=10`；
+  首帧后复用平台返回的 `stream_msg_id`）。
+- 新增 `lib/stream-bridge.js`：把增量合并成「当前全文」并按 600ms 节流推送，结束时必发 done；
+  发送失败只记一行日志并停用该会话，不刷错误。计时器可注入，纯逻辑单测覆盖。
+- 接线到 DSH 的 `agent/assistant-stream` 事件留到下一步（需要真实 DSH 会话验证，避免盲接把正常回复弄丢）。
+
 ## 0.12.6 —— 渲染抓取支持 JS 页面，安全与稳定性收口（2026-10-28）
 
 > 主语料来自四条并行的只读复审（网络与外部输入 / 权限与凭据 / 并发与资源 / 死代码），

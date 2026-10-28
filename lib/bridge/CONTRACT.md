@@ -55,6 +55,7 @@
 
 | type | 字段 | 说明 |
 | --- | --- | --- |
+| `stream`（官方 v2 私聊专用） | `message_type`（仅 `private`）, `target_id`, `msg_id`, `text`（全量）, `done?`, `echo?` | 适配器自己维护 `index` 与同一个 `msg_seq`，结束帧 `input_state=10`；群聊一律 `ok:false` |
 | `send` | `message_type`, `target_id`, `text`, `message?`, `reply_to?`, `echo?`, `channel_id?`, `markdown?`, `keyboard?`, `typing?` | `message` 段数组优先，无则发 `text`；`markdown` 走官方 v2 的 msg_type=2（可带 `keyboard` 按钮）；`typing` 只尽力而为；必须回 `send_result`（`echo` 原样回传） |
 | `action` | `action`, `params`, `echo` | OneBot 11 风格动作名；插件 12s 超时即判失败 |
 | `ping` / `shutdown` | — | 回 `pong` / 退出码 0 |
