@@ -37,7 +37,6 @@ const { STAGE, orderedValves, createNetworkValve, createSecurityValve, createToo
 const { currentProxy, multiEngineRequest } = await import('../lib/shared/http.js');
 const { __setNetworkHooks } = await import('../lib/valve/network/policy.js');
 const { assembleValves, describeAssembly, ASSEMBLY_ORDER } = await import('../lib/assemble.js');
-const { assembleReply, ASSEMBLY_STEPS } = await import('../lib/message/index.js');
 const { resolveAdapterPath, supportedProtocols } = await import('../lib/transport/index.js');
 
 console.log('\n1. 阀门清单与顺序');
@@ -95,8 +94,13 @@ const cfgHolder = { value: { flowAuth: { enabled: true, gatedTools: ['qq_draw'] 
 const security = createSecurityValve({ config: () => cfgHolder.value });
 const tool = createToolValve({ auth: security.flowAuth, enabled: security.enabled, gatedTools: security.gatedTools });
 await check('安全阀暴露契约字段', () => {
-  for (const key of ['flowAuth', 'enabled', 'gatedTools', 'verifyToken', 'judgeHistory', 'checkOwnerCaller']) {
+  // 只暴露「状态机 + 两个查询」；verifyToken / judgeHistory / checkOwnerCaller 那类薄包装
+  // 曾经在这里，实际零调用，已删（判定实现直接 import 各自模块）。
+  for (const key of ['flowAuth', 'flowStore', 'enabled', 'gatedTools']) {
     assert.ok(security[key] !== undefined, '缺少 ' + key);
+  }
+  for (const gone of ['verifyToken', 'verifyRecovery', 'judgeHistory', 'checkOwnerCaller']) {
+    assert.equal(security[gone], undefined, '不该再暴露 ' + gone);
   }
 });
 await check('工具阀只放行名单内的工具', () => {
@@ -139,24 +143,6 @@ await check('安全阀没成型时工具阀拿不到授权对象（依赖顺序�
   const a = assembleValves({ config: () => ({}) });
   assert.ok(a.tool.gate !== undefined);
   assert.equal(typeof a.security.flowAuth.takeGrant, 'function');
-});
-
-console.log('\n5. 消息组装');
-await check('中间发言排在正文之前', () => {
-  const out = assembleReply({ text: '结论', interim: [{ text: '我先查一下' }] });
-  assert.deepEqual(out.items.map((x) => x.kind), ['interim', 'final']);
-});
-await check('空文本不产生任何消息', () => {
-  assert.deepEqual(assembleReply({ text: '   ' }).items, []);
-  assert.deepEqual(assembleReply({}).items, []);
-});
-await check('分条开启时长文本被切开', () => {
-  const long = ('段落内容'.repeat(60) + '\n\n').repeat(4);
-  const out = assembleReply({ text: long, chunk: { enabled: true, max: 200 } });
-  assert.ok(out.items.length > 1, '应当切成多条');
-});
-await check('组装步骤顺序固定', () => {
-  assert.deepEqual(ASSEMBLY_STEPS, ['interim', 'chunk', 'stream']);
 });
 
 console.log('\n6. 传输层注册表');

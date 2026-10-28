@@ -3,7 +3,7 @@
 [![CI](https://github.com/arrow1031-dev/dsh-qq-bot/actions/workflows/ci.yml/badge.svg)](https://github.com/arrow1031-dev/dsh-qq-bot/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/%40sputnikzaychik%2Fdsh-qq-bot?label=npm)](https://www.npmjs.com/package/@sputnikzaychik/dsh-qq-bot)
 [![npm downloads](https://img.shields.io/npm/dm/%40sputnikzaychik%2Fdsh-qq-bot?label=%E4%B8%8B%E8%BD%BD)](https://www.npmjs.com/package/@sputnikzaychik/dsh-qq-bot)
-[![tests](https://img.shields.io/badge/tests-1420%20passing-brightgreen)](docs/DEVELOPMENT.md)
+[![tests](https://img.shields.io/badge/tests-1476%20passing-brightgreen)](docs/DEVELOPMENT.md)
 [![node](https://img.shields.io/badge/node-%E2%89%A522.6-339933)](https://nodejs.org/)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
@@ -11,7 +11,7 @@
 
 - **一套插件接五种协议**：OneBot 11（默认）/ OneBot 12 / Satori / Milky / QQ 官方机器人，换协议只是设置里的一个下拉。
 - **每个群、每个人都有独立的 DSH 会话**，会落盘、能像普通会话一样在 Web UI 里打开继续聊。
-- 零 npm 运行时依赖（适配器只用 Node 22 内置的 `WebSocket` / `fetch`）。
+- **只有一条运行时依赖**：`@deepseek-ai/schemastery`（DSH 配置 schema 的约定，必须与宿主同版本）；其余全部走 Node 22 内置的 `WebSocket` / `fetch`，适配器是零依赖子进程。
 
 > **版本 0.12.7** · 要求 **DSH ≥ 0.2.0-rc.2**（0.2.1 系列实测通过）
 > **设置入口**：首页侧边栏 → **插件 → 已安装 → dsh-qq-bot**。不再是「设置 → QQ 机器人」，**现有配置无需迁移**。
@@ -97,9 +97,10 @@ dsh plugin --profile web update
 | 场景 | 用哪个 | 配置 |
 | --- | --- | --- |
 | 协议端与 DSH 同机 / 同容器 | **正向 WS**（默认） | `mode: forward`，我们连 `ws://127.0.0.1:3001` |
-| 协议端在别的容器 / 只能它连出来 | **反向 WS** | `mode: reverse`，我们监听 `0.0.0.0:6199`，协议端填 `ws://<DSH主机IP>:6199/` |
+| 协议端在别的容器 / 只能它连出来 | **反向 WS** | `mode: reverse`，协议端填 `ws://<DSH主机IP>:6199/` |
 
-反向 WS 的鉴权：请求头 `Authorization: Bearer <token>` 或 URL 上的 `?access_token=<token>` 都接受。
+反向 WS 默认监听 `0.0.0.0:6199`（**只有配了 `onebot.accessToken` 才会真的对外监听**：没有 token 时强制退回 `127.0.0.1`，避免一个无鉴权的 WS 口暴露在局域网上）。
+鉴权：请求头 `Authorization: Bearer <token>` 或 URL 上的 `?access_token=<token>` 都接受。
 其它协议的连接参数（`protocols.onebot12` / `protocols.satori` / `protocols.milky` / `protocols.qqOfficial`）在设置页同名分组里。
 
 **能力边界**：`qq-official` 没有踢人/禁言/改名片这类群管理动作，`qqgroup` 会明确回「不支持」；`onebot12` 的图片段只有 `file_id`，要做视觉识别建议用 OneBot 11。
@@ -220,9 +221,9 @@ dsh plugin --profile web remove @sputnikzaychik/dsh-qq-bot          # 卸载
 
 | 文档 | 内容 |
 | --- | --- |
-| [DEVELOPMENT.md](docs/DEVELOPMENT.md) | 本地开发与测试（38 套件 / 1420 项）、完整配置参考、工具细节、文件清单、设计取舍、发布流程、部署备注 |
+| [DEVELOPMENT.md](docs/DEVELOPMENT.md) | 本地开发与测试（38 套件 / 1476 项）、完整配置参考、工具细节、文件清单、设计取舍、发布流程、部署备注 |
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | 分层图、模块职责、关键数据流、身份契约、已知边界 |
-| [CHANGELOG.md](CHANGELOG.md) | 0.1.0 → 0.12.6 的完整演进 |
+| [CHANGELOG.md](CHANGELOG.md) | 0.1.0 → 0.12.7 的完整演进 |
 | [AI-DISCLOSURE.md](docs/AI-DISCLOSURE.md) | AI 生成方式、验证到什么程度、**尚未验证清单**（用前务必读） |
 | [SECURITY.md](docs/SECURITY.md) | 安全模型与漏洞报告方式（别在公开 issue 里贴细节） |
 | [CONTRIBUTING.md](docs/CONTRIBUTING.md) | 贡献流程与代码约定 |

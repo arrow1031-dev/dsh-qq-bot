@@ -1,5 +1,8 @@
 {
+  "priority": 40,
   "group": "vision",
+  "tab": "capability",
+  "subtab": "vision",
   "fields": [
     {
       "path": [
@@ -8,9 +11,7 @@
       ],
       "label": "图片视觉（识别 QQ 图片并入回复）",
       "kind": "bool",
-      "hint": "关闭后图片保持 [图片] 占位符",
-      "tab": "capability",
-      "subtab": "vision"
+      "hint": "关闭后图片保持 [图片] 占位符"
     },
     {
       "path": [
@@ -21,9 +22,7 @@
       "kind": "select",
       "hint": "复用 DSH 会话界面同一份模型目录；baseURL/apiKey 沿用原配置。⚠️ 留空 = 跟随会话模型，而会话模型不一定支持图片——此时识图会报错，请显式指定一个支持视觉的 provider",
       "placeholder": "（留空 = 会话模型）",
-      "dynamic": "provider",
-      "tab": "capability",
-      "subtab": "vision"
+      "dynamic": "provider"
     },
     {
       "path": [
@@ -34,9 +33,7 @@
       "kind": "select",
       "hint": "跟随上面选的 provider 列出模型（如 deepseek-v4-flash-vision-exp）。留空 = 用会话模型：它会先探测是否支持图片，不支持时会直接回一条可读报错，引导你来这里换模型",
       "placeholder": "（留空 = 会话模型）",
-      "dynamic": "model",
-      "tab": "capability",
-      "subtab": "vision"
+      "dynamic": "model"
     },
     {
       "path": [
@@ -44,9 +41,7 @@
         "maxImages"
       ],
       "label": "单条最多图片数",
-      "kind": "number",
-      "tab": "capability",
-      "subtab": "vision"
+      "kind": "number"
     },
     {
       "path": [
@@ -54,9 +49,7 @@
         "downloadTimeoutMs"
       ],
       "label": "图片下载超时（毫秒）",
-      "kind": "number",
-      "tab": "capability",
-      "subtab": "vision"
+      "kind": "number"
     }
   ]
 }

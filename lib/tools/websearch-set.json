@@ -1,5 +1,8 @@
 {
+  "priority": 50,
   "group": "webSearch",
+  "tab": "capability",
+  "subtab": "retrieval",
   "fields": [
     {
       "path": [
@@ -9,9 +12,7 @@
       "label": "联网搜索 HTTP 代理",
       "kind": "text",
       "hint": "http://host:port；仅作用于 qq_websearch 联网搜索请求",
-      "placeholder": "（留空 = 直连）",
-      "tab": "capability",
-      "subtab": "retrieval"
+      "placeholder": "（留空 = 直连）"
     },
     {
       "path": [
@@ -20,9 +21,7 @@
       ],
       "label": "搜索 API 端点",
       "kind": "text",
-      "placeholder": "（留空 = https://api.deepseek.com/anthropic/v1）",
-      "tab": "capability",
-      "subtab": "retrieval"
+      "placeholder": "（留空 = https://api.deepseek.com/anthropic/v1）"
     },
     {
       "path": [
@@ -32,9 +31,7 @@
       "label": "搜索 API key 环境变量名",
       "kind": "text",
       "hint": "搜索服务专用，与生图的 key 互不影响",
-      "placeholder": "（留空 = DEEPSEEK_BALANCE_API_KEY）",
-      "tab": "capability",
-      "subtab": "retrieval"
+      "placeholder": "（留空 = DEEPSEEK_BALANCE_API_KEY）"
     },
     {
       "path": [
@@ -42,9 +39,7 @@
         "maxUses"
       ],
       "label": "每次搜索最多触发次数",
-      "kind": "number",
-      "tab": "capability",
-      "subtab": "retrieval"
+      "kind": "number"
     },
     {
       "path": [
@@ -53,9 +48,7 @@
       ],
       "label": "多引擎组合搜索（Tavily → DuckDuckGo → Yandex/Bing/Wikipedia；关闭则用官方 DeepSeek 搜索）",
       "kind": "bool",
-      "hint": "默认开；所有引擎请求都走上面的 HTTP 代理，留空直连",
-      "tab": "capability",
-      "subtab": "retrieval"
+      "hint": "默认开；所有引擎请求都走上面的 HTTP 代理，留空直连"
     }
   ]
 }

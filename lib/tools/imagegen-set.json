@@ -1,5 +1,8 @@
 {
+  "priority": 80,
   "group": "imageGen",
+  "tab": "capability",
+  "subtab": "vision",
   "fields": [
     {
       "path": [
@@ -8,9 +11,7 @@
       ],
       "label": "生图（qq_draw）",
       "kind": "bool",
-      "hint": "开启后 AI 能按描述画图；接口/模型/key 由下面几项决定，插件不内置任何 key",
-      "tab": "capability",
-      "subtab": "vision"
+      "hint": "开启后 AI 能按描述画图；接口/模型/key 由下面几项决定，插件不内置任何 key"
     },
     {
       "path": [
@@ -20,9 +21,7 @@
       "label": "生图 API 地址",
       "kind": "text",
       "hint": "OpenAI 兼容：会请求 <地址>/images/generations",
-      "placeholder": "https://api.example.com/v1",
-      "tab": "capability",
-      "subtab": "vision"
+      "placeholder": "https://api.example.com/v1"
     },
     {
       "path": [
@@ -31,9 +30,7 @@
       ],
       "label": "生图模型",
       "kind": "text",
-      "placeholder": "seedream-5.0-lite",
-      "tab": "capability",
-      "subtab": "vision"
+      "placeholder": "seedream-5.0-lite"
     },
     {
       "path": [
@@ -42,9 +39,7 @@
       ],
       "label": "默认尺寸",
       "kind": "text",
-      "placeholder": "1024x1024",
-      "tab": "capability",
-      "subtab": "vision"
+      "placeholder": "1024x1024"
     },
     {
       "path": [
@@ -54,9 +49,7 @@
       "label": "生图 API key",
       "kind": "password",
       "hint": "只写字段：已设置时留空表示保持不变。生图只认这里或下面的环境变量，不再给主动发言兜底",
-      "placeholder": "（留空 = 读下面的环境变量）",
-      "tab": "capability",
-      "subtab": "vision"
+      "placeholder": "（留空 = 读下面的环境变量）"
     },
     {
       "path": [
@@ -66,9 +59,7 @@
       "label": "API key 环境变量名",
       "kind": "text",
       "hint": "上一条留空时才读它；这是生图自己的回退链，主动发言已不再取 key",
-      "placeholder": "IMAGE_API_KEY",
-      "tab": "capability",
-      "subtab": "vision"
+      "placeholder": "IMAGE_API_KEY"
     },
     {
       "path": [
@@ -77,9 +68,7 @@
       ],
       "label": "失败重试次数（含首次）",
       "kind": "number",
-      "hint": "429 / 5xx / 网络错 / 空结果会重试；4xx 直接报错不重试",
-      "tab": "capability",
-      "subtab": "vision"
+      "hint": "429 / 5xx / 网络错 / 空结果会重试；4xx 直接报错不重试"
     },
     {
       "path": [
@@ -87,9 +76,7 @@
         "retryIntervalMs"
       ],
       "label": "重试间隔（毫秒）",
-      "kind": "number",
-      "tab": "capability",
-      "subtab": "vision"
+      "kind": "number"
     },
     {
       "path": [
@@ -98,9 +85,7 @@
       ],
       "label": "返回 task_id 时继续轮询",
       "kind": "bool",
-      "hint": "异步生图的供应商才有用：关掉则只尝试一次",
-      "tab": "capability",
-      "subtab": "vision"
+      "hint": "异步生图的供应商才有用：关掉则只尝试一次"
     },
     {
       "path": [
@@ -108,9 +93,7 @@
         "pollIntervalMs"
       ],
       "label": "轮询间隔（毫秒）",
-      "kind": "number",
-      "tab": "capability",
-      "subtab": "vision"
+      "kind": "number"
     },
     {
       "path": [
@@ -118,9 +101,7 @@
         "maxPolls"
       ],
       "label": "最多轮询次数",
-      "kind": "number",
-      "tab": "capability",
-      "subtab": "vision"
+      "kind": "number"
     },
     {
       "path": [
@@ -128,9 +109,7 @@
         "timeoutMs"
       ],
       "label": "单次请求超时（毫秒）",
-      "kind": "number",
-      "tab": "capability",
-      "subtab": "vision"
+      "kind": "number"
     }
   ]
 }

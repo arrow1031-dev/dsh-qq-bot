@@ -92,6 +92,43 @@ const emptyRec = createFlowAuth({ config: () => Object.assign({}, cfg, { recover
 emptyRec.requestAuth(owner, 'x', 'subagent');
 check('没有恢复码时直接拒（no-recovery）', emptyRec.consumeRecoveryCode(owner, 'AAAAA-AAAAA').reason === 'no-recovery');
 
+console.log('\n5b. /flow unbind 的显式工具通道（2026-10-28 审计 B4）');
+{
+  const ub = createFlowAuth({ config: () => cfg, now: () => clock, audit: () => {} });
+  // 不带显式工具名：'unbind' 既不是受闸工具、也不是刚被拦下的工具 → tool-unknown，
+  // 「认证器丢了又没恢复码」这条兜底路径以前永远走不通。
+  check('purpose=unbind 且不给工具名 → tool-unknown',
+    ub.requestAuth(owner, 'unbind').reason === 'tool-unknown');
+  // 显式工具名是插件内部给的受信通道（不经过模型），必须能过。
+  const issued = ub.requestAuth(owner, 'unbind', 'unbind');
+  check('显式指定工具名 → 申请成功并绑定 unbind', issued.ok === true && issued.toolName === 'unbind', JSON.stringify(issued));
+  const grant = ub.consumeToken(owner, codeAt());
+  check('动态码换到 grant', grant.ok === true, JSON.stringify(grant));
+  check('取用时不带工具名 → 拒绝（绑定不可绕过）', ub.takeGrant(grant.grantId, owner).ok === false);
+  const taken = ub.takeGrant(grant.grantId, owner, 'unbind');
+  check('带同一个工具名才能兑现', taken.ok === true, JSON.stringify(taken));
+}
+
+console.log('\n6b. 恢复码失败要节流，但不牵连动态码那条路（2026-10-28 审计 B2）');
+{
+  const throttle = createFlowAuth({ config: () => cfg, now: () => clock, audit: () => {} });
+  throttle.requestAuth(owner, 'x', 'subagent');
+  for (let index = 0; index < cfg.maxAttempts; index += 1) throttle.consumeRecoveryCode(owner, 'AAAAA-AAAAA');
+  const lockedNow = throttle.consumeRecoveryCode(owner, codes[0]);
+  check('连错 maxAttempts 次后用正确恢复码 → locked（不再无限触发 scrypt）',
+    lockedNow.ok === false && lockedNow.reason === 'locked', JSON.stringify(lockedNow));
+
+  // 两条路的计数器必须独立：恢复码被锁住时，动态码仍要能用（认证器还在的人不受影响）。
+  throttle.requestAuth(owner, 'x', 'subagent');
+  const tokenStillWorks = throttle.consumeToken(owner, codeAt());
+  check('恢复码锁定不影响动态码授权', tokenStillWorks.ok === true, JSON.stringify(tokenStillWorks));
+
+  clock += (cfg.lockoutMinutes * 60000) + 1000;
+  throttle.requestAuth(owner, 'x', 'subagent');
+  const afterLock = throttle.consumeRecoveryCode(owner, codes[0]);
+  check('锁定到期后恢复码重新可用（兜底路径没被永久关死）', afterLock.ok === true, JSON.stringify(afterLock));
+}
+
 console.log('\n7. 审计只记结论，不记令牌');
 const auditText = JSON.stringify(audits);
 check('审计里有 ok/fail 与 grantId', audits.some((a) => a.action === 'grant' && a.ok === true) && audits.some((a) => a.action === 'token' && a.ok === false));

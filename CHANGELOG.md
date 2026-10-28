@@ -1,3 +1,89 @@
+## 未发布 —— 安全加固 + 行为修正 + 文档与死代码清理（2026-10-28）
+
+六路子代理做了一轮对抗性审查（攻防演练 / 边界加固 / 文档审查 / 死代码审查 / 凭据泄露面 /
+收归与拆分），提交上来的 20 条逐条交叉验证后**零误报**，按「先 P0 再 P1/P2、结构重构暂不动」
+分两批落地。对外契约（包名、`main`/`exports`、配置键名、九个工具名）没变。
+
+### 1. P0：安全边界
+
+| 问题 | 不修的后果 | 修法 |
+| --- | --- | --- |
+| 内网校验代理在**直连模式**下把「解析不出地址」当成「安全」 | 判定层说「放行」，连接层退回按**主机名**盲连——判定与执行分叉，守卫等于没有 | `assertDialable()`：直连模式解析不出地址就 `policyRejection`（403），`connectTarget` 不再回退主机名；代理模式才交给上游解析并记日志 |
+| `webSearch.saucenaoKey` 没标成密钥 | 明文渲染在设置页、明文存进 profile | `Config` 上加 `.role('secret')`，设置页字段改 `kind: password` + `secret: true`（「已设置；留空则保持不变」，一键还原默认跳过） |
+| 群内点名判定用 `text.includes('@'+selfId)` | ① 正文里手打 `@机器人QQ` 就算点名，`requireAt` 形同虚设；② `@10001` 是 `@100012` 的前缀，正常 @ 别人会被误判成 @ 了我，`split/join` 剥前缀还会咬掉对方 QQ 号一位 | 适配器在帧里带 `mentions`（五套协议全覆盖），判定改看 `frame.mentions.includes(selfId)`；自定义适配器没给时退化成「@数字 + 数字边界」的保守匹配（宁可漏判不误判） |
+| 群白名单判定排在管理指令之后 | 不在白名单的群里发 `/kick` 仍会先走管理指令那条路 | `allowlistOk()` 提到 `handleAdminCommand` 之前 |
+| 闸门区只比较 `enabled` + `gatedTools` | 换掉 `totpSecret` 这一步连码都不问；换完之后所有「改名单要码」都变成「用攻击者的码验攻击者的锁」，一次原子保存就能清空名单 | 新增「保护面」比较：`totpSecret` / `recoveryHashes` / `recoverySalt` / `maxAttempts` / `lockoutMinutes` / `grantTtlSeconds` 任一变化都要码，且**必须用变更前那把密钥验**；拒绝时连保护面一起回滚 |
+| 闸门码无状态 | 6 位码可以无限试，同一个码能反复用 | 加失败锁定（默认 5 次 / 5 分钟）+ 重放防护（同一 counter 只认一次）。窗口保留 ±1：闸门码是人手工填的，从读到码到点保存常要十几秒，窗口 0 会让「第 29 秒读码、第 31 秒保存」直接失败——暴力风险由锁定承担 |
+| 恢复码路径完全不受限 | 谁都能反复提交错的恢复码，把 scrypt（16MB、同步、约 60ms）当免费 CPU 用，同时不断给动态码那条路续锁 | 恢复码用**独立**计数器与短锁定：两条路互不牵连（认证器丢了时恢复码仍是兜底），但各自都被夹住 |
+
+### 2. P1：行为修正
+
+- **QQ 官方协议上流程授权提示从来没发出去过**：`sendPrivateText` 只用 `send_private_msg` 这个 action，
+  而官方适配器只支持 `recall` / `delete_msg`，于是永远回「不支持」，错误被吞成空串，
+  `requestFlowAuth` 仍回 `{ok:true}`——主人等一条永远不来的码，模型以为「已申请」。改为 action 失败就退到
+  `send` 帧（同一个能力，官方协议支持私聊），并让发送失败**真的失败**（`prompt-failed`，同时回滚刚登记的 pending）。
+- **`/flow unbind` 永远失败**：`requestAuth(qq, 'unbind')` 不带显式工具名，而 `'unbind'` 既不是受闸工具、
+  也不是刚被拦下的工具，一律回 `tool-unknown`——「认证器丢了又没恢复码」这条兜底路径根本走不通。
+  改为插件内部给 `explicitTool='unbind'`（不经过模型），取用 grant 时带上同一个名字并**校验结果**
+  （以前传 2 个参数必然 `wrong-tool`，返回值还被忽略）。
+- **插件 HTTP 路由绕开 DSH 鉴权**：插件用 `webServer.register` 挂的具名路由在鉴权层之前处理
+  （实测 `GET /` 回 401、`GET /dsh-qq-bot/settings` 回 200）。新增 `lib/gateway/route-auth.js`：
+  过一遍 `client-connection` 的浏览器 cookie 校验（`browserAuth.isAuthenticated`）+ Origin/Referer 同源校验，
+  未登录 401；拿不到该服务时降级放行并告警一次（那种环境里 DSH 自己也没鉴权，加一道只会把设置页锁死）。
+  顺手补上 `/bind` 状态路由缺的方法校验（以前 `PUT` 也回状态）。
+- **`qq_imgsearch` 的本地文件白名单挡不住符号链接**：`qq-images/x.png -> /etc/passwd` 的**路径字符串**
+  完全在白名单目录下，`readFile` 却会顺着链接读到目标再上传图床。改为比较前先 `realpath`，失败（不存在/断链）一律不认。
+
+### 3. P2：死代码与文档
+
+- 删 `lib/message/index.js`（`assembleReply` / `ASSEMBLY_STEPS` 生产代码零调用，发送侧自己按同一顺序拼）；
+  删 `gateway/index.js` 的死导入与死再导出、`transport` 的 `ADAPTER_FILES` 别名、
+  `owner-settings.js` 的空 `DENY_PATHS` 与其死分支、7 个零引用阀门成员
+  （`verifyToken` / `verifyRecovery` / `judgeHistory` / `checkOwnerCaller` / `pin` / `__setHooks` / `__hooks` / `decideEdit`）。
+  安全阀文件头那句「这四个薄包装只有测试在调」也一并改掉——测试其实也没调。
+- 文档纠错：`AI-DISCLOSURE` 的逐套件项数（QQ 官方 95→109、Host 插件 120→146、客户端 107→130、
+  配置合并 24→35、内网校验代理 38→53、状态机 35→43、接线 20→23、生图 16→22）与英文段落的
+  「19 suites / 774」；补上 7 个从来没进过清单的套件；工具数 8 → 9；
+  `README` 的「零 npm 运行时依赖」改成「只有一条运行时依赖」；反向 WS 的 `0.0.0.0:6199`
+  补上「必须先配 `onebot.accessToken`，否则强制收回回环」；`DEVELOPMENT` 的发布流程按工作流的真实幂等口径重写；
+  `ARCHITECTURE` 的 `DENY_PATHS`（早已是空数组，真正的机制是 `DENY_PREFIXES` + `SPECS` 白名单）与
+  `message/index.js` 条目。
+
+### 4. 测试
+
+**38 个套件 / 1476 项**（+51，其中 19 项是同一基线上游新增的 `test-update-check`）：`test-plugin` 132 → 148（点名判定 3 项 + 白名单次序 3 项 + 路由鉴权 9 项）、
+`test-gate-guard` 18 → 30（保护面 6 项 / 重放 2 项 / 锁定 3 项 + 契约）、`test-flow-auth` 35 → 43
+（显式工具通道 5 项 + 恢复码节流 3 项）、`test-guard-proxy` 47 → 53（直连解析失败必须拒绝）、
+`test-imagegen` 16 → 22（符号链接逃逸）、`test-qq-bind` 19 → 20（PUT 405）、
+`test-valve-assembly` 31 → 27（删掉随死代码一起消失的 4 项消息组装断言，契约断言改为「已删的薄包装不该再出现」）、
+`test-config` 35 → 41（设置页分区顺序 3 项 + `priority` 三条护栏）。
+
+### 5. 实装到本机之后又抓到的两处
+
+纸上推演没问题、装上去才露馅的，记在这里免得下回重踩：
+
+- **路由鉴权取服务取错了名字**：`ctx.get('client-connection')` 永远拿不到——`client-connection`
+  是**插件名**，它 `provide` 的服务叫 `connection`（`HostConnectionService` 里 `super(ctx, "connection")`）。
+  于是鉴权闸门每次都走进降级分支，日志还写着「这个 DSH 版本没有该服务」——而服务其实在。
+  现在两个名字都试，取不到时的告警文案也改成「先看 `ctx.get('connection')` 是否可用」，
+  不再把排查引向「版本没有这个服务」。
+- **设置页字段顺序是文件名的副产品**：上一轮把 `FIELDS` 从客户端搬进 `-set.json` 时，组装顺序
+  直接用了文件路径排序，于是「图片反搜」排在「moli 卡片」前面、moli 从分区收尾跑到中间，
+  而 `vision` 也掉到了 `history` / `imageGen` 后面。改个文件名就换一次版面，还没人知道顺序谁定的。
+  现在每份模板在头部声明 `priority`（升序，同值按文件路径兜底，不写默认 500），
+  顺序成了模板自己的属性：联网 50 → 图片反搜 60 → moli 90 收尾，识图 40 → 历史 70 → 生图 80。
+- **模板头补上 `tab` / `subtab`**：一份模板通常只管一个工具、整份都在同一标签页，
+  于是把「落在哪一页」也提到文件头，单条字段写了就覆盖（`auth` 横跨「基础·准入」和
+  「高级·会话」，仍逐条声明）。9 份内置模板里 7 份收成一行文件头，字段里那 60 多处重复的
+  `"tab": "capability"` / `"subtab": "retrieval"` 全部删掉——组装结果与改之前**逐字段完全一致**
+  （147 个字段的 path/tab/subtab/group/kind/label 做过快照比对）。
+- **密钥字段的「已设置」从灰字变成状态徽章**：以前不管填没填都显示同一行灰字
+  「已设置；留空则保持不变」，等于没填也说自己已设置。现在按 DSH 返回的
+  `secrets[].set` 区分：填了是绿框绿字的「已设置」，没填是灰框虚线的「未设置」并提示
+  「填写并保存后才会生效」。
+
+---
+
 ## 未发布 —— 设置页字段模板化 + TypeScript 类型检查（2026-10-28）
 
 ### 新版本探测：设置页提示（只提示，不自动升级）

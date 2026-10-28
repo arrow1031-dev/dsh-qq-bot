@@ -1,4 +1,5 @@
 {
+  "priority": 20,
   "group": "auth",
   "fields": [
     {

@@ -3,6 +3,10 @@
  * 用法：node test/test-imagegen.mjs
  */
 import { generationsUrl, trimBaseUrl, parseImagePayload, generateImage } from '../lib/tools/imagegen.js';
+import { mkdirSync, writeFileSync, symlinkSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { qqMsgRootSync, imageCacheDir } from '../lib/session/workspace.js';
+import { meIsAllowedImageFile } from '../lib/tools/imgsearch.js';
 
 let pass = 0;
 let fail = 0;
@@ -80,6 +84,43 @@ check('轮询请求打到 generations/<id>', f4.calls.some((c) => c.url.indexOf(
 const f5 = fakeFetch([{ status: 200, body: { task_id: 't2', status: 'pending' } }]);
 const r5 = await generateImage({ baseUrl: 'https://api.x.top/v1', prompt: 'p', maxAttempts: 1, retryIntervalMs: 0, poll: false, fetchImpl: f5 });
 check('关闭轮询时提示 task id', r5.ok === false && String(r5.error).indexOf('t2') >= 0, JSON.stringify(r5));
+
+console.log('\n7. 本地图片白名单必须解符号链接（2026-10-28 审计）');
+{
+  // 纯字符串前缀判断挡不住软链：qq-images/<会话>/steal.png -> /etc/passwd 的**路径字符串**
+  // 完全在白名单目录下，readFile 却会读到目标，再被上传到图床。
+  const sessionId = 'imgsearch-symlink-test';
+  const ownDir = imageCacheDir(sessionId);
+  const outside = join(qqMsgRootSync(), 'outside-secret.txt');
+  const link = join(ownDir, 'steal.png');
+  let cleaned = false;
+  try {
+    mkdirSync(ownDir, { recursive: true });
+    writeFileSync(outside, 'SECRET', 'utf8');
+    const realFile = join(ownDir, 'ok.png');
+    writeFileSync(realFile, 'IMG', 'utf8');
+    check('会话目录下的普通图片 → 放行', meIsAllowedImageFile(realFile, sessionId) === true);
+
+    try { rmSync(link, { force: true }); } catch { /* 不存在 */ }
+    symlinkSync(outside, link);
+    check('指向白名单外的软链 → 拒绝', meIsAllowedImageFile(link, sessionId) === false, link);
+
+    const escape = join(ownDir, 'escape.png');
+    try { rmSync(escape, { force: true }); } catch { /* 不存在 */ }
+    symlinkSync('/etc/passwd', escape);
+    check('指向系统文件的软链 → 拒绝', meIsAllowedImageFile(escape, sessionId) === false, escape);
+
+    check('不存在的路径 → 拒绝（realpath 失败不认）', meIsAllowedImageFile(join(ownDir, 'nope.png'), sessionId) === false);
+    check('别的会话目录 → 拒绝', meIsAllowedImageFile(realFile, 'another-session') === false);
+  } finally {
+    try { rmSync(join(ownDir, 'steal.png'), { force: true }); } catch { /* ignore */ }
+    try { rmSync(join(ownDir, 'escape.png'), { force: true }); } catch { /* ignore */ }
+    try { rmSync(join(ownDir, 'ok.png'), { force: true }); } catch { /* ignore */ }
+    try { rmSync(outside, { force: true }); } catch { /* ignore */ }
+    try { rmSync(ownDir, { recursive: true, force: true }); cleaned = true; } catch { /* ignore */ }
+  }
+  check('测试临时文件已清理', cleaned === true);
+}
 
 console.log('\n' + pass + '/' + (pass + fail) + ' 项通过');
 if (fail > 0) { console.log('生图自测失败'); process.exit(1); }
