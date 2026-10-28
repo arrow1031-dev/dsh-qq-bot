@@ -46,7 +46,7 @@ node test/run-all.mjs
 - 用 `@param {X} deps.foo` 这类**限定名**时，父参数必须保持 `@param {object} deps`；
   把它换成 `Record<string, any>` 会报 TS8032（「限定名不能没有前导的 @param {object}」）
 
-## 2. 测试（38 个套件 / 1420 项）
+## 2. 测试（37 个套件 / 1444 项）
 
 ```sh
 node test/run-all.mjs      # 一键全量（套件失败会自动重试一次，重试通过会标注）
@@ -61,13 +61,13 @@ npm test                   # 同上
 | `test-adapter-satori.mjs` | 70 | Satori 适配器 |
 | `test-adapter-milky.mjs` | 83 | Milky 适配器（含 WebHook 默认准入与读体上限） |
 | `test-adapter-qq-official.mjs` | 109 | QQ 官方适配器（含回调重放防护） |
-| `test-plugin.mjs` | 132 | Host 半边：假 ctx + 真适配器 + 真 `lib/index.js`（入口薄壳 → `lib/gateway/plugin.js`），含 Config 契约、热更新、9 个工具、适配器重启、默认准入 fail-closed、入站限制，以及设置页模板路由（200 / 405 / 只回模板不回配置 / 注销）（132 项含工具注册段落；解析不到 `@deepseek-ai/dsh-tools` 的裸克隆里为 106 项 + 6 项 `[SKIP]`） |
+| `test-plugin.mjs` | 146 | Host 半边：假 ctx + 真适配器 + 真 `lib/index.js`（入口薄壳 → `lib/gateway/plugin.js`），含 Config 契约、热更新、9 个工具、适配器重启、默认准入 fail-closed、入站限制、点名判定（按段而非字符串）、群白名单次序，以及设置页模板路由（200 / 405 / 只回模板不回配置 / 注销）与路由鉴权闸门（未登录 401 / 跨站 401 / 服务缺失降级放行）（146 项含工具注册段落；解析不到 `@deepseek-ai/dsh-tools` 的裸克隆里为 120 项 + 6 项 `[SKIP]`） |
 | `test-client.mjs` | 130 | 客户端设置页：模拟模块加载器 + 最小 React 渲染 + 四档标签（字段来自服务端模板）+ 只写密钥护栏 + 纯数字名单校验 + 一键还原默认 |
 | `test-admin.mjs` | 38 | 权限 · 群管理 · 访客工具闸 |
 | `test-http.mjs` | 30 | HTTP / 代理隧道 / IP 归一与公网判定 |
 | `test-config.mjs` | 35 | 配置合并、volatile 还原、废弃键清理、`-conf.json` / `-set.json` 自动发现与三道护栏（组不存在 / 路径不存在 / 标签页不存在） |
 | `test-websearch.mjs` | 5 | 多引擎搜索结果解析 |
-| `test-imagegen.mjs` | 16 | 生图重试 / 轮询 / 响应解析 |
+| `test-imagegen.mjs` | 22 | 生图重试 / 轮询 / 响应解析；本地图片白名单必须解符号链接（软链指向白名单外一律拒） |
 | `test-session-id.mjs` | 5 | 会话 id 回退 |
 | `test-compat.mjs` | 14 | 运行时兼容自检 |
 | `test-history.mjs` | 20 | 聊天记录鉴权与定向 |
@@ -77,7 +77,7 @@ npm test                   # 同上
 | `test-totp.mjs` | 44 | TOTP / HOTP（RFC 4226 + 6238 官方向量） |
 | `test-totp-cli.mjs` | 14 | 终端绑定（secret / otpauth URI / 二维码） |
 | `test-qr.mjs` | 18 | 二维码编码器（固定矩阵守回归） |
-| `test-flow-auth.mjs` | 35 | 授权状态机（授权 / 重放 / 锁定 / 过期 / 工具绑定） |
+| `test-flow-auth.mjs` | 43 | 授权状态机（授权 / 重放 / 锁定 / 过期 / 工具绑定）；`/flow unbind` 的显式工具通道；恢复码独立节流且不牵连动态码 |
 | `test-flow-store.mjs` | 17 | 流程脚本存取（路径穿越 / sha 校验 / 目录删不掉要报错） |
 | `test-flow-commands.mjs` | 49 | `/auth` 与 `/flow` 解析（含不可见字符与控制符） |
 | `test-flow-gate.mjs` | 16 | 流程授权闸门 |
@@ -87,11 +87,11 @@ npm test                   # 同上
 | `test-model-router.mjs` | 23 | 模型路由自动检测：agentDefaultModel 优先 / llm 只读 / 都没有不假装；偏好文件 fallback |
 | `test-stream-bridge.mjs` | 18 | 官方 v2 私聊流式桥：增量合并、节流、done 收尾、失败停用、取消 |
 | `test-msgid-cache.mjs` | 13 | 入站去重：首见/复见、TTL 过期、有界淘汰、空 id、重复不延 TTL |
-| `test-valve-assembly.mjs` | 31 | 三道阀门的契约字段、装配顺序与依赖、网络判定口径（编码变体 / 云元数据 / 本机保留名 / 域名不误判）、**代理归属**（阀门接管传输层、工具不持有代理串）、工具阀一次性消费、消息组装顺序、传输层注册表 |
-| `test-qq-bind.mjs` | 19 | 扫码绑定状态机：二维码等待 / 凭据只经回调一次 / 失败与刷新 / 异步工厂 / 路由不泄露 appSecret |
+| `test-valve-assembly.mjs` | 27 | 三道阀门的契约字段（含「已删的薄包装不该再出现」）、装配顺序与依赖、网络判定口径（编码变体 / 云元数据 / 本机保留名 / 域名不误判）、**代理归属**（阀门接管传输层、工具不持有代理串）、工具阀一次性消费、传输层注册表 |
+| `test-qq-bind.mjs` | 20 | 扫码绑定状态机：二维码等待 / 凭据只经回调一次 / 失败与刷新 / 异步工厂 / 路由不泄露 appSecret / 状态路由只认 GET |
 | `test-chunk.mjs` | 15 | 回复分条：短文本原样 / 长文本不超限且不丢行 / 代码块围栏成对 / 表格不切行 / 超长单行硬切 / 未闭合围栏兜底 |
-| `test-gate-guard.mjs` | 18 | 闸门区改动判定：关着不需要码 / 没码·错码·无 secret 拒绝 / 对码接受 / ±1 窗口 / 开关本身变更也要码 / 名单没变时清码 |
-| `test-guard-proxy.mjs` | 47 | 内网校验代理：CONNECT 与明文请求拒绝回环 / 元数据 / 私网 / IPv6 / 6to4 / Teredo / localhost；用「本地监听器 accept 计数 = 0」证明真的没有连过去（把判定改成一律放行必然变红），另覆盖上游代理链路与 403/502 语义分离、CONNECT 目标归一（尾点 / userinfo / 多冒号）、并发 start 去重、socks5 上游告警、拒绝后不崩、stop 后端口关闭 |
+| `test-gate-guard.mjs` | 30 | 闸门区改动判定：关着不需要码 / 没码·错码·无 secret 拒绝 / 对码接受 / ±1 窗口 / 开关本身变更也要码 / 名单没变时清码 / **保护面（密钥·恢复码·试错上限·授权时长）变更也要码且必须用变更前的密钥验** / 码不能重放 / 连错锁定 |
+| `test-guard-proxy.mjs` | 53 | 内网校验代理：CONNECT 与明文请求拒绝回环 / 元数据 / 私网 / IPv6 / 6to4 / Teredo / localhost；用「本地监听器 accept 计数 = 0」证明真的没有连过去（把判定改成一律放行必然变红），另覆盖上游代理链路与 403/502 语义分离、CONNECT 目标归一（尾点 / userinfo / 多冒号）、并发 start 去重、socks5 上游告警、拒绝后不崩、stop 后端口关闭、**解析失败在直连模式下必须拒绝（不再退化成盲连主机名）** |
 
 **手动联调**（假 OneBot 端口正好是 NapCat 默认值，不用真 QQ 号）：
 
@@ -103,7 +103,7 @@ node -e "fetch('http://127.0.0.1:3000/__inject',{method:'POST',headers:{'content
 node -e "fetch('http://127.0.0.1:3000/__sent').then(r=>r.json()).then(j=>console.log(JSON.stringify(j.messages,null,2)))"
 ```
 
-> **文档里的测试数必须自洽**：改测试就同步本表、README 的「38 套件 / 1420 项」与顶部 `tests` 徽章（`tests-1420%20passing`）、`AI-DISCLOSURE.md` 的验证情况。数字以裸克隆跑 `npm test` 的输出为准；能解析到 `@deepseek-ai/dsh-tools` 的环境里 `test-plugin` 与 `test-admin` 会多跑工具注册段落，总数随之更多。跳过项按 `[SKIP]` 单列，不计入通过数；设 `DSH_TOOLS_DISABLE=1` 可以在这台机器上模拟裸克隆（否则 `test/dsh-tools-link.mjs` 会把链接建回来，永远看不到跳过路径——CI 就是这么红的）。
+> **文档里的测试数必须自洽**：改测试就同步本表、README 的「37 套件 / 1444 项」与顶部 `tests` 徽章（`tests-1444%20passing`）、`AI-DISCLOSURE.md` 的验证情况。数字以裸克隆跑 `npm test` 的输出为准；能解析到 `@deepseek-ai/dsh-tools` 的环境里 `test-plugin` 与 `test-admin` 会多跑工具注册段落，总数随之更多。跳过项按 `[SKIP]` 单列，不计入通过数；设 `DSH_TOOLS_DISABLE=1` 可以在这台机器上模拟裸克隆（否则 `test/dsh-tools-link.mjs` 会把链接建回来，永远看不到跳过路径——CI 就是这么红的）。
 
 <a id="完整配置参考"></a>
 ## 3. 完整配置参考
@@ -145,8 +145,10 @@ node -e "fetch('http://127.0.0.1:3000/__sent').then(r=>r.json()).then(j=>console
         appId: ''
         appSecret: ''
         botSecret: ''
+        selfId: ''            # 机器人自己的 QQ 号；留空则退化成「正文里有 @ 就响应」
         listen: "0.0.0.0:8443"
         path: "/qqbot"
+        streaming: false      # 官方 v2 私聊流式（只在该协议支持时生效）
     group:
       enabled: true
       allow: []   # 群号白名单，空数组 = 所有群
@@ -488,8 +490,11 @@ node -e "fetch('http://127.0.0.1:3000/__sent').then(r=>r.json()).then(j=>console
 
 1. 改 `package.json` 的 `version`（**不要手动打 tag**），同时更新 `CHANGELOG.md` 与文档里的版本号。
 2. 推 `main`。`.github/workflows/release.yml`（Auto Release）在 push 触达 `package.json` 时启动：
-   checkout → `actions/setup-node@v4`（node 24）→ 读版本 → 已存在同名 tag 就跳过 → `npm install && npm test` →
-   `npm publish --provenance --access public` → 用「引入这个版本的第一个提交」的提交信息做正文建 GitHub Release。
+   checkout（含全部历史与 tag）→ `actions/setup-node@v4`（node 24）→ 读版本 →
+   **按产物是否已存在分别判定幂等**（npm 上已有该版本 → 跳过发布；release 已存在 → 跳过创建；两者互不牵连）→
+   `npm install && npm test`（仅在需要发布时）→ `npm publish --provenance --access public` →
+   用「首次引入当前版本号的那个提交」的提交信息做正文 `gh release create`（tag 由它创建或复用）。
+   曾经只看 tag：tag 先于 workflow 存在时整条流水线被跳过，npm 与 release 都不补，而 skipped 不算失败、run 照样绿（0.12.6 就这么漏过一次），所以改成了现在的写法。
 3. 发布走 **Trusted Publishing（OIDC）**：`permissions: id-token: write`，runner 的 npm 必须 ≥ 11.5.1（所以有 setup-node 那一步；npm 10 会在 OIDC 之前就报 `ENEEDAUTH`）。
 4. tag 与 Release 由工作流创建；版本号一经发布不可复用（unpublish 过的版本也不行）。
 5. 发版后抽查一次 tarball（`npm pack` 或直接下载）确认关键文件在包里。
@@ -504,7 +509,7 @@ node -e "fetch('http://127.0.0.1:3000/__sent').then(r=>r.json()).then(j=>console
 
 ## 13. 部署备注
 
-- **ARM / 手机容器跑 NapCat**：官方镜像有 arm64 版，但容器里再跑 Docker 通常需要 privileged。备选是直接在容器里跑 NapCat.Shell（要对应的 Linux QQ 版本）。同容器用 `forward` 连 `127.0.0.1:3001` 最省事；跨容器用 `reverse`，让 NapCat 连 `ws://<DSH主机IP>:6199/`。**6099（WebUI）不要暴露到公网**。
+- **ARM / 手机容器跑 NapCat**：官方镜像有 arm64 版，但容器里再跑 Docker 通常需要 privileged。备选是直接在容器里跑 NapCat.Shell（要对应的 Linux QQ 版本）。同容器用 `forward` 连 `127.0.0.1:3001` 最省事；跨容器用 `reverse`，让 NapCat 连 `ws://<DSH主机IP>:6199/`——但**必须先配 `onebot.accessToken`**：没配 token 时反向端口会被强制收回 `127.0.0.1`（那个口上的帧能直接冒充任意 QQ 号）。**6099（WebUI）不要暴露到公网**。
 - **重启 DSH**：插件是常驻 Cordis 插件，装/升级/改连接方式后都要重启 Host；桌面版重启应用，CLI 重启 `dsh web`。
 - **日志**：插件前缀 `[dsh-qq-bot]`，适配器前缀 `[dsh-qq-bot]/adapter`，都打到 Host 的 stdout（systemd 部署看 `journalctl -u dsh-web`）。
 - **与 AstrBot 互斥**：AstrBot 也是 OneBot 消费方，两边同时接会让同一条消息被回两次。

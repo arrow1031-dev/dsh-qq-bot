@@ -36,21 +36,23 @@
 
 ### 验证情况
 
-- **自动化测试 38 个套件 / 1420 项全部通过**（`npm test` = `node test/run-all.mjs`；CI 在 Node 22 / 24 双版本上跑）：
-  - 正向 WebSocket 适配器 19 项 ／ 反向 19 项（含半开回收） ／ OneBot 12 30 项 ／ Satori 70 项 ／ Milky 83 项 ／ QQ 官方 95 项
-  - Host 插件端到端 120 项（假 ctx + 真适配器 + Config 契约 + 配置热更新 + 废弃配置清理 + 默认准入 fail-closed + 入站限流；能解析到 `@deepseek-ai/dsh-tools` 时会多跑 9 个工具注册断言）
-  - 安全回归 `test-security.mjs` 55 项（SSRF 公网判定与 F1 / IPv6 映射写法 / 6to4 与 Teredo 内嵌 IPv4 / 识图下载源码断言 / 跨群与撤回绑群）
-  - 客户端设置页 107 项 ／ 中间发言 14 项 ／ 权限·群管理·访客工具闸 38 项
-  - HTTP·代理隧道 30 项 ／ 配置合并 24 项 ／ 多引擎搜索解析 5 项 ／ 运行时兼容自检 14 项
-  - 内网校验代理 `test-guard-proxy.mjs` 38 项（拒绝路径 + 「本地监听器 accept 计数 = 0」的判别力断言 + 上游代理链路 + 403/502 语义分离 + CONNECT 目标归一 + 并发 start 去重；离网可跑）
-  - 生图引擎 16 项（URL 拼接、响应解析、500/429 重试、4xx 不重试、网络异常重试、task_id 轮询、关闭轮询）
+- **自动化测试 37 个套件 / 1444 项全部通过**（`npm test` = `node test/run-all.mjs`；CI 在 Node 22 / 24 双版本上跑）：
+  - 协议适配器 330 项：正向 WebSocket 19 ／ 反向 19（含半开回收）／ OneBot 12 30 ／ Satori 70 ／ Milky 83 ／ QQ 官方 109
+  - Host 插件端到端 146 项（假 ctx + 真适配器 + Config 契约 + 配置热更新 + 废弃配置清理 + 默认准入 fail-closed + 入站限流 + 点名判定与白名单次序 + 路由鉴权闸门；能解析到 `@deepseek-ai/dsh-tools` 时会多跑 9 个工具注册断言）
+  - 客户端设置页 130 项 ／ 中间发言 14 项 ／ 权限·群管理·访客工具闸 38 项
+  - 安全回归 `test-security.mjs` 55 项（SSRF 公网判定与 F1 / IPv6 映射写法 / 6to4 与 Teredo 内嵌 IPv4 / 识图下载源码断言 / 跨群与撤回绑群）／ 历史消息鉴权 20 项
+  - 内网校验代理 `test-guard-proxy.mjs` 53 项（拒绝路径 + 「本地监听器 accept 计数 = 0」的判别力断言 + 上游代理链路 + 403/502 语义分离 + CONNECT 目标归一 + 并发 start 去重 + 解析失败必须拒绝；离网可跑）
+  - HTTP·代理隧道 30 项 ／ 配置合并 35 项 ／ 多引擎搜索解析 5 项 ／ 运行时兼容自检 14 项
+  - 消息链路：分条 15 项 ／ 入站去重 13 项 ／ 流式桥接 18 项 ／ 模型路由 23 项
+  - 生图引擎 22 项（URL 拼接、响应解析、500/429 重试、4xx 不重试、网络异常重试、task_id 轮询、关闭轮询、本地图片白名单解符号链接）
   - 会话 id 作用域回退 5 项（旧工作区会话不删、改用 `-ws<哈希>` 新 id）
-  - 历史消息鉴权 20 项 ／ 主动发言 84 项 ／ 主动发言回合端到端 35 项 ／ 拥有者设置通道 58 项
-  - 流程授权链路 213 项：TOTP 44 ／ 终端绑定 14 ／ 二维码 18 ／ 状态机 35 ／ 流程脚本存取 17 ／ 指令解析 49 ／ 闸门 16 ／ 接线 20
+  - 主动发言 84 项 ／ 主动发言回合端到端 35 项 ／ 拥有者设置通道 58 项 ／ 扫码绑定状态机 20 项
+  - 阀门组装 27 项（STAGE 表 + 依赖顺序 + 冻结后的对外契约）
+  - 流程授权链路 254 项：TOTP 44 ／ 终端绑定 14 ／ 二维码 18 ／ 状态机 43 ／ 流程脚本存取 17 ／ 指令解析 49 ／ 闸门 16 ／ 接线 23 ／ 闸门码判定 30
 - 测试对端是项目自带的**零依赖 OneBot 11 模拟器**（`test/mock-onebot.mjs`，手写 RFC 6455 帧编解码），
   **不需要真实 QQ 账号**即可回归。
 - **真机验证**（上述部署环境，证据来自 DSH 端日志，可复现）：
-  - `已注册 qqbot / qqconfig / qqgroup / qq_websearch / qq_webfetch / qq_imgsearch / qq_history / qq_draw 工具` 8 个齐全；
+  - `已注册 qqbot / qqconfig / qqgroup / qq_websearch / qq_webfetch / qq_imgsearch / qq_history / qq_draw / qqauth 工具` 9 个齐全；
   - `OneBot 已连接`（正向 WS 链路 + lifecycle connect）；
   - 群聊/私聊会话创建、消息收发、群管理指令、访客工具闸按预期工作；
   - 设置页字段（含列表字段逗号输入、生图与人设分组）在真实浏览器里读写正常；
@@ -69,13 +71,13 @@
 
 ### 已知限制与**尚未验证**的部分（请务必阅读）
 
-1. **多协议适配器只对「本地假协议端」验证过**：OneBot 12 / Satori / Milky / QQ 官方四个适配器各有独立测试套件，但尚未接真实实现端（OneBot 12 生态、Koishi、Milky 协议端、QQ 开放平台机器人）跑过端到端；上真实协议端时请先看 README「三、协议与连接方式」的能力边界。
+1. **多协议适配器只对「本地假协议端」验证过**：OneBot 12 / Satori / Milky / QQ 官方四个适配器各有独立测试套件，但尚未接真实实现端（OneBot 12 生态、Koishi、Milky 协议端、QQ 开放平台机器人）跑过端到端；上真实协议端时请先看 README「协议与连接方式」的能力边界。
 2. **真实 QQ 只在维护者的单一账号 / 单机 Debian 13 上跑过**。其它 QQ 版本、其它 OneBot 实现
    （OneDisc / Lagrange 等）的字段细节、限流与风控未逐一验证；报错请附 `[dsh-qq-bot]` 日志。
 3. **跨对话检索（session_search 系列）尚未在真实 QQ 会话里端到端跑过一遍**：它依赖 DSH 的
    `session-query-sqlite` 索引与「cwd 完全一致」授权，本地组合校验通过，真实检索结果待实测。
 4. **平台覆盖**：Linux（Debian 13 / Node 22）是主要验证环境，CI 另覆盖 Node 24；Windows 在 0.6.1 时代
-   实测过（Windows 11 + Node 24），0.8/0.9 未复测；macOS 未测试。Windows 上测试脚本里的
+   实测过（Windows 11 + Node 24），0.8–0.10 未复测；macOS 未测试。Windows 上测试脚本里的
    `import(path.join(...))` 会报 `ERR_UNSUPPORTED_ESM_URL_SCHEME`。
 
 5. **设置契约按 DSH 0.1.7 实现**：0.1.7 移除了 `settings.register()`，改为读插件自己导出的
@@ -158,16 +160,16 @@ No source code from third-party projects was copied into this repository.
 | QQ transport | NapCat + OneBot 11 **forward WebSocket** (the plugin connects outbound to a loopback address; nothing is exposed publicly) |
 | Bot account | a real QQ account (via OneBot `get_login_info`), not a simulator |
 | LLM / image APIs | self-hosted OpenAI-compatible relays; **endpoints and keys live only in deployment config and are never committed** |
-| Tools verified | `qqbot` / `qqgroup` / `qq_websearch` / `qq_webfetch` / `qqconfig` / `qq_imgsearch` / `qq_history` / `qq_draw` — all eight registered |
+| Tools verified | `qqbot` / `qqconfig` / `qqgroup` / `qq_websearch` / `qq_webfetch` / `qq_imgsearch` / `qq_history` / `qq_draw` / `qqauth` — all nine registered |
 
 - **Verification:** the browser settings page was **manually confirmed on a real device**.
-  **19 suites / 774 automated checks pass** (`npm test` = `node test/run-all.mjs`; CI runs on Node 22 and 24),
+  **37 suites / 1444 automated checks pass** (`npm test` = `node test/run-all.mjs`; CI runs on Node 22 and 24),
   covering the forward/reverse WebSocket adapter, the Host plugin (fake `ctx` + real adapter + Config contract
   + config hot reload), the settings page, the permission/group-management subsystem, HTTP/proxy, multi-engine
   search parsing, the image-gen engine (retry / poll / response parsing) and the session-id workspace fallback.
   The QQ-side peer used in CI is a zero-dependency OneBot 11 simulator bundled in `test/`,
   so **no real QQ account is required** to reproduce the suite.
-- **Observed on the real deployment** (evidence in DSH logs, reproducible): all eight tool registrations;
+- **Observed on the real deployment** (evidence in DSH logs, reproducible): all nine tool registrations;
   `OneBot connected` over the forward WS link; group/private session creation and messaging; group-admin
   commands and the guest tool gate; settings read/write in a real browser; image generation end-to-end
   (one retry then success, `attempts=3, 38s`); config hot reload (adapter restart + reconnect);

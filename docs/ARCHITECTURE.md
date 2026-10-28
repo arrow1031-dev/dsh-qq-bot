@@ -26,6 +26,7 @@ lib/transport/            传输层：独立子进程适配器，零 npm 依赖 
 lib/gateway/              网关层：路由与分发 —— 入站帧 → 会话 → 出站
    ├─ plugin.js           Cordis 插件主体（apply / 生命周期 / 帧分发）
    ├─ index.js            HTTP 路由统一挂载（ROUTE_MOUNTS 表）
+   ├─ route-auth.js       路由鉴权闸门（DSH 登录 cookie + 同源校验）
    ├─ routes-bind.js      扫码绑定的两条具名路由
    └─ commands.js         /auth · /flow 指令解析
    │
@@ -180,14 +181,14 @@ lib/**/*-set.json  →  SETTINGS_FIELDS  →  GET /dsh-qq-bot/settings  →  客
 | `valve/network/index.js` | **网络阀门门面**，对外只有两个接口（见 2.2.1）：**流量管控** `traffic` 与**代理状态** `proxyStatus`。成型时用 `__setProxyResolver` 接管传输层的代理策略——**工具层拿不到代理串**，只能声明意图（`useProxy`） | `createNetworkValve` → `traffic` `proxyStatus`（另有策略判定与测试注入：`isAllowedTarget` `isLoopback` `assertHost` `resolve` `pin` `canonicalHost` `uninstall` `__setHooks`） |
 | `valve/network/policy.js` | 网络阀门**策略层**（纯判定，不发请求）：地址先过 WHATWG URL 归一，再按 8 组/4 段整数判段；`pinnedLookup` 钉死已校验地址（防 DNS rebinding） | `canonicalHost` `isNonPublicIp` `resolvePublicAddresses` `assertPublicHost` `pinnedLookup` `__setNetworkHooks` |
 | `valve/network/guard-proxy.js` | 本地校验代理：给无头浏览器兜底，逐条请求先过策略层，内网目标 403（重定向/子资源/DNS rebinding 都在这层拦） | `createGuardProxy` |
-| `valve/security/index.js` | **安全阀门面**：身份、动态码、授权与审计的集中判定处；红线集中写在文件头。注意生产代码目前直接用门面暴露的 `flowAuth`/`flowStore` 对象（见 5.5） | `createSecurityValve` → `flowAuth` `enabled` `gatedTools` `verifyToken` `verifyRecovery` `judgeHistory` `checkOwnerCaller` |
+| `valve/security/index.js` | **安全阀门面**：身份、动态码、授权与审计的集中判定处；红线集中写在文件头。注意生产代码目前直接用门面暴露的 `flowAuth`/`flowStore` 对象（见 5.5） | `createSecurityValve` → `flowAuth` `flowStore` `enabled` `gatedTools` |
 | `valve/security/totp.js` | 零依赖 TOTP/HOTP 与恢复码（RFC 4226/6238、base32 容错、scrypt 哈希、弱密钥拒绝） | `generateSecret` `hotp` `totp` `totpVerify` `generateBackupCodes` `hashBackupCode` `verifyBackupCode` `otpauthUri` |
 | `valve/security/totp-cli.mjs` | 终端绑定：打印 base32 secret / otpauth URI / 终端二维码 / 恢复码（密钥不经 QQ） | —（命令行入口） |
 | `valve/security/flow-auth.js` | 授权状态机 + 闸门：申请 / 验码 / grant / 一次性消费 / 连错锁定 / 审计 | `createFlowAuth` `createFlowGate` |
 | `valve/security/flow-store.js` | 流程脚本只读视图：名字白名单、sha256、路径穿越防护 | `createFlowStore` `isValidFlowName` `sha256` |
 | `valve/security/history-auth.js` | 历史消息的会话定向与鉴权（纯逻辑，三档权限） | `resolveHistoryTarget` `judgeHistoryAccess` `buildHistoryRequest` |
 | `valve/security/owner-settings.js` | 拥有者设置通道：白名单、确认码、限流、审计 | `createOwnerSettings` `SPECS` `checkCaller` |
-| `valve/tool/index.js` | **工具阀门面**：名单判定 + 调用拦截（一次授权只能用一次）+ 改闸门要码；消费安全阀的 grant，不持有密钥。生产代码取门面暴露的 `gate` 对象（见 5.5） | `createToolValve` → `isGated` `check` `remember` `forget` `names` `blockedText` `decideEdit` |
+| `valve/tool/index.js` | **工具阀门面**：名单判定 + 调用拦截（一次授权只能用一次）+ 改闸门要码；消费安全阀的 grant，不持有密钥。生产代码取门面暴露的 `gate` 对象（见 5.5） | `createToolValve` → `isGated` `check` `remember` `forget` `names` `blockedText` `sameToolList` |
 | `valve/tool/gate-guard.js` | 闸门区改动的判定：改名单 / 关开关都要码（关掉闸门不能比改名单更容易） | `decideGateEdit` `sameToolList` |
 
 #### 2.2.1 网络阀门只暴露两个接口
@@ -207,14 +208,15 @@ lib/**/*-set.json  →  SETTINGS_FIELDS  →  GET /dsh-qq-bot/settings  →  客
 | --- | --- | --- |
 | `gateway/plugin.js` | Cordis 插件主体：适配器生命周期、帧分发、回合/回复/视觉、主动发言、配置热更新 | `apply` `name` `inject` `cleanupStaleConfig` |
 | `gateway/index.js` | **HTTP 路由统一挂载**：ROUTE_MOUNTS 表 + 等 webServer 就绪 + 逆序注销 + 失败降级 | `mountHttpRoutes` `mountRoutesWhenReady` |
-| `gateway/routes-bind.js` | 扫码绑定的两条具名路由：只回状态与脱敏 appId，不碰密钥 | `registerBindRoutes` `BIND_STATE_PATH` `BIND_REFRESH_PATH` |
+| `gateway/route-auth.js` | **路由鉴权闸门**：插件具名路由在 DSH 鉴权层**之前**被处理（`GET /` 回 401，`GET /dsh-qq-bot/settings` 回 200），所以自己过一遍 `client-connection` 的浏览器 cookie 校验 + Origin/Referer 同源校验；拿不到该服务时降级放行（那种环境里 DSH 自己也没鉴权） | `createRouteGuard` |
+| `gateway/routes-bind.js` | 扫码绑定的两条具名路由：只回状态与脱敏 appId，不碰密钥；`waiting` 期会给登录 URL，必须先过 `guard` | `registerBindRoutes` `BIND_STATE_PATH` `BIND_REFRESH_PATH` |
 | `gateway/commands.js` | `/auth` `/flow` 文本解析、拦截判定、打包输入归一化、帮助文案 | `parseAuthCommand` `parseFlowCommand` `flowInterceptKind` `FLOW_HELP` |
 
 ### 2.4 消息组装层 `lib/message/`
 
 | 文件 | 职责 | 关键导出 |
 | --- | --- | --- |
-| `message/index.js` | 组装入口：固定顺序 **中间发言 → 正文分条 → 流式合并**；`assembleReply()` 是纯函数 | `assembleReply` `ASSEMBLY_STEPS` |
+| （无 `index.js`） | 这里**没有**入口聚合文件：`assembleReply()` 曾是「固定顺序 中间发言 → 正文分条 → 流式合并」的纯函数，但生产代码从不调用它（发送侧在 `gateway/plugin.js` 里自己按这个顺序拼），2026-10-28 审计后删除。要改顺序就改发送侧那一处，别再养一份影子实现。 | — |
 | `message/chunk.js` | 回复分条：Markdown 感知切分（代码块/表格整块搬，超长才硬切） | `chunkMarkdown` |
 | `message/stream.js` | 官方 v2 私聊流式桥（增量合并 / 节流 / done 收尾 / 失败停用），**特有能力** | `createStreamBridge` `shouldStream` |
 | `message/interim.js` | 中间发言：把「已经说完、后面还有内容」的 assistant 文本挑出来先发 | `pickInterim` |
@@ -277,7 +279,7 @@ lib/**/*-set.json  →  SETTINGS_FIELDS  →  GET /dsh-qq-bot/settings  →  客
 | --- | --- |
 | `client/settings.js` | 插件详情页配置区（手写 `__ModuleLoader__` bundle，只依赖 react）。**模块 id 与插槽 key 都必须是 npm 包名**，设置命名空间 `NS` 仍是条目 id `dsh-qq-bot`（见「身份契约」） |
 
-**扩展点**：加协议 → 新写 `lib/transport/adapters/<协议>.mjs` + 在 `lib/transport/index.js` 与 `lib/config.js` 各加一项；加 Agent 工具 → 改 `lib/tools/index.js`，要在设置页露出参数就再往 `lib/tools/` 丢一个 `{group, defaults}` 的 JSON（**不用改 `config.js`**，它会自己扫到）；加 HTTP 路由 → 只改 `lib/gateway/index.js` 的 `ROUTE_MOUNTS`；调阀门优先级 → 只改 `lib/valve/index.js` 的 `STAGE`。
+**扩展点**：加协议 → 新写 `lib/transport/adapters/<协议>.mjs` + 在 `lib/transport/index.js` 与 `lib/config.js` 各加一项；加 Agent 工具 → 改 `lib/tools/index.js`，要在设置页露出参数就再往 `lib/tools/` 丢一个 `{group, defaults}` 的 JSON（**不用改 `config.js`**，它会自己扫到）；加 HTTP 路由 → 只改 `lib/gateway/index.js` 的 `ROUTE_MOUNTS`（**处理器第一行必须过 `deps.guard`**，否则这条路由绕开鉴权）；调阀门优先级 → 只改 `lib/valve/index.js` 的 `STAGE`。
 
 **测试与发布**：`test/run-all.mjs` 汇总 **37 个套件**（5 个协议各一套 + 阀门/组装/权限/设置/搜索/生图/历史/授权链路等），每个协议都自带零依赖假协议端（OneBot 11 的是 `test/mock-onebot.mjs`，其余在各自 `test-adapter-*.mjs` 内）；`npm test` 即跑全部。进 npm 包的只有 `lib/`、`cordis.patch.yml` 与根目录文档（见 `package.json` 的 `files`），`test/`、`examples/` 只在仓库里。
 
@@ -317,7 +319,7 @@ lib/**/*-set.json  →  SETTINGS_FIELDS  →  GET /dsh-qq-bot/settings  →  客
 
 1. `checkCaller`：身份只取自当前会话的 `entry.speaker`，**只允许拥有者私聊**；工具参数里的 QQ 号一律不作数。
 2. `show / propose / apply / cancel`：`propose` 只校验不写盘，返回一次性确认码（TTL 5 分钟，绑定 owner + path + value + revision）。
-3. 白名单 `SPECS`（群/私聊开关、白名单、回复长度、主动发言…）；密钥、连接参数、`auth.owners` 等按 `DENY_PATHS` 硬拒。
+3. 白名单 `SPECS`（群/私聊开关、白名单、回复长度、主动发言…）；密钥、连接参数、`auth.owners` 等按 `DENY_PREFIXES` 整段前缀硬拒。**没列进 `SPECS` 的一律拒绝**（白名单是唯一来源，不是黑名单的补充）。
 4. `apply` 前复核 `revision`（期间被别人改过就作废），再 `ctx.settings.update(ns, patch, revision)` —— schema 校验 + 原子写 + 热重载，本模块不写任何 YAML。
 5. 限流（每小时 6 次 / 每天 30 次）+ 审计行追加到 `<QQ_msg>/qqbot-config-audit.jsonl`。
 
