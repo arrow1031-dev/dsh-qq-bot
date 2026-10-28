@@ -5,7 +5,7 @@
  * 守的是「切完之后每段都能独立读」：代码块不拦腰断、表格不切行、超长行能硬切、
  * 内容不丢（把各段拼回首尾能对上）。
  */
-import { chunkMarkdown } from '../lib/chunk.js';
+import { chunkMarkdown } from '../lib/message/chunk.js';
 
 let pass = 0;
 let fail = 0;

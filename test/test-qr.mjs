@@ -8,7 +8,7 @@
  * （字节模式、纠错等级 M、相同掩码）逐位对齐后取的，改坏一位就会红。
  */
 import { createHash } from 'node:crypto';
-import { encode, chooseVersion, toTerminal, MAX_VERSION } from '../lib/qr.js';
+import { encode, chooseVersion, toTerminal, MAX_VERSION } from '../lib/tools/qr.js';
 
 let pass = 0;
 let fail = 0;

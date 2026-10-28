@@ -12,7 +12,7 @@
  */
 import http from 'node:http';
 import net from 'node:net';
-import { createGuardProxy, resolveGuardTarget } from '../lib/guard-proxy.js';
+import { createGuardProxy, resolveGuardTarget } from '../lib/valve/network/guard-proxy.js';
 
 let pass = 0;
 let fail = 0;

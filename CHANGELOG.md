@@ -1,3 +1,275 @@
+## 未发布 —— 默认值拆到各目录的 JSON + 设置页三处改进（2026-10-28）
+
+这一轮改的是「默认值住在哪」和设置页的可用性，对外契约（包名、`main`/`exports`、配置键名、九个
+工具名、路由路径）没变。
+
+### 工具/阀门的默认值搬进各自目录的同名 JSON
+
+改造前 `lib/config.js` 里有两份默认值：`DEFAULTS` 字面量和 schema 的 `.default(...)`，改一个忘一个
+是迟早的事。现在**谁拥有这组配置，默认值就放在谁的目录里**：
+
+| 目录 | 归谁 |
+| --- | --- |
+| `lib/tools/*.json` | 工具自己的参数（`websearch.js` ↔ `websearch.json`） |
+| `lib/valve/<阀门>/*.json` | 阀门自己的参数（如 `valve/security/auth.json`） |
+
+**路径不写死**：`lib/config.js` 在加载时遍历这两个目录，每个 JSON 自己声明管哪个配置组：
+
+```json
+{ "group": "webSearch", "defaults": { "maxUses": 5 } }
+```
+
+加新工具只需要往目录里丢一个 JSON，不用回来改 `config.js`。文件名只用于报错定位，不参与映射
+（`websearch.json` 管的是 `webSearch`，不用逼文件名迁就驼峰）。目前自动发现 8 组、59 个字段：
+`vision` / `webSearch` / `imgSearch` / `imageGen` / `moli` / `history` / `auth` / `flowAuth`。
+
+### 配置清洗改成依赖组装结果，并加了两道护栏
+
+`staleConfigPaths`（启动时清理本版本已不存在的字段）本来就是拿 schema 判断「哪些键算废弃」，
+现在 schema 的默认值也来自同一批 JSON，三者是一条链：**JSON → DEFAULTS → schema → 清理判定**。
+
+两处容易出事的地方都堵上了：
+
+- **group 写错一个字母**（`webSerach`）会让这组默认值变成 schema 不认识的键，而清理逻辑恰恰把
+  schema 不认识的键当垃圾删——用户配置会被静默清掉。现在加载时就抛错，并指出是哪个文件。
+- **重复 group**（两个文件都声明 `vision`）同样在加载时报错，不做「后写覆盖」这种猜测。
+
+`test-config.mjs` 新增 8 项，其中两项是往临时副本里塞坏 JSON，断言它真的炸。
+
+### 设置页：纯数字名单的校验加强
+
+群号 / QQ 号类输入框（群号白名单、私聊白名单、拥有者、高级管理员、可管理群号、主动发言群号）
+以前什么字符都能填，填错了要等到消息被静默丢弃才发现。现在：
+
+- 输入时**硬过滤**：非数字、非分隔符的字符根本敲不进去（`123abc456` → `123456`）；
+- **逐项校验** 5–12 位，不合规的项当场标红并说明原因，**保存被拦下**（不只是提示）；
+- 保存时统一格式化成 `123456, 789012`；只差空格不算改动，不会产生无意义的写入。
+
+判定在客户端做（服务端 schema 保持宽松，避免把历史配置里的异常值变成致命错误）。
+
+### 设置页：一键还原默认（仅本页、不保存）
+
+底栏新增「还原本页默认」：把**当前这一页看得见的字段**改回默认值，只动界面上的草稿，
+点「保存」才真正写进配置——所以还原绕不过保存时的动态码校验，也不会出现「点一下按钮配置就变了」。
+
+**密钥类字段一律不碰**。这些框的语义是「已设置；留空则保持不变」，读回来的值里本来就没有密钥；
+若把默认值（空串）写进草稿，保存时会被当成「没填新值」跳过——旧密钥原样留着，用户却以为还原过，
+这就是假还原。所以干脆跳过它们，并在提示里说清楚跳过了几项。
+
+默认值走插件自己的路由 `GET /dsh-qq-bot/defaults`（与扫码绑定同源）：**只回默认值，不回当前配置**，
+默认值是编译期常量、不含任何真实密钥，用户填过的地址与 token 不会出现在响应里。
+
+### `agentPreset` 的默认值改成 `standard`
+
+高级页第 ③ 项（兜底 preset）默认从「空 = 跟随部署默认」改成显式 `standard`。空值选项保留，
+想回到部署默认仍然可以选。只影响新会话，①② 两项未动。
+
+### 测试
+
+37 个套件 / 1385 项（+24）：`test-client` 109 → 125（数字名单 6 项、还原默认 9 项，另加渲染桩
+对函数组件的支持），`test-config` 24 → 32（自动发现与两道护栏）。
+
+顺带修了客户端测试桩的两个失真：函数组件从不展开（包了一层的列表输入框在树里是空节点，
+测不到）、`useRef` 每次渲染返回新对象（列表输入框永远拿不到新值）。
+
+## 未发布 —— 网络阀门拆成两个接口 + 门面措辞与分层说明（2026-10-28）
+
+上一轮审查留下的两条「待决策」按主人意见处理：不重构，改措辞、写清楚；同时把网络阀门的对外
+接口正式拆成两组。
+
+### 网络阀门只暴露两个接口
+
+以前门面是一大坨平铺成员（15 个），哪些是给插件用的、哪些是内部判定，全靠读注释。现在拆成两组：
+
+- **`traffic`（网络流量管控）**：`fetchText` / `request` / `post` / `createGuardProxy`。所有出网动作
+  从这里走，调用方只声明意图（`useProxy` / `timeoutMs` / `binary`），**拿不到代理串**。
+- **`proxyStatus`（代理状态，只读）**：只有 `hasProxy` 一个成员。只回答「有没有配 HTTP 代理」，
+  不含任何出网能力；插件/工具读它来决定自己的行为（某些搜索/反搜引擎只在走代理时可用），
+  而不是自己去嗅探配置或代理串。刻意不再加 `describe()` 之类的便利方法——没人调的方法就是
+  下一个「空门面」，要加先想清楚谁用。
+
+策略判定（`isAllowedTarget` `assertHost` `resolve` `pin` `canonicalHost`）与测试注入
+（`__setHooks` `uninstall`）不在两个接口内，仍平铺在门面上，并在注释里标明「阀门内部与测试用」。
+
+调用点同步迁移：`qq_webfetch` → `net.traffic.fetchText`，识图引擎可用性 → `net.proxyStatus.hasProxy()`。
+新增一条断言锁住接口形状（`traffic` 必须恰好是那四个成员、`proxyStatus` 必须恰好是 `hasProxy`
+一个且不是异步出网方法），防止以后又被揉回一个大对象。
+
+### 门面措辞改成实话
+
+`valve/security/index.js` 文件头原写「身份、动态码、授权与审计的**唯一入口**」，但生产代码实际用的是
+门面暴露的 `flowAuth` / `flowStore` 对象与 history-auth / owner-settings 的判定函数，那四个便捷方法
+（`verifyToken` / `verifyRecovery` / `judgeHistory` / `checkOwnerCaller`）只有测试在调。
+现改为「**集中判定处**」，并在文件头写明现状与「真要收成单一入口需要改哪些直接 import」。
+`valve/tool/index.js` 同样处理（生产取门面暴露的 `gate` 对象，包装方法只有测试在调）。
+
+### 分层倒置写进文档
+
+新增 `docs/ARCHITECTURE.md` **5.5 已知的分层倒置（有意保留）**，逐条写清四处与分层图相反的
+import 方向、为什么保留、真要理顺该怎么做：
+
+- `shared/http.js` → `valve/network/policy.js`（传输层用阀门的纯判定函数）
+- `valve/network/index.js` → `shared/http.js`（阀门调传输层发请求，设计本身）
+  两条合起来是双向依赖，但不成环（`policy.js` 不回指 `http.js`），运行时无问题
+- `transport/adapters/*` → `message/segments.mjs`（段归一只有一份；纯函数，无状态耦合）
+- `tools/index.js` → `valve/network/guard-proxy.js`（moli 兜底，属既定例外）
+
+判断标准也写进去了：这些倒置只跨「无状态纯函数」或「明确单向调用」，**没有形成状态环**；
+哪天某条开始持有状态或回指上层，就必须当场拆开。
+
+另新增 **5.6 门面的「薄包装」现状**，说明 security / tool 那两个门面的定位是「判定与状态集中在这一层」，
+不是「所有调用都必须穿过这些包装方法」。
+
+## 未发布 —— 五路对抗性审查后的修正（2026-10-28）
+
+对前两条提交做了五路独立审查（代理归属 / 阀门架构 / 目录完整性 / 测试有效性 / 文档一致性），
+交叉认证后修掉以下问题。审查里两份结论被交叉认证推翻，记在这里避免以后重犯：
+
+- 「把 resolver 删掉，37 个套件一个都不会挂」**不成立**：破坏实验实测 `test-valve-assembly` 会红 2 条
+  （`currentProxy()` 的断言守住了阀门→传输层的接管链路）。
+- 「测试数 1359 偏高 4%」**不成立**：文档 37 行逐项求和正好 1359；本机汇总只有 1161 是因为漏解析了
+  三个只打印 `SELF-TEST PASSED` 的适配器套件（19+70+109=198）。
+
+### 用户可见破损（重构漏改的直接后果）
+
+- **11 处**文案还在教用户跑 `node lib/totp-cli.mjs`，文件早已搬到 `lib/valve/security/totp-cli.mjs`，
+  照抄必 `MODULE_NOT_FOUND`，且没有 `bin`/npm script 兜底。涉及设置页提示、`qqauth` 工具报错、
+  CLI 自身 usage、插件启动日志。已全部改为新路径。
+- `lib/transport/bridge/CONTRACT.md`（写新适配器的权威指南）三处路径失效，其中第 97 行给出的
+  `import ... from '../bridge/segments.mjs'` 照抄即报错（段归一层在 `lib/message/`）。已修。
+- `lib/adapters/`、`lib/bridge/` 两个重构后留下的空目录已删。
+
+### 测试真实性（这次最要紧的一条）
+
+- **假阳性断言**：原「不传代理时按阀门策略走」用「内网目标被拒」当证据，但直连与代理两个分支
+  都会 `assertPublicHost` 拒内网，该断言恒真、区分不了路径。改为「死代理 + 公网目标必须连不上代理」
+  并断言直连钩子未被命中。
+- **补上阀门门面自身的覆盖**：`net.traffic.fetchText` 是 `qq_webfetch` 的唯一出网入口，之前零测试——
+  破坏实验证实「让阀门 fetchText 永远直连」时全套件无人报警。现补 3 条（配代理走代理 / 不配直连 /
+  `useProxy:false` 强制直连），再跑同样的破坏实验会立刻红。
+- **结构性断言的 allowlist 有洞**：原白名单含 `wsCfg`，导致它本要拦的那行
+  `const proxy = wsCfg.proxy.trim()` 自己就能过。白名单收窄为「moli / guard-proxy」，
+  并另测 `websearch.js`、`imgsearch.js` 整份不得出现代理串（`hasProxy()` 属合法用法，先剔除）。
+- 断言改为 `try/finally` 还原阀门状态，避免中途抛错把代理残留给同套件后续断言。
+
+### 契约与架构收口
+
+- **关掉代理逃生舱**：`shared/http.js` 不再接受 `{ proxy: '…' }` 自带代理——代理串只能来自网络阀门
+  安装的解析器，否则任何直接 import 传输层的模块都能绕开阀门策略与审计。要自定义代理，用
+  `__setProxyResolver` 装桩。
+- 修分层倒置：`valve/network/guard-proxy.js` 改为直接依赖 `valve/network/policy.js`（原来绕回
+  `shared/http.js` 取判定函数）。
+- `assemble.js` 补表自检：stage 重复会抛错、阀门没在 `ASSEMBLY_ORDER` 登记会抛错、
+  `tool` 拿不到 `security` 时给可读错误而不是 `TypeError`。
+- `qq_webfetch` 的代理串读取移进 moli 分支并改名 `moliUpstream`——非 moli 路径从此在源码层面
+  完全不碰代理串；`net` 未注入时给可读报错而不是 `TypeError`。
+
+### 文档与代码对齐
+
+- `docs/ARCHITECTURE.md`：组装优先级表补一段「10/20/30 由 `assembleValves()` 真装配，40/50/60 只登记
+  在 `ASSEMBLY_ORDER` 里、由 `gateway/plugin.js` 在 `apply()` 内按同一顺序创建」，不再暗示六层都由
+  装配根管；删掉 `message/segments.mjs` 那个并不存在的 `seg` 导出；2.8 传输层补上 `CONTRACT.md` 行。
+- `CHANGELOG` 里「12 个函数签名」更正为 **20 个**（`websearch.js` 8 + `imgsearch.js` 12）。
+- 批量修掉注释里的旧路径（`lib/compat.js`、`lib/totp.js`、`lib/qr.js`、`lib/bind-routes.js`、
+  `lib/bridge/CONTRACT.md` 等），共 11 个文件。
+
+### 仍未处理（需要决策）
+
+- security / tool 门面的便捷方法（`verifyToken`、`judgeHistory`、`checkCaller`、`isGated`…）在生产代码里
+  零调用，实际用的是门面暴露的 `.flowAuth` / `.flowStore` / `.gate` 底层对象。门面文件头声称的
+  「唯一入口」并不成立。
+- `shared/http.js` ↔ `valve/network/` 双向依赖（策略层被 shared 引用、门面又引用 shared）；
+  `transport/adapters/*` 反向依赖 `message/segments.mjs`。两处都与文档的分层声明相反。
+
+## 未发布 —— 代理收归网络阀门 + 文档收进 docs/（2026-10-28）
+
+### 代理不再由工具自己决定（行为等价，归属改变）
+
+- **问题**：上一轮把「目标能不能出站」的判定收进了网络阀门，但**用不用代理、用哪个代理**
+  仍散在调用点——`qq_webfetch` / `qq_imgsearch` / `runWebSearch` 各自从 `webSearch.proxy`
+  读一次字符串，再层层往下传。工具因此握有一条绕过出口管控的自由裁量权，且历史上已经
+  漂移过（三处调用方三种语义）。
+- **现在**：网络阀门在成型时（stage 10）用 `__setProxyResolver` 接管传输层的代理策略，
+  `shared/http.js` 不再读配置。工具只声明**意图**：
+  - `net.traffic.fetchText(url, { useProxy: true })` —— 走统一策略（配了代理就走，没配就直连）
+  - `multiEngineRequest(…, { useProxy: false })` —— 明确要求直连
+  - 不传 spec 的老调用 = 按阀门策略走；显式传字符串仍照用（只留给测试与特例）
+- 连带收敛：**20 个**函数签名里的 `proxy` 形参全部删除（`websearch.js` 8 个 +
+  `imgsearch.js` 12 个），另有 `runWebSearch` 内部不再读 `cfg.proxy`；`qq_imgsearch` 判断「哪些引擎可用」改为问
+  `net.proxyStatus.hasProxy()`，不再自己嗅探代理串。
+- **保持原样**（按需求）：识图下载与生图结果下载继续走 `publicFetch` 强制直连；
+  `moli` 的 `moli.proxy` 覆盖/透传语义不动（那是用户显式配置，不归阀门管）。
+- 顺带修依赖方向：`valve/network/guard-proxy.js` 原来从 `shared/http.js` 取判定函数
+  （绕一圈 re-export），改为直接依赖 `valve/network/policy.js`——阀门内部不该反向依赖传输层。
+- 测试：`test-valve-assembly` 新增 5 条，并加一条结构性断言锁住「工具源码里不再出现代理串」
+  （moli 分支例外）。**关键是让断言真的能区分代理路径**：早期版本用「内网目标被拒」来证明
+  「走了代理」，但直连与代理两个分支都会拒内网，那种断言永远为真——现在改成「死代理 + 公网
+  目标，必须连不上代理」和「阀门 `fetchText` 配代理走代理 / 不配直连 / `useProxy:false` 直连」
+  三条真断言。已用破坏实验验证：把解析器改成恒直连、或让阀门 `fetchText` 永远直连，套件立刻红。
+
+### 文档收进 docs/
+
+- 根目录只留 `README.md` 与 `CHANGELOG.md`；`ARCHITECTURE.md`、`DEVELOPMENT.md`、
+  `CONTRIBUTING.md`、`CODE_OF_CONDUCT.md`、`SECURITY.md`、`AI-DISCLOSURE.md` 移入 `docs/`。
+- GitHub 对 `docs/` 下的 CONTRIBUTING / CODE_OF_CONDUCT / SECURITY 仍有原生识别，
+  这几份的入口不会丢。
+- `package.json` 的 `files` 用 `docs` 整目录替代逐份列举；README 与文档间互链同步更新。
+
+## 未发布 —— 目录重构：分层 + 三道阀门独立 + 组装优先级（2026-10-28）
+
+纯结构调整，**行为不变**：重构前后 37 个测试套件全绿，插件对外契约（包名、入口路径、
+配置 schema、工具名、路由路径）一个都没动。
+
+### 目录按关注点分层
+
+```
+lib/
+├── index.js        包入口薄壳（只转发，包入口路径是对外契约）
+├── assemble.js     组装根（按 STAGE 表把阀门依次成型）
+├── config.js       配置 schema
+├── valve/          ★ 阀门层（独立、可单测、无插件内部依赖）
+│   ├── network/    policy.js 判定 · index.js 门面 · guard-proxy.js 本地校验代理
+│   ├── security/   totp · flow-auth · flow-store · history-auth · owner-settings
+│   └── tool/       index.js 门面 · gate-guard.js
+├── gateway/        plugin.js 主体 · index.js 路由挂载 · routes-bind · commands
+├── message/        index.js 组装入口 · chunk · stream · interim · segments · msgid-cache
+├── tools/          index.js 注册 · websearch · imgsearch · imagegen · moli · qr
+├── session/        manager · model-router · workspace · proactive
+├── api/            group-admin · qq-bind
+├── transport/      index.js 注册表 · adapters/ · bridge/
+├── shared/         http.js 传输机制 · compat.js
+└── client/         settings.js 浏览器侧设置区
+```
+
+### 五个关注点各自收成一处
+
+- **网关路由**：`gateway/index.js` 的 `ROUTE_MOUNTS` 表统一挂载（等 webServer 就绪、逆序注销、
+  不可用静默降级），新增路由只加一条表项。
+- **消息组装**：`message/index.js` 固定顺序「中间发言 → 正文分条 → 流式合并」，
+  `assembleReply()` 是纯函数，三处各自发送造成的错位不再可能。
+- **网络阀门**：判定（`valve/network/policy.js`）与传输（`shared/http.js`）分离——
+  前者回答「能不能出站」，后者只负责「怎么出站」。回环地址永不进代理；域名不再被误判成本机。
+- **安全阀**：`valve/security/index.js` 把 TOTP / 流程授权 / 历史鉴权 / 拥有者通道收进一个门面，
+  红线集中写在文件头，避免「这个入口要码、那个入口不要」的裂缝。
+- **工具阀**：`valve/tool/index.js` 只管「这个工具要不要卡、这张卡能不能用」，消费安全阀的
+  grant、不持有密钥；改名单与关开关都要码的判定仍在 `gate-guard.js`。
+
+### 组装优先级成型
+
+`valve/index.js` 的 `STAGE` 表：network(10) → security(20) → tool(30) → message(40) →
+gateway(50) → transport(60)。`assemble.js` 照着执行，依赖没成型就装配会直接抛错，
+不会静默降级成「没有阀门」。启动日志打一行 `装配顺序 10:valve/network → …`，排障先看它。
+
+### 测试与文档
+
+- 新增 `test/test-valve-assembly.mjs`（25 项）：锁住三道阀门的契约字段、装配顺序、
+  网络判定口径（编码变体 / 云元数据 / 本机保留名 / 域名不误判）、工具阀的一次性消费语义、
+  消息组装顺序、传输层注册表。套件总数 36 → 37。
+- `ARCHITECTURE.md` 重写「分层」与「模块清单」（按层列表 + 组装优先级表），
+  `DEVELOPMENT.md` 文件清单同步，README 的客户端路径更新。
+- `package.json` 的 `exports`：`./client` → `lib/client/settings.js`，
+  `./adapter` → `lib/transport/onebot-adapter.mjs`（包名与入口 `lib/index.js` 不变）。
+
 ## 0.12.7 —— 稳定性与体验优化（2026-10-28）
 
 ### 原装抓取工具 moli_fetch 进默认 gatedTools（一道验证墙，不叠第二道）

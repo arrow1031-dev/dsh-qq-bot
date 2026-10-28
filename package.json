@@ -10,9 +10,9 @@
   "main": "lib/index.js",
   "exports": {
     ".": "./lib/index.js",
-    "./adapter": "./lib/onebot-adapter.mjs",
+    "./adapter": "./lib/transport/onebot-adapter.mjs",
     "./client": {
-      "default": "./lib/client.js"
+      "default": "./lib/client/settings.js"
     },
     "./package.json": "./package.json"
   },
@@ -20,14 +20,9 @@
     "lib",
     "cordis.patch.yml",
     "README.md",
-    "DEVELOPMENT.md",
-    "ARCHITECTURE.md",
+    "docs",
     "LICENSE",
-    "AI-DISCLOSURE.md",
-    "CHANGELOG.md",
-    "CONTRIBUTING.md",
-    "CODE_OF_CONDUCT.md",
-    "SECURITY.md"
+    "CHANGELOG.md"
   ],
   "engines": {
     "node": ">=22.6",

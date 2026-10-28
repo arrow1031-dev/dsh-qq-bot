@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 客户端半边（lib/client.js）的独立验证：不需要浏览器。
+ * 客户端半边（lib/client/settings.js）的独立验证：不需要浏览器。
  *
  *   node test-client.mjs
  *
@@ -19,7 +19,7 @@ import process from 'node:process';
 import { readFileSync } from 'node:fs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const BUNDLE = path.join(here, '..', 'lib', 'client.js');
+const BUNDLE = path.join(here, '..', 'lib', 'client', 'settings.js');
 // 模块 id 必须等于包名，而包名会变（0.12 起带作用域）——从 package.json 读，别再写死，
 // 否则这条断言会在改名后继续“通过”，而线上 bundle 其实是坏的。
 const PKG_ID = JSON.parse(readFileSync(path.join(here, '..', 'package.json'), 'utf8')).name;
@@ -37,6 +37,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const reactRuntime = (() => {
   let states = [];
+  let refs = [];
   let cursor = 0;
   let effects = [];
   return {
@@ -47,6 +48,13 @@ const reactRuntime = (() => {
         if (child === null || child === undefined || child === false || child === true) continue;
         if (Array.isArray(child)) { for (const item of child) if (item !== null && item !== undefined) children.push(item); }
         else children.push(child);
+      }
+      // 函数组件就地展开：真实 React 也是在渲染期调用它们，这里只是省掉了调度。
+      // 不展开的话，像 ListInput 这种包了一层的字段在树里永远是个空节点，测不到。
+      if (typeof type === 'function') {
+        const merged = Object.assign({}, props || {});
+        if (children.length > 0) merged.children = children.length === 1 ? children[0] : children;
+        return type(merged);
       }
       return { type, props: props || {}, children };
     },
@@ -59,7 +67,14 @@ const reactRuntime = (() => {
     useCallback(fn) { cursor += 1; return fn; },
     useEffect(fn) { cursor += 1; effects.push(fn); },
     useMemo(fn) { cursor += 1; return fn(); },
-    useRef(value) { cursor += 1; return { current: value }; },
+    // useRef 必须跨渲染持久：ListInput 靠 committedHook 记住「上一次同步过的值」，
+    // 每次渲染给个新对象的话，draft 变了输入框也不会跟着变（浏览器里不是这样）。
+    useRef(value) {
+      const index = cursor;
+      cursor += 1;
+      if (!(index in refs)) refs[index] = { current: value };
+      return refs[index];
+    },
     Fragment: 'Fragment',
     __beginRender() { cursor = 0; },
     __takeEffects() { const taken = effects; effects = []; return taken; },
@@ -692,6 +707,124 @@ try {
   const hasForward = labelsReverse.some((t) => t.includes('正向 WS 地址'));
   check('切到反向模式：出现「反向 WS 监听地址」', hasListen, JSON.stringify(labelsReverse.slice(0, 12)));
   check('切到反向模式：正向 WS 地址被隐藏', hasForward === false && hasListen === true, JSON.stringify(labelsReverse.slice(0, 12)));
+
+  // ------------------------------------------------------------------
+  // 5. 纯数字名单（QQ 号 / 群号）：硬过滤 + 逐项校验 + 保存前拦下
+  // ------------------------------------------------------------------
+  console.log('\n5. 纯数字名单的输入过滤与校验');
+  let treeN = null;
+  const renderNow = () => {
+    reactRuntime.__beginRender();
+    treeN = registered.component(props);
+    // 只取不跑：这条测试桩不区分 deps，真跑会把挂载时的 reload 每渲染触发一次。
+    reactRuntime.__takeEffects();
+    return treeN;
+  };
+  // 保存成功后组件会 reload（state 先回到 loading），等它把表单渲染回来再断言。
+  const renderSettled = async () => {
+    for (let i = 0; i < 12; i += 1) {
+      renderNow();
+      if (!textsOf(treeN).includes('正在读取设置')) return treeN;
+      await sleep(25);
+    }
+    return treeN;
+  };
+  const clickTabN = (label) => {
+    const btn = collectButtons(treeN, []).find((b) => b.props.role === 'tab' && b.props['data-tab'] !== undefined && childText(b) === label);
+    if (btn) btn.props.onClick();
+    return renderNow();
+  };
+  await renderSettled();
+  await clickTabN('基本');
+  const numericInputs = () => collectInputs(treeN, []).filter((el) => el.props.inputMode === 'numeric');
+  check('数字名单输入框标了 inputMode=numeric', numericInputs().length >= 4, String(numericInputs().length));
+
+  const emptyList = numericInputs().find((el) => el.props.value === '');
+  check('找到空的群号白名单输入框', Boolean(emptyList));
+  emptyList.props.onChange({ target: { value: '123abc456' } });
+  await renderSettled();
+  check('非数字字符敲不进去（123abc456 → 123456）',
+    numericInputs().some((el) => el.props.value === '123456'),
+    JSON.stringify(numericInputs().map((el) => el.props.value)));
+
+  const typed = numericInputs().find((el) => el.props.value === '123456');
+  typed.props.onChange({ target: { value: '123456,12' } });
+  await renderSettled();
+  check('非法项当场标红（12 太短）', textsOf(treeN).includes('不是合法的号码'), textsOf(treeN).slice(0, 140));
+
+  mutateCalls.length = 0;
+  await findByText(treeN, '保存').props.onClick();
+  check('有非法项时保存被拦下（没发 mutate）', mutateCalls.length === 0, JSON.stringify(mutateCalls));
+  check('提示指出正确格式', textsOf(treeN).includes('5–12 位纯数字'), textsOf(treeN).slice(0, 160));
+
+  const typed2 = numericInputs().find((el) => el.props.value === '123456,12');
+  typed2.props.onChange({ target: { value: '123456,789012' } });
+  await renderSettled();
+  mutateCalls.length = 0;
+  await findByText(treeN, '保存').props.onClick();
+  await renderSettled();
+  const listOps = (mutateCalls.length > 0 ? mutateCalls[0].ops : []).filter((op) => op.path.join('.') === 'group.allow');
+  check('合法后保存：提交的是拆开的数组', listOps.length === 1 && Array.isArray(listOps[0].value) && listOps[0].value.join(',') === '123456,789012',
+    JSON.stringify(listOps));
+
+  // ------------------------------------------------------------------
+  // 6. 一键还原默认：只改 draft、不保存、密钥字段不碰
+  // ------------------------------------------------------------------
+  console.log('\n6. 一键还原默认（仅本页）');
+  const fetchCalls = [];
+  const DEFAULTS_STUB = {
+    mode: 'forward',
+    onebot: { wsUrl: 'ws://127.0.0.1:3001', listen: '0.0.0.0:6199', httpUrl: 'http://127.0.0.1:3000', accessToken: '' },
+    group: { allow: [], requireAt: true },
+    private: { allow: [] },
+    auth: { owners: [], superAdmins: [], guestToolAllow: [], guestDshTools: false, ownerSettings: true },
+  };
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => {
+    fetchCalls.push({ url, opts });
+    return { json: async () => ({ ok: true, defaults: DEFAULTS_STUB }) };
+  };
+
+  await renderSettled();
+  await clickTabN('基本');
+  check('还原前：拥有者 QQ 号是 66666',
+    numericInputs().some((el) => el.props.value === '66666'),
+    JSON.stringify(numericInputs().map((el) => el.props.value)));
+  const restoreBtn = findByText(treeN, '还原本页默认');
+  check('底栏出现「还原本页默认」按钮', Boolean(restoreBtn) && typeof restoreBtn.props.onClick === 'function');
+  mutateCalls.length = 0;
+  await restoreBtn.props.onClick();
+  await renderSettled();
+  check('默认值取自插件路由 /dsh-qq-bot/defaults',
+    fetchCalls.length >= 1 && fetchCalls[0].url === '/dsh-qq-bot/defaults',
+    JSON.stringify(fetchCalls.map((c) => c.url)));
+  check('还原没有写盘（没发 mutate）', mutateCalls.length === 0, JSON.stringify(mutateCalls));
+  check('提示说明还没保存', textsOf(treeN).includes('未保存'), textsOf(treeN).slice(0, 200));
+
+  // 「还原改的是 draft、保存才落盘」用提交内容验证：输入框的本地文本在测试桩里不会跑
+  // effect 同步（浏览器会），所以看提交值比看显示值更接近真实结论。
+  mutateCalls.length = 0;
+  await findByText(treeN, '保存').props.onClick();
+  await renderSettled();
+  const restoreOps = mutateCalls.length > 0 ? mutateCalls[0].ops : [];
+  const ownerOp = restoreOps.find((op) => op.path.join('.') === 'auth.owners');
+  check('保存时提交的是还原后的默认值（auth.owners → []）',
+    Boolean(ownerOp) && Array.isArray(ownerOp.value) && ownerOp.value.length === 0, JSON.stringify(ownerOp));
+
+  // 密钥字段：留空 = 保持不变，所以还原必须绕开它，否则就是假还原
+  await renderSettled();
+  await clickTabN('连接');
+  const tokenInput = collectInputs(treeN, []).find((el) => el.props.type === 'password');
+  check('连接页有 access_token 密码框', Boolean(tokenInput));
+  tokenInput.props.onChange({ target: { value: 'secret-xyz' } });
+  await renderSettled();
+  await findByText(treeN, '还原本页默认').props.onClick();
+  await renderSettled();
+  const tokenAfter = collectInputs(treeN, []).find((el) => el.props.type === 'password');
+  check('还原不动密钥字段（输入的新 token 还在）', Boolean(tokenAfter) && tokenAfter.props.value === 'secret-xyz',
+    String(tokenAfter && tokenAfter.props.value));
+  check('提示说明密钥类字段未动', textsOf(treeN).includes('密钥类字段未动'), textsOf(treeN).slice(0, 200));
+  globalThis.fetch = realFetch;
 } catch (error) {
   failures += 1;
   console.log('\n错误：' + (error && error.stack ? error.stack : String(error)));

@@ -11,9 +11,9 @@
  *   3) 调用失败不能留下「本轮有产物」的标记。
  */
 
-import { createSession } from '../lib/session.js';
-import { createFlowAuth, createFlowGate } from '../lib/flow-auth.js';
-import { generateSecret, totp } from '../lib/totp.js';
+import { createSession } from '../lib/session/manager.js';
+import { createFlowAuth, createFlowGate } from '../lib/valve/security/flow-auth.js';
+import { generateSecret, totp } from '../lib/valve/security/totp.js';
 
 const OWNER = '319543886';
 const GATED = ['subagent', 'subagent_fork', 'spawn_teammate', 'workflow'];

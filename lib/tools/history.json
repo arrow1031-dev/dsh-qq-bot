@@ -1,0 +1,7 @@
+{
+  "group": "history",
+  "defaults": {
+    "scopeMessages": 5,
+    "imageLimit": 3
+  }
+}

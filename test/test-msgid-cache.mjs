@@ -5,7 +5,7 @@
  * 守的是「重连/重投下的消息只起一个回合」：第一次 false，重复 true；TTL 过期后可再次接受；
  * 超上限按最旧淘汰；空 id 不当重复；时间可注入。
  */
-import { createMsgIdCache } from '../lib/msgid-cache.js';
+import { createMsgIdCache } from '../lib/message/msgid-cache.js';
 
 let pass = 0;
 let fail = 0;

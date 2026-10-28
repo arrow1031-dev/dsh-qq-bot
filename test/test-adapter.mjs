@@ -20,7 +20,7 @@ import process from 'node:process';
 import { startMockOneBot } from './mock-onebot.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const ADAPTER = path.join(here, '..', 'lib', 'onebot-adapter.mjs');
+const ADAPTER = path.join(here, '..', 'lib', 'transport', 'onebot-adapter.mjs');
 
 let failures = 0;
 const results = [];

@@ -21,9 +21,9 @@ import path from 'node:path';
 import fs from 'node:fs';
 import process from 'node:process';
 import { startMockOneBot } from './mock-onebot.mjs';
-import { __setNetworkHooks } from '../lib/http.js';
+import { __setNetworkHooks } from '../lib/shared/http.js';
 
-// 公共抓取（qq_websearch / qq_imgsearch / 识图下载）走 lib/http.js 的 node:http 实现，不再经过
+// 公共抓取（qq_websearch / qq_imgsearch / 识图下载）走 lib/shared/http.js 的 node:http 实现，不再经过
 // globalThis.fetch：要打桩只能用 http.js 的 __setNetworkHooks（解析 + 单次请求两个动作）。
 const TEST_PNG = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 const TEST_DDG_HTML = '<html><body><div class="result">'
@@ -312,8 +312,8 @@ try {
   // 设置页能不能出现、能不能保存，全看字段是不是 volatile：
   //   * dsh-settings 的 volatileForm() 只投影 volatile 字段（一个都没有 => 整个条目不出现）
   //   * write() 对非 volatile 路径直接抛 "Config field ... is not volatile"
-  // 所以直接从 lib/client.js 里抠出 FIELDS 的 path 逐条核对，避免两边各写一份而漂移。
-  const clientSource = fs.readFileSync(path.join(PKG_ROOT, 'lib', 'client.js'), 'utf-8');
+  // 所以直接从 lib/client/settings.js 里抠出 FIELDS 的 path 逐条核对，避免两边各写一份而漂移。
+  const clientSource = fs.readFileSync(path.join(PKG_ROOT, 'lib', 'client', 'settings.js'), 'utf-8');
   const fieldPaths = [];
   for (const match of clientSource.matchAll(/\{\s*path:\s*\[([^\]]+)\]([\s\S]{0,240})/g)) {
     // virtual: true 的是纯界面卡片（例如扫码绑定），不对应 schema 字段，不参与 volatile 核对。

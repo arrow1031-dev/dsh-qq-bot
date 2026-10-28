@@ -16,7 +16,7 @@
 // ------------------------------------------------------------- configuration
 // A dynamic Package carries its configuration inline: edit CONFIG and re-run.
 const CONFIG = {
-  adapterPath: '/home/dsh/qq-bot/lib/onebot-adapter.mjs',
+  adapterPath: '/home/dsh/qq-bot/lib/transport/onebot-adapter.mjs',
   nodeFallback: '/opt/node/bin/node',   // real path resolved from PATH at start
   workspace: '/home/dsh',               // cwd handed to each QQ agent session
 

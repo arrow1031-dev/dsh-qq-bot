@@ -1,6 +1,6 @@
-/** 单元测试：lib/http.js —— IP 公网判定 / HTTP 响应体解析 / 实体解码净化 / set-cookie 合并 */
+/** 单元测试：lib/shared/http.js + lib/valve/network/policy.js —— IP 公网判定 / HTTP 响应体解析 / 实体解码净化 / set-cookie 合并 */
 import http from 'node:http';
-import { isNonPublicIp, canonicalHost, extractHttpBody, meHeadersFromRaw, meDecodeEntities, meCleanText, meStripCdata, proxyRequest, fetchUrlViaProxy, __setNetworkHooks, MAX_FETCH_BYTES } from '../lib/http.js';
+import { isNonPublicIp, canonicalHost, extractHttpBody, meHeadersFromRaw, meDecodeEntities, meCleanText, meStripCdata, proxyRequest, fetchUrlViaProxy, __setNetworkHooks, MAX_FETCH_BYTES } from '../lib/shared/http.js';
 
 const results = [];
 let failures = 0;

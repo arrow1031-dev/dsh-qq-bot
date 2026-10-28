@@ -1,0 +1,21 @@
+{
+  "group": "flowAuth",
+  "defaults": {
+    "enabled": false,
+    "totpSecret": "",
+    "enrolledAt": 0,
+    "grantTtlSeconds": 30,
+    "maxAttempts": 5,
+    "lockoutMinutes": 15,
+    "gatedTools": [
+      "subagent",
+      "subagent_fork",
+      "spawn_teammate",
+      "workflow",
+      "moli_fetch"
+    ],
+    "gateEditCode": "",
+    "recoveryHashes": [],
+    "recoverySalt": ""
+  }
+}

@@ -9,7 +9,7 @@
  *   2) 后面还有消息（工具调用 / 下一段话）就说明这段写完了，可以发；
  *   3) 锚点丢失时宁可不说，也不能把上一轮的话当成本轮中间发言重播。
  */
-import { pickInterim } from '../lib/interim.js';
+import { pickInterim } from '../lib/message/interim.js';
 import { DEFAULTS } from '../lib/config.js';
 
 let pass = 0;

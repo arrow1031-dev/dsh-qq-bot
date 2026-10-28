@@ -1,0 +1,10 @@
+{
+  "group": "vision",
+  "defaults": {
+    "enabled": true,
+    "provider": "",
+    "model": "",
+    "maxImages": 3,
+    "downloadTimeoutMs": 10000
+  }
+}

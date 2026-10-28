@@ -3,7 +3,7 @@ import {
   parseClock, parseQuietRanges, isQuiet, summarizeSegments,
   normalizeMessages, newerThan, buildDigest, buildPrompt, parseDecision, runSpeakStage,
   validateMessage, allowSend, analyzeEvent, topicKey, topicRepeated, resolveStageModels, buildSpeakPrompt, resolveModel,
-} from '../lib/proactive.js';
+} from '../lib/session/proactive.js';
 
 let pass = 0;
 let fail = 0;

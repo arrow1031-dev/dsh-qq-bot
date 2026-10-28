@@ -2,7 +2,7 @@
  * 生图引擎自测（不联网）：URL 拼接 / 响应解析 / 失败重试 / 任务轮询。
  * 用法：node test/test-imagegen.mjs
  */
-import { generationsUrl, trimBaseUrl, parseImagePayload, generateImage } from '../lib/imagegen.js';
+import { generationsUrl, trimBaseUrl, parseImagePayload, generateImage } from '../lib/tools/imagegen.js';
 
 let pass = 0;
 let fail = 0;
