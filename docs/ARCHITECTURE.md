@@ -247,6 +247,7 @@ lib/**/*-set.json  →  SETTINGS_FIELDS  →  GET /dsh-qq-bot/settings  →  客
 | --- | --- | --- |
 | `api/group-admin.js` | 三路权限判定（静态名单/动态授权/本群身份）+ 群管理指令 | `createAdmin` → `resolveAuthority` `hasPerm` `handleAdminCommand` |
 | `api/qq-bind.js` | 官方 Bot 扫码绑定状态机：二维码回调、凭据回调、刷新/取消（SDK 动态 import） | `createQqBind` `loadOfficialConnect` |
+| `api/update-check.js` | 新版本探测：拉 registry 最新版、判断是否更新且与当前 DSH 兼容；6 小时缓存、失败静默 | `createUpdateChecker` `satisfies` `readPackageVersion` |
 
 ### 2.8 传输层 `lib/transport/`
 
