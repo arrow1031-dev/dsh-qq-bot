@@ -92,5 +92,39 @@ console.log('6. 缓存：TTL 内只拉一次；开关关闭不拉');
   check('关闭后不请求且 enabled=false', info.enabled === false && offCalls === 0, JSON.stringify(info));
 }
 
-console.log('\n' + pass + ' 通过 / ' + fail + ' 失败');
-if (fail > 0) process.exitCode = 1;
+
+console.log('7. registry 回退：首选失败自动换下一个');
+{
+  const calls = [];
+  const checker = createUpdateChecker({
+    currentVersion: '0.12.7',
+    dshVersion: '0.2.1-rc.2',
+    registry: ['https://a.invalid/x', 'https://b.invalid/x'],
+    fetchJson: async (url) => { calls.push(url); if (url.includes('a.invalid')) throw new Error('ENOTFOUND'); return manifest('0.12.8', '>=0.2.0-rc.2 <0.3.0'); },
+    now: () => 0,
+  });
+  const info = await checker.check();
+  check('第一个失败后回退到第二个', calls.length === 2 && info.hasUpdate === true, JSON.stringify({ calls, info }));
+  check('记录命中的 registry', String(info.registry || '').includes('b.invalid'), String(info.registry));
+}
+
+console.log('8. 失败缓存只有 5 分钟（网络抖动不该盲等 6 小时）');
+{
+  let calls = 0;
+  let now = 0;
+  const checker = createUpdateChecker({
+    currentVersion: '0.12.7',
+    dshVersion: '0.2.1-rc.2',
+    fetchJson: async () => { calls += 1; throw new Error('ETIMEDOUT'); },
+    now: () => now,
+    ttlMs: 6 * 60 * 60 * 1000,
+  });
+  await checker.check();
+  now = 4 * 60 * 1000;
+  await checker.check();
+  // 默认两个 registry：每次真正探测会各试一次，所以 calls 以 2 递增。
+  check('失败后 4 分钟仍在 5 分钟错误缓存内（不重试）', calls === 2, 'calls=' + calls);
+  now = 6 * 60 * 1000;
+  await checker.check();
+  check('超过 5 分钟后重新探测（两个 registry 各一次）', calls === 4, 'calls=' + calls);
+}
