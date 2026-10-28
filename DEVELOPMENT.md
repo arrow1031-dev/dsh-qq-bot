@@ -20,7 +20,7 @@ node test/run-all.mjs
 ## 2. 测试（36 个套件 / 1330 项）
 
 ```sh
-node test/run-all.mjs      # 一键全量
+node test/run-all.mjs      # 一键全量（套件失败会自动重试一次，重试通过会标注）
 npm test                   # 同上
 ```
 
