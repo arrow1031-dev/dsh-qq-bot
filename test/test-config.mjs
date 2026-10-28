@@ -191,7 +191,11 @@ console.log('\n10. 默认值 JSON：自动发现 / 与 schema 一致 / 邪门输
     check('把 moli 的 priority 改成 1 就排到最前（顺序真的由它决定）',
       withMoliFirst[0][0] === 'moli', JSON.stringify(withMoliFirst.slice(0, 2)));
 
-    writeFileSync(moliFile, JSON.stringify({ group: moliParsed.group, fields: moliParsed.fields }), 'utf8');
+    // 去掉 priority 时要把文件头其余部分（group / tab / subtab）原样留着：
+    // 字段现在可以只靠文件头声明标签页，整份重建成 { group, fields } 会把 tab 弄丢。
+    const noPriority = Object.assign({}, moliParsed);
+    delete noPriority.priority;
+    writeFileSync(moliFile, JSON.stringify(noPriority), 'utf8');
     const withoutPriority = readSources();
     check('不写 priority 时落在内置模板之后（默认 500，不插队）',
       withoutPriority[withoutPriority.length - 1][0] === 'moli' && withoutPriority[withoutPriority.length - 1][1] === 500,
@@ -201,6 +205,33 @@ console.log('\n10. 默认值 JSON：自动发现 / 与 schema 一致 / 邪门输
     let priError = '';
     try { runImport(); } catch (error) { priError = String((error.stderr || '') + (error.message || '')); }
     check('priority 不是数字时在加载时报错', priError.includes('priority 必须是有限数字'), priError.slice(0, 120));
+    writeFileSync(moliFile, moliBackup, 'utf8');   // 先还原，后面几条都基于干净的文件
+
+    // 文件头 tab / subtab：整份模板默认落哪个标签页，单条字段可以覆盖。
+    const readFieldTabs = () => JSON.parse(execFileSync(process.execPath,
+      ['--input-type=module', '-e',
+        'const m = await import(' + JSON.stringify(target) + '); console.log(JSON.stringify(m.SETTINGS_FIELDS.filter((f) => f.group === "moli").map((f) => [f.path.join("."), f.tab, f.subtab])))'],
+      { stdio: 'pipe', encoding: 'utf8' }));
+    const headerOnly = readFieldTabs();
+    check('字段不写 tab，靠文件头也能定位到标签页',
+      headerOnly.every((row) => row[1] === 'capability' && row[2] === 'retrieval'), JSON.stringify(headerOnly.slice(0, 2)));
+
+    const overrideDoc = Object.assign({}, moliParsed);
+    overrideDoc.fields = moliParsed.fields.map((f, i) => (i === 0 ? Object.assign({}, f, { tab: 'advanced', subtab: 'flow' }) : f));
+    writeFileSync(moliFile, JSON.stringify(overrideDoc), 'utf8');
+    const overridden = readFieldTabs();
+    check('单条字段写的 tab / subtab 覆盖文件头',
+      overridden[0][1] === 'advanced' && overridden[0][2] === 'flow'
+      && overridden.slice(1).every((row) => row[1] === 'capability'), JSON.stringify(overridden.slice(0, 2)));
+
+    const noTabDoc = Object.assign({}, moliParsed);
+    delete noTabDoc.tab;
+    delete noTabDoc.subtab;
+    noTabDoc.fields = moliParsed.fields.map((f) => { const g = Object.assign({}, f); delete g.tab; delete g.subtab; return g; });
+    writeFileSync(moliFile, JSON.stringify(noTabDoc), 'utf8');
+    let noTabError = '';
+    try { runImport(); } catch (error) { noTabError = String((error.stderr || '') + (error.message || '')); }
+    check('文件头和字段都没写 tab 时在加载时报错', noTabError.includes('字段缺少 tab'), noTabError.slice(0, 120));
     writeFileSync(moliFile, moliBackup, 'utf8');
   } finally {
     rmSync(scratch, { recursive: true, force: true });

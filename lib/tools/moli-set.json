@@ -1,6 +1,8 @@
 {
   "priority": 90,
   "group": "moli",
+  "tab": "capability",
+  "subtab": "retrieval",
   "fields": [
     {
       "path": [
@@ -8,9 +10,7 @@
         "enabled"
       ],
       "label": "Moli 渲染抓取",
-      "kind": "moli",
-      "tab": "capability",
-      "subtab": "retrieval"
+      "kind": "moli"
     },
     {
       "path": [
@@ -21,8 +21,6 @@
       "kind": "text",
       "hint": "引擎装在非标准位置时填这里；保存后下次抓取就用",
       "placeholder": "（留空 = 自动探测 ~/.local/bin/moli 与 PATH）",
-      "tab": "capability",
-      "subtab": "retrieval",
       "in": "moli-card"
     },
     {
@@ -34,8 +32,6 @@
       "kind": "text",
       "hint": "http://host:port；与「联网搜索 HTTP 代理」各自独立",
       "placeholder": "（留空 = 透传联网搜索代理）",
-      "tab": "capability",
-      "subtab": "retrieval",
       "in": "moli-card"
     },
     {
@@ -46,8 +42,6 @@
       "label": "渲染超时（毫秒）",
       "kind": "number",
       "hint": "对应 moli 的 -t，默认 30000",
-      "tab": "capability",
-      "subtab": "retrieval",
       "in": "moli-card"
     },
     {
@@ -58,8 +52,6 @@
       "label": "单次输出上限（字符）",
       "kind": "number",
       "hint": "超出按头尾省略，默认 200000",
-      "tab": "capability",
-      "subtab": "retrieval",
       "in": "moli-card"
     },
     {
@@ -70,8 +62,6 @@
       "label": "跳过 TLS 证书校验",
       "kind": "bool",
       "hint": "默认开。关掉后走严格证书校验：自签名证书、公司网关或代理的 TLS 拦截、证书吊销列表（CRL）取不到，都会让渲染抓取直接失败（表现为 qq_webfetch 报渲染失败，普通抓取不受影响）。反过来开着时，中间人可以替换页面内容——只有确认网络里没有中间人拦截，才建议关",
-      "tab": "capability",
-      "subtab": "retrieval",
       "in": "moli-card"
     },
     {
@@ -82,8 +72,6 @@
       "label": "内网防护（本地校验代理）",
       "kind": "bool",
       "hint": "默认开。把 moli 的全部流量收进只监听 127.0.0.1 的校验代理，每个目标先过内网 IP 黑名单：回环、10/8、172.16/12、192.168/16、169.254/16（云元数据）、100.64/10，IPv6 的 fe80/fc00/ff00、内嵌 IPv4、6to4、Teredo 一律 403。重定向、子资源、页面 JS 发起的请求也在这层拦。关掉就只剩「入口域名校验一次」，页面绕过入口去摸内网时没有第二道闸；它只拦内网，不拦外网刷屏（那个看下一项）",
-      "tab": "capability",
-      "subtab": "retrieval",
       "in": "moli-card"
     },
     {
@@ -94,8 +82,6 @@
       "label": "允许访客渲染",
       "kind": "bool",
       "hint": "默认开。关掉后只有拥有者私聊能用无头浏览器渲染，群聊和别人的私聊退回普通抓取（引擎照常装着，只是不给访客用）。与上面的「内网防护」相互独立：防护管能不能摸内网，这一项管谁能用",
-      "tab": "capability",
-      "subtab": "retrieval",
       "in": "moli-card"
     },
     {
@@ -106,8 +92,6 @@
       "label": "每分钟最多渲染几次（每个会话）",
       "kind": "number",
       "hint": "默认 5，0 = 不限。一次渲染要起一个无头浏览器（几十 MB 内存），群里刷屏就是这个开销；普通抓取不受这条限制",
-      "tab": "capability",
-      "subtab": "retrieval",
       "in": "moli-card"
     },
     {
@@ -118,8 +102,6 @@
       "label": "同时最多渲染几个（全局）",
       "kind": "number",
       "hint": "默认 2，0 = 不限。跨会话的总闸：多个群同时刷渲染时，超出的请求直接回「忙，稍后再试」而不是排队——一次渲染实测峰值约 47 MB 常驻内存，这台机器扛不住十几个同时开",
-      "tab": "capability",
-      "subtab": "retrieval",
       "in": "moli-card"
     }
   ]

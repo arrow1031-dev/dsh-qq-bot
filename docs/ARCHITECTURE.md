@@ -140,9 +140,16 @@ schema 的默认值直接引用组装结果，所以「默认值」只有一处�
 ```json
 { "priority": 50,
   "group": "webSearch",
+  "tab": "capability",
+  "subtab": "retrieval",
   "fields": [{ "path": ["webSearch", "maxUses"], "label": "每次搜索最多触发次数",
-               "kind": "number", "tab": "capability", "subtab": "retrieval" }] }
+               "kind": "number" }] }
 ```
+
+文件头的 `tab` / `subtab` 是这份模板的字段**默认**落在哪个标签页，单条字段再写就覆盖它
+（`auth-set.json` 横跨「基础·准入」和「高级·会话」，所以它不写文件头，逐条声明）。
+一份模板通常只管一个工具，整份都在同一页——写一遍比每条重复一遍不容易写错；
+字段想显式表示「这个标签页没有二级标签」，写 `"subtab": null`。
 
 `priority` 决定这份模板的字段在**同一个标签页/二级标签内**排第几，升序，同值时按文件路径
 兜底（保证确定性）。以前顺序是「按文件路径排序」的副产品：`imgsearch` 排在 `moli` 前面，
@@ -188,6 +195,7 @@ lib/**/*-set.json  →  SETTINGS_FIELDS  →  GET /dsh-qq-bot/settings  →  客
 | `tab` / `subtab` 写错 | 字段掉进谁也点不到的页 | 与 `settings-page-set.json` 的骨架比对 |
 | `group` 重复 | 两份模板抢同一组，渲染顺序不确定 | 按 group 去重 |
 | `priority` 不是有限数字 | 排序变成 `NaN` 比较，整页顺序不可预期 | 加载期校验 |
+| 文件头和字段都没写 `tab` | 字段不知道去哪个标签页 | 加载期报错（带字段序号与文件名） |
 
 两个例外标记：`virtual: true`（纯界面锚点，例如扫码绑定，不对应任何配置项，跳过路径校验）、
 `in: "moli-card"`（渲染在 moli 卡片内部，不占外层位置，但保存/还原仍按普通字段处理）。

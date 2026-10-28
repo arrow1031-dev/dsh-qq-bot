@@ -608,7 +608,6 @@ try {
   console.log('\n5. 密钥字段是只写的（不会把 access_token 清空）');
   check('loadConfig 带回了 secrets 位置', loaded.secrets && loaded.secrets.length === 2 && loaded.secrets[0].path.join('.') === 'onebot.accessToken',
     JSON.stringify(loaded.secrets));
-  check('页面提示「已设置；留空则保持不变」', joined.includes('已设置；留空则保持不变'));
 
   const findByText = (node, text) => {
     if (node === null || node === undefined || typeof node !== 'object') return null;
@@ -620,6 +619,18 @@ try {
     }
     return null;
   };
+  // 密钥字段的状态徽章：已设置=绿框绿字，未设置=灰框灰字（以前是无条件的一行灰字，
+  // 「填了」和「没填」看起来一模一样）。
+  const setBadge = findByText(tree, '已设置');
+  const setBadgeStyle = (setBadge === null || setBadge.props === undefined) ? undefined : setBadge.props.style;
+  check('「已设置」渲染成绿框绿字',
+    setBadgeStyle !== undefined && setBadgeStyle.color === '#2ea043'
+    && String(setBadgeStyle.border).includes('46, 160, 67'),
+    JSON.stringify(setBadgeStyle === undefined ? null : setBadgeStyle));
+  check('「已设置」旁边仍说明「留空则保持不变」', joined.includes('留空则保持不变'));
+  check('未设置时走灰框灰字分支（源码里有 secretBadgeOff 与「未设置」）',
+    bundleSource.includes('secretBadgeOff') && bundleSource.includes("'未设置'"));
+
   const collectInputs = (node, out) => {
     if (node === null || node === undefined || typeof node !== 'object') return out;
     if (Array.isArray(node)) { for (const item of node) collectInputs(item, out); return out; }
