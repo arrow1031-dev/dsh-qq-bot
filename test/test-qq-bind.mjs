@@ -90,9 +90,12 @@ console.log('\n5. 路由：状态 JSON + refresh 方法限制');
   check('两条路由都注册了', reg.ok === true && typeof handlers[BIND_STATE_PATH] === 'function' && typeof handlers[BIND_REFRESH_PATH] === 'function');
   const replies = [];
   const fakeRes = { writeHead: (status, headers) => { replies.push({ status, headers }); }, end: (body) => { replies[replies.length - 1].body = body; } };
-  await handlers[BIND_STATE_PATH]({}, fakeRes);
+  // 2026-10-28 审计 B1 起 handleState 也校验方法（以前连方法都不看）。
+  await handlers[BIND_STATE_PATH]({ method: 'GET' }, fakeRes);
   const body = JSON.parse(replies[0].body);
   check('状态响应带脱敏 appId', replies[0].status === 200 && body.appId === '102000001', replies[0].body);
+  await handlers[BIND_STATE_PATH]({ method: 'PUT' }, fakeRes);
+  check('状态路由只认 GET（PUT 也回 405）', replies[replies.length - 1].status === 405, String(replies[replies.length - 1].status));
   check('状态响应拿不到 appSecret', JSON.stringify(body).includes('SECRET') === false);
   const replies2 = [];
   const fakeRes2 = { writeHead: (status) => { replies2.push({ status }); }, end: (body) => { replies2[replies2.length - 1].body = body; } };

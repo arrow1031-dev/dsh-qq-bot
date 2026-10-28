@@ -85,5 +85,67 @@ console.log('\n7. 什么都没变：接受，但填进来的码要清掉');
   check('顺手清掉码', same.clearCode === true, JSON.stringify(same));
 }
 
+console.log('\n8. 换掉闸门自己的锁也要码，且必须用「变更前」那把锁验（2026-10-28 审计 A1）');
+{
+  const other = generateSecret(20);
+  const baseSec = { totpSecret: secret, recoveryHashes: [], recoverySalt: '', maxAttempts: 5, lockoutMinutes: 5, grantTtlSeconds: 300 };
+  const swapped = Object.assign({}, baseSec, { totpSecret: other });
+
+  const noCode = decideGateEdit({ previousEnabled: true, nextEnabled: true, previous: prev, next: prev.slice(), previousSecurity: baseSec, nextSecurity: swapped, code: '', nowMs: now });
+  check('只换 totpSecret、名单不动 → 仍然要码', noCode.accept === false && noCode.needsCode === true, JSON.stringify(noCode));
+
+  const codeFromNew = totp(other, { timeMs: now });
+  const newLock = decideGateEdit({ previousEnabled: true, nextEnabled: true, previous: prev, next: prev.slice(), previousSecurity: baseSec, nextSecurity: swapped, code: codeFromNew, nowMs: now });
+  check('用「新」密钥算的码 → 拒绝（否则换锁者用自己那把就能过）', newLock.accept === false, JSON.stringify(newLock));
+
+  const codeFromOld = totp(secret, { timeMs: now });
+  const legit = decideGateEdit({ previousEnabled: true, nextEnabled: true, previous: prev, next: [], previousSecurity: baseSec, nextSecurity: swapped, code: codeFromOld, nowMs: now });
+  check('用「旧」密钥算的码 → 接受（这才是合法换锁）', legit.accept === true, JSON.stringify(legit));
+
+  // 恢复码 / 试错上限 / 授权时长同样是保护面：改了都要码。
+  const weaken = Object.assign({}, baseSec, { maxAttempts: 1000000 });
+  const weakenEdit = decideGateEdit({ previousEnabled: true, nextEnabled: true, previous: prev, next: prev.slice(), previousSecurity: baseSec, nextSecurity: weaken, code: '', nowMs: now });
+  check('把 maxAttempts 调成天文数字 → 要码', weakenEdit.accept === false && weakenEdit.needsCode === true, JSON.stringify(weakenEdit));
+
+  const addRecovery = Object.assign({}, baseSec, { recoveryHashes: ['HASH-1'], recoverySalt: 'S' });
+  const recEdit = decideGateEdit({ previousEnabled: true, nextEnabled: true, previous: prev, next: prev.slice(), previousSecurity: baseSec, nextSecurity: addRecovery, code: '', nowMs: now });
+  check('塞进自己的恢复码 → 要码', recEdit.accept === false && recEdit.needsCode === true, JSON.stringify(recEdit));
+
+  const longerGrant = Object.assign({}, baseSec, { grantTtlSeconds: 31536000 });
+  const ttlEdit = decideGateEdit({ previousEnabled: true, nextEnabled: true, previous: prev, next: prev.slice(), previousSecurity: baseSec, nextSecurity: longerGrant, code: '', nowMs: now });
+  check('把 grantTtlSeconds 拉到一年 → 要码', ttlEdit.accept === false && ttlEdit.needsCode === true, JSON.stringify(ttlEdit));
+
+  // 保护面完全没动时不该平白要码（别把正常改名单变成永远失败）。
+  const untouched = decideGateEdit({ previousEnabled: true, nextEnabled: true, previous: prev, next: prev.slice(), previousSecurity: baseSec, nextSecurity: Object.assign({}, baseSec), code, nowMs: now });
+  check('保护面没动 → 行为与以前一致', untouched.accept === true && untouched.reason === 'unchanged', JSON.stringify(untouched));
+}
+
+console.log('\n9. 闸门码不能重放（以前是纯无状态校验）');
+{
+  const gateState = { lastCounter: undefined, fails: 0, lockedUntil: 0 };
+  const step1 = ['subagent'];
+  const step2 = ['subagent', 'workflow'];
+  const firstUse = decideGateEdit({ previousEnabled: true, nextEnabled: true, previous: prev, next: step1, code, secret, gateState, nowMs: now });
+  check('第一次用这个码 → 接受', firstUse.accept === true, JSON.stringify(firstUse));
+  const replay = decideGateEdit({ previousEnabled: true, nextEnabled: true, previous: step1, next: step2, code, secret, gateState, nowMs: now });
+  check('同一个码再用来改第二次 → replayed', replay.accept === false && replay.reason === 'replayed', JSON.stringify(replay));
+}
+
+console.log('\n10. 闸门码连错要锁定（以前可以无限试）');
+{
+  const gateState = { lastCounter: undefined, fails: 0, lockedUntil: 0 };
+  const wrong = '000000' === totp(secret, { timeMs: now }) ? '111111' : '000000';
+  let last = null;
+  for (let index = 0; index < 5; index += 1) {
+    last = decideGateEdit({ previousEnabled: true, nextEnabled: true, previous: prev, next: [], code: wrong, secret, gateState, nowMs: now });
+  }
+  check('连错 5 次后进入锁定', (Number(gateState.lockedUntil) || 0) > now, JSON.stringify(gateState));
+  const lockedOut = decideGateEdit({ previousEnabled: true, nextEnabled: true, previous: prev, next: [], code: totp(secret, { timeMs: now }), secret, gateState, nowMs: now });
+  check('锁定期间用正确的码也拒（reason=locked）', lockedOut.accept === false && lockedOut.reason === 'locked', JSON.stringify(lockedOut));
+  const later = now + 5 * 60000 + 1000;
+  const unlocked = decideGateEdit({ previousEnabled: true, nextEnabled: true, previous: prev, next: [], code: totp(secret, { timeMs: later }), secret, gateState, nowMs: later });
+  check('锁定到期后恢复', unlocked.accept === true, JSON.stringify(unlocked));
+}
+
 console.log('\n' + pass + ' 通过 / ' + fail + ' 失败');
 if (fail > 0) process.exitCode = 1;

@@ -397,6 +397,39 @@ try {
   const defaultsMount = registerDefaultsRoutes({ webServer: fakeServer });
   check('默认值路由仍然挂着', defaultsMount.ok === true && mounted.has(DEFAULTS_PATH));
 
+  console.log('\n1b. 路由鉴权闸门（插件具名路由在 DSH 鉴权层之前处理，2026-10-28 审计 B1）');
+  {
+    const { createRouteGuard } = await import(pathToFileURL(path.join(PKG_ROOT, 'lib', 'gateway', 'route-auth.js')).href);
+    const mkRes = () => { const r = { status: 0, headers: null, body: '' }; r.writeHead = (st, hd) => { r.status = st; r.headers = hd; }; r.end = (b) => { r.body = b; }; return r; };
+    const mkCtx = (auth) => ({ get: (name) => (name === 'client-connection' ? { browserAuth: auth } : (name === 'webServer' ? { protocol: 'http:' } : undefined)) });
+
+    // 1) 拿不到 client-connection（桌面端 / 老版本）→ 放行，不把设置页锁死。
+    const looseGuard = createRouteGuard({ get: () => undefined }, () => {});
+    const looseRes = mkRes();
+    check('服务不可用时放行（降级，不锁死设置页）', looseGuard({ method: 'GET', headers: { host: 'h:1' } }, looseRes) === true, String(looseRes.status));
+
+    // 2) 服务在、验签失败 → 401。
+    const strictGuard = createRouteGuard(mkCtx({ isAuthenticated: () => false }), () => {});
+    const denyRes = mkRes();
+    check('未登录 → 401', strictGuard({ method: 'GET', headers: { host: 'h:1' } }, denyRes) === false && denyRes.status === 401, String(denyRes.status));
+    check('401 文案与 DSH 自己的一致（排障时不会误判成插件坏了）',
+      String(denyRes.body).includes('dsh web authentication required'));
+
+    // 3) 验签通过 → 放行。
+    const okGuard = createRouteGuard(mkCtx({ isAuthenticated: () => true }), () => {});
+    const okRes = mkRes();
+    check('已登录 → 放行', okGuard({ method: 'GET', headers: { host: 'h:1' } }, okRes) === true);
+
+    // 4) 跨站请求（Origin 与 Host 不同）直接拒，连验签都不做。
+    let called = 0;
+    const spyGuard = createRouteGuard(mkCtx({ isAuthenticated: () => { called += 1; return true; } }), () => {});
+    const crossRes = mkRes();
+    check('跨站 Origin → 401', spyGuard({ method: 'POST', headers: { host: 'a:1', origin: 'http://evil.test' } }, crossRes) === false && crossRes.status === 401);
+    check('跨站请求不消耗验签', called === 0, 'called=' + String(called));
+    const sameRes = mkRes();
+    check('同源 Origin → 放行', spyGuard({ method: 'GET', headers: { host: 'a:1', origin: 'http://a:1' } }, sameRes) === true);
+  }
+
   const unmounted = settingsMount.unregister;
   unmounted();
   check('注销后路由从服务端摘掉', !mounted.has(SETTINGS_PATH));
@@ -489,6 +522,51 @@ try {
     const modelText = textOf(modelSends[0]);
     check('/model 走到了指令分支（回复里有模型/接口字样）', modelText.includes('模型') || modelText.includes('provider'), modelText.slice(0, 80));
     check('/model 没有进模型回合（回复不是 Agent 的 REPLY: 信封）', modelText.startsWith('REPLY:') === false, modelText.slice(0, 80));
+  }
+
+  console.log('\n3d. requireAt 只认 at 段，不认正文（2026-10-28 审计 A1）');
+  {
+    // 1) 正文里手打 '@10000'（bot 的 QQ）但没有任何 at 段 —— 旧实现用 text.includes 判定，
+    //    于是谁都能靠「在正文里写一串 @机器人QQ」绕过 requireAt。
+    const beforeText = mock.sent.length;
+    await fetch(mock.httpUrl + '/__inject', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        message_type: 'group', group_id: 33333, user_id: 22222, nickname: '小明',
+        message: [{ type: 'text', data: { text: '@10000 正文里的假艾特' } }],
+      }),
+    });
+    await sleep(1500);
+    check('正文里手打 @机器人QQ 不算点名（不触发回复）', mock.sent.length === beforeText,
+      'sent=' + String(mock.sent.length - beforeText) + ' last=' + JSON.stringify(mock.sent.slice(beforeText).map(textOf).join('|').slice(0, 160)));
+
+    // 2) 前缀碰撞：群友 QQ 是 100001，'@10000' 是它的前缀。
+    //    旧实现既会误判成 @ 了我，又会在 split('@10000').join(' ') 时把对方号咬成 '1'。
+    const beforePrefix = mock.sent.length;
+    await fetch(mock.httpUrl + '/__inject', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        message_type: 'group', group_id: 33333, user_id: 22222, nickname: '小明',
+        message: [{ type: 'at', data: { qq: '100001' } }, { type: 'text', data: { text: ' 找一下他' } }],
+      }),
+    });
+    await sleep(1500);
+    check('@100001 不会被当成 @10000（前缀碰撞不再误判）', mock.sent.length === beforePrefix,
+      'sent=' + String(mock.sent.length - beforePrefix));
+
+    // 3) 真的 @ 了 bot：仍然要正常触发（别把修复做成「一律不响应」）。
+    const beforeReal = mock.sent.length;
+    await fetch(mock.httpUrl + '/__inject', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        message_type: 'group', group_id: 33333, user_id: 22222, nickname: '小明',
+        message: [{ type: 'at', data: { qq: '10000' } }, { type: 'text', data: { text: '[real-at] 真的艾特' } }],
+      }),
+    });
+    const realSent = await waitFor(() => (mock.sent.length > beforeReal ? mock.sent.slice(beforeReal) : null), 15000, '真 @ 的回复');
+    check('真 @ 机器人照常触发', realSent.length >= 1, 'sent=' + String(realSent.length));
+    const realText = textOf(realSent[0]);
+    check('剥掉 @ 之后正文完整（没有咬掉数字）', realText.includes('[real-at] 真的艾特'), realText.slice(0, 120));
   }
 
   console.log('\n3b. 中间发言：先发一句（不引用），结论照常引用回复');
@@ -1240,6 +1318,43 @@ try {
   };
   await mod.cleanupStaleConfig(valueCtx, { log: (line) => valueLogs.push(line) });
   check('日志里带上被删键的旧值', valueLogs.some((line) => line.includes('proactive.judgeModel=') && line.includes('deepseek-x')), JSON.stringify(valueLogs));
+
+  console.log('\n7b. 白名单排在群管理指令之前（2026-10-28 审计 A2）');
+  {
+    // 以前 allowlistOk 排在 handleAdminCommand 之后，于是 group.allow 收紧到单群后，
+    // 其它群里的 /help、/whoami 照样会拿到回复——白名单只挡住了「进 Agent 回合」。
+    const sendHelp = async () => {
+      const before = mock.sent.length;
+      await fetch(mock.httpUrl + '/__inject', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          message_type: 'group', group_id: 33333, user_id: 22222, nickname: '小明',
+          message: [{ type: 'text', data: { text: '/help' } }],
+        }),
+      });
+      await sleep(1500);
+      return mock.sent.length - before;
+    };
+    const flushVolatile = () => {
+      for (const handler of volatileUpdateHandlers) { try { handler(); } catch (error) { console.log('  volatile handler 抛错：' + error.message); } }
+    };
+
+    const openReplies = await sendHelp();
+    check('白名单为空（不限）时 /help 有回复', openReplies >= 1, 'sent=' + String(openReplies));
+
+    const savedAllow = liveConfig.group.allow;
+    liveConfig.group.allow = ['99999'];
+    flushVolatile();
+    await sleep(300);
+    const closedReplies = await sendHelp();
+    check('白名单收紧到别的群后 /help 不再回复', closedReplies === 0, 'sent=' + String(closedReplies));
+
+    liveConfig.group.allow = savedAllow;
+    flushVolatile();
+    await sleep(300);
+    const restoredReplies = await sendHelp();
+    check('还原白名单后 /help 恢复', restoredReplies >= 1, 'sent=' + String(restoredReplies));
+  }
 
   console.log('\n8. 卸载');
   for (const d of disposers) { try { d(); } catch (error) { console.log('  disposer 抛错：' + error.message); } }

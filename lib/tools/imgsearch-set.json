@@ -28,7 +28,8 @@
         "saucenaoKey"
       ],
       "label": "SauceNAO API key（可选）",
-      "kind": "text",
+      "kind": "password",
+      "secret": true,
       "hint": "saucenao.com 注册可得；填入后反搜会带上 SauceNAO",
       "placeholder": "（留空 = 不启用 SauceNAO）",
       "tab": "capability",

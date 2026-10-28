@@ -39,9 +39,14 @@ async function startTarget() {
 /** 假上游代理：记录收到的 CONNECT 目标；mode=ok 回 200 并保持，mode=deny 回 403。 */
 async function startUpstream(mode) {
   const state = { seen: [], port: 0 };
+  /** CONNECT 升级后的裸 socket 不会被 server.closeAllConnections() 收掉，
+   *  不自己记一份的话 close() 会一直等到超时（表现为「unsettled top-level await」）。 */
+  const tunnels = new Set();
   const server = http.createServer((req, res) => { res.writeHead(400); res.end(); });
   server.on('connect', (req, socket) => {
     state.seen.push(req.url);
+    tunnels.add(socket);
+    socket.on('close', () => tunnels.delete(socket));
     socket.on('error', () => {});
     if (mode === 'ok') {
       socket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
@@ -53,6 +58,8 @@ async function startUpstream(mode) {
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   state.port = server.address().port;
   state.close = () => new Promise((resolve) => {
+    for (const socket of tunnels) { try { socket.destroy(); } catch { /* 已关 */ } }
+    tunnels.clear();
     try { if (typeof server.closeAllConnections === 'function') server.closeAllConnections(); } catch { /* 老 Node */ }
     server.close(() => resolve());
     const timer = setTimeout(resolve, 1000);
@@ -180,10 +187,14 @@ for (const [name, authority] of [['端口 0', 'example.com:0'], ['端口越界',
   const got = await connectVia(port, authority);
   check(name + ' → 400', got.status === 400, 'status=' + String(got.status));
 }
-// 缺端口：按 443 容错处理，于是走公网连接→失败 502；关键是它**没有**被当成内网目标放过去，也没把测试挂住。
+// 缺端口：按 443 容错处理。这个主机名在本机解析不了，所以 2026-10-28 的 A1 修复之后
+// 直连模式会直接 403（以前是退回主机名让 net.connect 再解析，失败后 502）。
+// 关键是它**没有**被当成内网目标放过去，也没把测试挂住——403/502/400 都满足这一点，
+// 但必须显式允许 403，否则这条会把新语义判成回归。
 {
   const got = await connectVia(port, 'no-port-and-no-colon');
-  check('缺端口按 443 容错（502 或 400，不 hang）', got.status === 502 || got.status === 400, 'status=' + String(got.status));
+  check('缺端口按 443 容错（403/502/400 均可，不 hang）',
+    got.status === 403 || got.status === 502 || got.status === 400, 'status=' + String(got.status));
 }
 
 console.log('\n4. 明文 http 绝对 URI 也过同一道闸');
@@ -242,6 +253,40 @@ console.log('\n10. 解析即钉住（DNS rebinding 只在判定那一次决胜�
   check('解析出内网就拒绝（带原因）', typeof priv.reason === 'string' && priv.reason.includes('非公网') && priv.address === null, JSON.stringify(priv));
   const noDns = await resolveGuardTarget('no-such-host.test', async () => { throw new Error('ENOTFOUND'); });
   check('本机解析不了 → 不判内网、交给连接阶段（保留旧语义）', noDns.reason === '' && noDns.address === null, JSON.stringify(noDns));
+}
+
+console.log('\n11. 判不了就别连：直连模式解析失败必须拒绝（2026-10-28 审计 A1）');
+{
+  // 攻击模型：攻击者用自己的域名，权威 DNS 按查询序号作答——
+  //   第 1 次（moli 的 assertPublicHost）→ 真公网 IP，骗过外层检查；
+  //   第 2 次（守卫代理 resolveGuardTarget）→ SERVFAIL；
+  //   第 3 次（net.connect 自己再解析）→ 10.0.0.5。
+  // 旧实现在第 2 步返回 address=null 后**退回主机名**，于是第 3 步说了算，隧道打进内网。
+  // 这里注入一个必抛的 resolver 复现第 2 步，再用「403 还是 502」区分新旧行为：
+  // 旧代码会让 net.connect 去解析 rebind.test → ENOTFOUND → 502；新代码在判定层就拒绝 → 403。
+  const blind = createGuardProxy({ resolve: async () => { throw new Error('ENOTFOUND'); }, log: () => {} });
+  const blindPort = await blind.start();
+  const beforeAccepts = target.accepts;
+  const refused = await connectVia(blindPort, 'rebind.test:' + String(target.port));
+  check('解析失败 → 403（策略拒绝），不是 502（连不上）', refused.status === 403, String(refused.status));
+  check('解析失败 → 目标一次都没被连上', target.accepts === beforeAccepts, 'accepts=' + String(target.accepts - beforeAccepts));
+  const plainRefused = await getVia(blindPort, 'http://rebind.test:' + String(target.port) + '/x');
+  check('明文分支同样拒绝', plainRefused.status === 403, String(plainRefused.status));
+  await blind.stop();
+}
+
+console.log('\n12. 配了上游代理才允许把解析交给代理侧（CDN 域名不被误杀）');
+{
+  const upBlind = await startUpstream('ok');
+  const blindLogs = [];
+  const viaProxy = createGuardProxy({ upstreamProxy: 'http://127.0.0.1:' + String(upBlind.port), resolve: async () => { throw new Error('ENOTFOUND'); }, log: (line) => blindLogs.push(line) });
+  const viaPort = await viaProxy.start();
+  const tunneled = await connectVia(viaPort, 'cdn-only-proxy.test:443');
+  check('上游模式放行（200）', tunneled.status === 200, String(tunneled.status));
+  check('确实把主机名交给了上游代理', upBlind.seen.some((item) => item.startsWith('cdn-only-proxy.test:')), JSON.stringify(upBlind.seen));
+  check('留了「交给上游代理解析」的日志', blindLogs.some((line) => line.includes('无法本地解析')), blindLogs.join(' | '));
+  await viaProxy.stop();
+  await upBlind.close();
 }
 console.log('\n' + pass + ' 通过 / ' + fail + ' 失败');
 if (fail > 0) process.exitCode = 1;
