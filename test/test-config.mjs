@@ -1,5 +1,13 @@
 /** 单元测试：lib/config.js —— DEFAULTS / plainConfig（volatile 还原）/ mergeConfig / describeError */
-import { DEFAULTS, plainConfig, mergeConfig, staleConfigPaths, describeError } from '../lib/config.js';
+import { DEFAULTS, DEFAULTS_SOURCES, Config, plainConfig, mergeConfig, staleConfigPaths, describeError } from '../lib/config.js';
+import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.join(here, '..');
 
 const results = [];
 let failures = 0;
@@ -62,6 +70,63 @@ console.log('9. staleConfigPaths 的两个边界（评审提出，曾会破坏�
     JSON.stringify(staleConfigPaths({ legacy: null })) === '[["legacy"]]');
   const cleanDefaults = staleConfigPaths(DEFAULTS);
   check('加了表达式跳过之后，DEFAULTS 仍然没有废弃键', cleanDefaults.length === 0, JSON.stringify(cleanDefaults));
+}
+
+console.log('\n10. 默认值 JSON：自动发现 / 与 schema 一致 / 邪门输入被挡');
+{
+  check('自动发现到默认值文件', DEFAULTS_SOURCES.length >= 8, JSON.stringify(DEFAULTS_SOURCES.map((s2) => s2.file)));
+  check('工具目录与阀门目录都有', DEFAULTS_SOURCES.some((s2) => s2.file.startsWith('tools/'))
+    && DEFAULTS_SOURCES.some((s2) => s2.file.startsWith('valve/')), JSON.stringify(DEFAULTS_SOURCES.map((s2) => s2.file)));
+
+  const missingDefaults = DEFAULTS_SOURCES.filter((s2) => DEFAULTS[s2.group] === undefined);
+  check('每个 group 都进了 DEFAULTS', missingDefaults.length === 0, JSON.stringify(missingDefaults));
+
+  // 关键护栏：group 写错一个字母，这组默认值就成了 schema 不认识的键，而
+  // staleConfigPaths 正是拿 schema 判废弃字段——启动清理会把用户配置当垃圾删掉。
+  const dict = Config.dict || {};
+  const unknown = DEFAULTS_SOURCES.filter((s2) => dict[s2.group] === undefined);
+  check('每个 group 都在 Config schema 里', unknown.length === 0, JSON.stringify(unknown));
+
+  // 默认值只有一个来源：JSON 改了，schema 求值结果必须跟着变（这里是反向核对）。
+  const evaluated = plainConfig(new Config({}));
+  const drift = [];
+  for (const source of DEFAULTS_SOURCES) {
+    for (const key of Object.keys(DEFAULTS[source.group])) {
+      const a = JSON.stringify(DEFAULTS[source.group][key]);
+      const b = JSON.stringify(evaluated[source.group] === undefined ? undefined : evaluated[source.group][key]);
+      if (a !== b) drift.push(source.group + '.' + key + ': ' + a + ' vs ' + b);
+    }
+  }
+  check('JSON 默认值与 schema 求值一致（改 JSON 就是改默认值）', drift.length === 0, drift.slice(0, 4).join('；'));
+
+  // 邪门输入：拷一份最小树到仓库内（这样 @deepseek-ai/schemastery 还能解析到），
+  // 分别塞「重复 group」和「schema 里没有的 group」，两者都必须在加载时炸掉。
+  const scratch = mkdtempSync(path.join(repoRoot, 'test', '.tmp-defaults-'));
+  try {
+    cpSync(path.join(repoRoot, 'lib'), path.join(scratch, 'lib'), { recursive: true });
+    const target = pathToFileURL(path.join(scratch, 'lib', 'config.js')).href;
+    const runImport = () => execFileSync(process.execPath, ['--input-type=module', '-e', 'await import(' + JSON.stringify(target) + ')'],
+      { stdio: 'pipe', encoding: 'utf8' });
+    let okFirst = true;
+    try { runImport(); } catch (error) { okFirst = false; }
+    check('干净副本可以正常装载', okFirst === true);
+
+    writeFileSync(path.join(scratch, 'lib', 'tools', 'dup.json'),
+      JSON.stringify({ group: 'vision', defaults: { enabled: false } }), 'utf8');
+    let dupError = '';
+    try { runImport(); } catch (error) { dupError = String((error.stderr || '') + (error.message || '')); }
+    check('重复的 group 在加载时报错', dupError.includes('默认配置组重复'), dupError.slice(0, 120));
+
+    rmSync(path.join(scratch, 'lib', 'tools', 'dup.json'));
+    writeFileSync(path.join(scratch, 'lib', 'tools', 'typo.json'),
+      JSON.stringify({ group: 'webSerach', defaults: { maxUses: 5 } }), 'utf8');
+    let typoError = '';
+    try { runImport(); } catch (error) { typoError = String((error.stderr || '') + (error.message || '')); }
+    check('schema 里没有的 group 在加载时报错（否则清理会删用户配置）',
+      typoError.includes('不在 Config schema 里'), typoError.slice(0, 120));
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
 }
 
 const passed = results.filter(Boolean).length;

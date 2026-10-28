@@ -1,0 +1,15 @@
+{
+  "group": "moli",
+  "defaults": {
+    "enabled": false,
+    "exePath": "",
+    "proxy": "",
+    "defaultTimeoutMs": 30000,
+    "maxChars": 200000,
+    "insecureTls": true,
+    "guardProxy": true,
+    "allowGuest": true,
+    "rateLimitPerMin": 5,
+    "maxConcurrentRenders": 2
+  }
+}

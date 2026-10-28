@@ -1,0 +1,17 @@
+{
+  "group": "imageGen",
+  "defaults": {
+    "enabled": false,
+    "baseUrl": "",
+    "apiKeyEnv": "IMAGE_API_KEY",
+    "apiKey": "",
+    "model": "seedream-5.0-lite",
+    "size": "1024x1024",
+    "timeoutMs": 180000,
+    "maxAttempts": 4,
+    "retryIntervalMs": 5000,
+    "poll": true,
+    "pollIntervalMs": 5000,
+    "maxPolls": 30
+  }
+}

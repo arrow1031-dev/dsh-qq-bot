@@ -96,7 +96,34 @@ DSH Agent（默认每个 QQ 会话一个）
 | --- | --- | --- |
 | `lib/index.js` | 包入口**薄壳**：只转发，不放逻辑（包入口路径是对外契约，重构内部目录时它不该变） | `Config` `name` `inject` `apply` `cleanupStaleConfig` |
 | `lib/assemble.js` | **组装根**：按 STAGE 表把阀门依次成型，返回装配结果与顺序；`describeAssembly()` 给启动日志 | `assembleValves` `describeAssembly` `ASSEMBLY_ORDER` `STAGE` |
-| `lib/config.js` | 配置契约：默认值 + schemastery schema + 合并/还原 + 废弃键识别 | `Config` `DEFAULTS` `plainConfig` `mergeConfig` `staleConfigPaths` |
+| `lib/config.js` | 配置契约：**扫描各目录的默认值 JSON** + schemastery schema + 合并/还原 + 废弃键识别 | `Config` `DEFAULTS` `DEFAULTS_SOURCES` `plainConfig` `mergeConfig` `staleConfigPaths` |
+
+#### 2.1.1 默认值住在哪：各目录的 JSON，路径不写死
+
+默认值不再全写在 `config.js` 里，而是**谁拥有这组配置，默认值就放在谁的目录**：
+
+| 位置 | 归谁 | 例子 |
+| --- | --- | --- |
+| `lib/tools/*.json` | 工具自己的参数 | `websearch.js` ↔ `websearch.json`（管 `webSearch`） |
+| `lib/valve/<阀门>/*.json` | 阀门自己的参数 | `valve/security/auth.json`（管 `auth`） |
+| `lib/config.js` 里的 `CORE_DEFAULTS` | 不属于任何工具/阀门的 | 传输、消息、网关、会话、产物投递 |
+
+`config.js` 在加载时**遍历**这两个目录，逐个读取，每个 JSON 自己声明管哪个配置组：
+
+```json
+{ "group": "webSearch", "defaults": { "maxUses": 5 } }
+```
+
+于是加新工具只需要往对应目录丢一个 JSON，不用回来改 `config.js`。文件名只用于报错定位，
+不参与映射——`websearch.json` 管 `webSearch`，不用逼文件名迁就驼峰。组装链是一条：
+
+```
+lib/**/*.json  →  JSON_DEFAULTS  →  DEFAULTS(+CORE)  →  Config 的 .default()  →  staleConfigPaths 判定
+```
+
+schema 的默认值直接引用组装结果，所以「默认值」只有一处来源，改 JSON 就是改默认值。
+两道加载期护栏：**group 重复**、**group 不在 schema 里**都直接抛错——后者尤其要紧，
+因为废弃键清理正是拿 schema 判断哪些键该删，一个笔误就会把用户配置当垃圾清掉。
 
 ### 2.2 阀门层 `lib/valve/`
 
@@ -202,7 +229,7 @@ DSH Agent（默认每个 QQ 会话一个）
 | --- | --- |
 | `client/settings.js` | 插件详情页配置区（手写 `__ModuleLoader__` bundle，只依赖 react）。**模块 id 与插槽 key 都必须是 npm 包名**，设置命名空间 `NS` 仍是条目 id `dsh-qq-bot`（见「身份契约」） |
 
-**扩展点**：加协议 → 新写 `lib/transport/adapters/<协议>.mjs` + 在 `lib/transport/index.js` 与 `lib/config.js` 各加一项；加 Agent 工具 → 只改 `lib/tools/index.js`；加 HTTP 路由 → 只改 `lib/gateway/index.js` 的 `ROUTE_MOUNTS`；调阀门优先级 → 只改 `lib/valve/index.js` 的 `STAGE`。
+**扩展点**：加协议 → 新写 `lib/transport/adapters/<协议>.mjs` + 在 `lib/transport/index.js` 与 `lib/config.js` 各加一项；加 Agent 工具 → 改 `lib/tools/index.js`，要在设置页露出参数就再往 `lib/tools/` 丢一个 `{group, defaults}` 的 JSON（**不用改 `config.js`**，它会自己扫到）；加 HTTP 路由 → 只改 `lib/gateway/index.js` 的 `ROUTE_MOUNTS`；调阀门优先级 → 只改 `lib/valve/index.js` 的 `STAGE`。
 
 **测试与发布**：`test/run-all.mjs` 汇总 **37 个套件**（5 个协议各一套 + 阀门/组装/权限/设置/搜索/生图/历史/授权链路等），每个协议都自带零依赖假协议端（OneBot 11 的是 `test/mock-onebot.mjs`，其余在各自 `test-adapter-*.mjs` 内）；`npm test` 即跑全部。进 npm 包的只有 `lib/`、`cordis.patch.yml` 与根目录文档（见 `package.json` 的 `files`），`test/`、`examples/` 只在仓库里。
 

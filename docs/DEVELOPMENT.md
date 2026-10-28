@@ -17,7 +17,7 @@ node test/run-all.mjs
 裸克隆即可跑全部测试：需要 DSH 运行时才能成立的少数断言（动态工具注册、`qqgroup` 工具路径）会自动跳过而不是判失败；
 想连那部分一起跑，把 `DSH_PROFILE_MODULES` 指向一个装了 DSH 运行时的 profile 的 `node_modules`。
 
-## 2. 测试（37 个套件 / 1361 项）
+## 2. 测试（37 个套件 / 1385 项）
 
 ```sh
 node test/run-all.mjs      # 一键全量（套件失败会自动重试一次，重试通过会标注）
@@ -33,10 +33,10 @@ npm test                   # 同上
 | `test-adapter-milky.mjs` | 83 | Milky 适配器（含 WebHook 默认准入与读体上限） |
 | `test-adapter-qq-official.mjs` | 109 | QQ 官方适配器（含回调重放防护） |
 | `test-plugin.mjs` | 124 | Host 半边：假 ctx + 真适配器 + 真 `lib/index.js`（入口薄壳 → `lib/gateway/plugin.js`），含 Config 契约、热更新、9 个工具、适配器重启、默认准入 fail-closed 与入站限制（124 项含工具注册段落；解析不到 `@deepseek-ai/dsh-tools` 的裸克隆里为 98 项 + 6 项 `[SKIP]`） |
-| `test-client.mjs` | 109 | 客户端设置页：模拟模块加载器 + 最小 React 渲染 + 四档标签 + 只写密钥护栏 |
+| `test-client.mjs` | 125 | 客户端设置页：模拟模块加载器 + 最小 React 渲染 + 四档标签 + 只写密钥护栏 + 纯数字名单校验 + 一键还原默认 |
 | `test-admin.mjs` | 38 | 权限 · 群管理 · 访客工具闸 |
 | `test-http.mjs` | 30 | HTTP / 代理隧道 / IP 归一与公网判定 |
-| `test-config.mjs` | 24 | 配置合并、volatile 还原、废弃键清理 |
+| `test-config.mjs` | 32 | 配置合并、volatile 还原、废弃键清理、默认值 JSON 自动发现与护栏 |
 | `test-websearch.mjs` | 5 | 多引擎搜索结果解析 |
 | `test-imagegen.mjs` | 16 | 生图重试 / 轮询 / 响应解析 |
 | `test-session-id.mjs` | 5 | 会话 id 回退 |
@@ -74,7 +74,7 @@ node -e "fetch('http://127.0.0.1:3000/__inject',{method:'POST',headers:{'content
 node -e "fetch('http://127.0.0.1:3000/__sent').then(r=>r.json()).then(j=>console.log(JSON.stringify(j.messages,null,2)))"
 ```
 
-> **文档里的测试数必须自洽**：改测试就同步本表、README 的「37 套件 / 1361 项」与顶部 `tests` 徽章（`tests-1361%20passing`）、`AI-DISCLOSURE.md` 的验证情况。数字以裸克隆跑 `npm test` 的输出为准；能解析到 `@deepseek-ai/dsh-tools` 的环境里 `test-plugin` 与 `test-admin` 会多跑工具注册段落，总数随之更多。跳过项按 `[SKIP]` 单列，不计入通过数；设 `DSH_TOOLS_DISABLE=1` 可以在这台机器上模拟裸克隆（否则 `test/dsh-tools-link.mjs` 会把链接建回来，永远看不到跳过路径——CI 就是这么红的）。
+> **文档里的测试数必须自洽**：改测试就同步本表、README 的「37 套件 / 1385 项」与顶部 `tests` 徽章（`tests-1385%20passing`）、`AI-DISCLOSURE.md` 的验证情况。数字以裸克隆跑 `npm test` 的输出为准；能解析到 `@deepseek-ai/dsh-tools` 的环境里 `test-plugin` 与 `test-admin` 会多跑工具注册段落，总数随之更多。跳过项按 `[SKIP]` 单列，不计入通过数；设 `DSH_TOOLS_DISABLE=1` 可以在这台机器上模拟裸克隆（否则 `test/dsh-tools-link.mjs` 会把链接建回来，永远看不到跳过路径——CI 就是这么红的）。
 
 <a id="完整配置参考"></a>
 ## 3. 完整配置参考

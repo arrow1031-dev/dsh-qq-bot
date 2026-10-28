@@ -1,0 +1,10 @@
+{
+  "group": "webSearch",
+  "defaults": {
+    "baseUrl": "",
+    "apiKeyEnv": "",
+    "proxy": "",
+    "maxUses": 5,
+    "multiEngine": true
+  }
+}
