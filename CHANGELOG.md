@@ -47,6 +47,69 @@
   对码接受、±1 窗口容差、开关变更要码、名单没变时顺手清码）；`test-client` 断言高级页三个二级标签并覆盖锁定文案。
 - 套件 30 → 31，总项 1204 → 1224。只防「绕闸门的人」：填错码只会让改动弹回去，不额外加确认步骤。
 
+
+### 回复分条：Markdown 感知切分（消化 tencent-connect/dsh-qqbot 的做法）
+
+- 以前长回答只按换行硬切，会把代码块和 GFM 表格拦腰截断；现在 `lib/chunk.js` 把代码块与表格当原子块搬，
+  优先在空行处断开，单行超长才按字符硬切；被强切的代码块在本段补收尾围栏、下一段补回语言标记。
+- 思路来自官方插件 tencent-connect/dsh-qqbot（MIT）的 `chunker`：我们只取它「别把结构切坏」的判据，
+  实现按本仓库风格重写（纯函数、无第三方依赖、逐条断言）；`sendReply` 换用它。
+- 测试：新增 `test-chunk.mjs`（15 项：短文本/长文本/代码块围栏平衡/表格不切行/超长行硬切/未闭合围栏）。
+- 套件 31 → 32，总项 1224 → 1239。
+
+
+### 入站去重（消化官方插件的 msgid-cache 思路）
+
+- 新增 `lib/msgid-cache.js`：按 `message_id` 记最近见过的消息，有界（512 条）+ TTL（10 分钟），
+  重复命中不延长窗口；`acceptMessage` 最前面判重，重投事件只计入 `skipped/duplicates`，不再起第二个回合。
+- 触发场景：官方 WS 的 resume/重连会重放少量事件、webhook 可能重投；以前会对同一条消息回两次。
+
+### 官方 Bot 扫码绑定（服务端 + 设置页卡片）
+
+- 新增 `lib/qq-bind.js` + `lib/bind-routes.js`：`@tencent-connect/qqbot-connector` **动态 import**（装了就可用，
+  没装退回手动填 AppID/AppSecret），走 SDK 的 `startQrConnect` 回调拿二维码 URL 与凭据；凭据经设置服务落盘，
+  `appSecret` 只在回调里经过一次、不进任何 HTTP 响应。
+- 路由挂在 DSH `webServer` 上（同源）：`GET /dsh-qq-bot/bind`、`POST /dsh-qq-bot/bind/refresh`；
+  设置页「连接」里新增「扫码绑定（手机 QQ）」卡片：显示二维码、2 秒轮询状态、可刷新/重新扫码。
+- 既有的 qq-official 适配器 **webhook / ws 两条路径都保留**，扫码只是把 AppID/AppSecret 填进去。
+
+
+### 官方 API v2 富消息：markdown / keyboard / 输入中 / 按钮回传
+
+- `qq-official` 适配器的 `send` 增加三个可选字段：`markdown`（走 msg_type=2，可带 `keyboard` 按钮）、
+  `keyboard`（原样透传；只给 keyboard 时正文包成 markdown）、`typing`（msg_type=6 输入中，只尽力而为）。
+  被动回复的 `msg_id` / 递增 `msg_seq` 对 markdown 与输入中同样生效。
+- `INTERACTION_CREATE` 现在**同时**产出 `notice`（原有行为）与一条 `message` 帧（`sub_type: 'interaction'`，
+  `text` 取按钮 `button_data`）——以前用户点按钮只有一条 notice，模型看不见，像石沉大海。
+- 测试：`test-adapter-qq-official` 95 → 102 项（markdown/keyboard/msg_seq、msg_type=6、按钮点击回传与身份保留）。
+- 套件 34 / 1271 → 1278 项。
+
+
+### 官方 v2 私聊流式（特有能力，适配层就绪）
+
+- 开放平台只对 C2C 私聊开放 `stream_messages`，所以按**特有能力**做：`qq-official` 适配器新增
+  `stream` 命令（`input_mode=replace` + 同一 `msg_seq` + 递增 `index`，结束帧 `input_state=10`；
+  首帧后复用平台返回的 `stream_msg_id`）。
+- 新增 `lib/stream-bridge.js`：把增量合并成「当前全文」并按 600ms 节流推送，结束时必发 done；
+  发送失败只记一行日志并停用该会话，不刷错误。计时器可注入，纯逻辑单测覆盖。
+- 接线：`runTurn` 里按 `shouldStream()`（官方 v2 + 开关 + 私聊 + 有 `msg_id`）决定是否走流式；
+  中间发言改为喂给桥（不再单独发消息），回合末补足剩余文本并发 done 帧；桥没发出任何帧时
+  退化为普通 `sendReply`，保证用户至少拿到一条。开关在设置页「连接 → 私聊流式回复」，默认关。
+
+
+### 模型选择：自动检测，优先用宿主自己的能力
+
+- 新增 `lib/model-router.js`：按顺序探测 —— ① DSH 原生 `agentDefaultModel`（`currentSelection`/`saveSelection`，可写，
+  改的是默认模型）；② DSH `llm`（`listProviders`/`listModels`，只读能列）；③ 都没有就落到**官方插件那套**
+  per-chat 偏好文件（`QQ_msg/model-prefs.json`），并且如实说明「只记录、不会自动应用」。
+- 新增拥有者指令 `/model`：查看当前模型/接口来源/provider 列表；`/model set <provider> <model>`；
+  `/model models <provider>`。写不进去时不假装成功：返回 applied=false 并说明原因。
+- 端到端模拟：`test-plugin` 新增两条场景——同一 `message_id` 重投只回一次；群里 `@机器人 /model`
+  被截获、不进模型回合。
+- 解析器 `parseModelCommand` 统一剥掉群里 @ 前缀与前后空格——第一版在群里被 @ 时文本是
+  `"@123456  /model"`，`startsWith('/model')` 直接漏判、指令进了模型回合（已修）。
+- `/help` 里补上 `/model` 一行。测试：`test-model-router.mjs` 17 项；套件 35 → 36，总项 1296 → 1313。
+
 ## 0.12.6 —— 渲染抓取支持 JS 页面，安全与稳定性收口（2026-10-28）
 
 > 主语料来自四条并行的只读复审（网络与外部输入 / 权限与凭据 / 并发与资源 / 死代码），

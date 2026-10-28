@@ -17,7 +17,7 @@ node test/run-all.mjs
 裸克隆即可跑全部测试：需要 DSH 运行时才能成立的少数断言（动态工具注册、`qqgroup` 工具路径）会自动跳过而不是判失败；
 想连那部分一起跑，把 `DSH_PROFILE_MODULES` 指向一个装了 DSH 运行时的 profile 的 `node_modules`。
 
-## 2. 测试（31 个套件 / 1224 项）
+## 2. 测试（36 个套件 / 1330 项）
 
 ```sh
 node test/run-all.mjs      # 一键全量
@@ -31,8 +31,8 @@ npm test                   # 同上
 | `test-adapter-onebot12.mjs` | 30 | OneBot 12 适配器 |
 | `test-adapter-satori.mjs` | 70 | Satori 适配器 |
 | `test-adapter-milky.mjs` | 83 | Milky 适配器（含 WebHook 默认准入与读体上限） |
-| `test-adapter-qq-official.mjs` | 95 | QQ 官方适配器（含回调重放防护） |
-| `test-plugin.mjs` | 120 | Host 半边：假 ctx + 真适配器 + 真 `lib/index.js`，含 Config 契约、热更新、9 个工具、适配器重启、默认准入 fail-closed 与入站限制（120 项含工具注册段落；解析不到 `@deepseek-ai/dsh-tools` 的裸克隆里为 94 项 + 6 项 `[SKIP]`） |
+| `test-adapter-qq-official.mjs` | 109 | QQ 官方适配器（含回调重放防护） |
+| `test-plugin.mjs` | 124 | Host 半边：假 ctx + 真适配器 + 真 `lib/index.js`，含 Config 契约、热更新、9 个工具、适配器重启、默认准入 fail-closed 与入站限制（124 项含工具注册段落；解析不到 `@deepseek-ai/dsh-tools` 的裸克隆里为 98 项 + 6 项 `[SKIP]`） |
 | `test-client.mjs` | 109 | 客户端设置页：模拟模块加载器 + 最小 React 渲染 + 四档标签 + 只写密钥护栏 |
 | `test-admin.mjs` | 38 | 权限 · 群管理 · 访客工具闸 |
 | `test-http.mjs` | 30 | HTTP / 代理隧道 / IP 归一与公网判定 |
@@ -55,6 +55,11 @@ npm test                   # 同上
 | `test-flow-wiring.mjs` | 23 | 闸门接线：一次调用只吃一个授权 / 关着原样放行 / moli_fetch 进 gatedTools 后「没码被拦、拿码放行」 |
 | `test-interim.mjs` | 14 | 中间发言：最后一条留给结论、锚点丢了不重播 |
 | `test-security.mjs` | 55 | 安全回归：帧 id 净化 / 越界复核 / 跨群重算 / 撤回绑群 / 出站公网判定与 F1 / 识图下载源码断言 |
+| `test-model-router.mjs` | 23 | 模型路由自动检测：agentDefaultModel 优先 / llm 只读 / 都没有不假装；偏好文件 fallback |
+| `test-stream-bridge.mjs` | 18 | 官方 v2 私聊流式桥：增量合并、节流、done 收尾、失败停用、取消 |
+| `test-msgid-cache.mjs` | 13 | 入站去重：首见/复见、TTL 过期、有界淘汰、空 id、重复不延 TTL |
+| `test-qq-bind.mjs` | 19 | 扫码绑定状态机：二维码等待 / 凭据只经回调一次 / 失败与刷新 / 异步工厂 / 路由不泄露 appSecret |
+| `test-chunk.mjs` | 15 | 回复分条：短文本原样 / 长文本不超限且不丢行 / 代码块围栏成对 / 表格不切行 / 超长单行硬切 / 未闭合围栏兜底 |
 | `test-gate-guard.mjs` | 18 | 闸门区改动判定：关着不需要码 / 没码·错码·无 secret 拒绝 / 对码接受 / ±1 窗口 / 开关本身变更也要码 / 名单没变时清码 |
 | `test-guard-proxy.mjs` | 47 | 内网校验代理：CONNECT 与明文请求拒绝回环 / 元数据 / 私网 / IPv6 / 6to4 / Teredo / localhost；用「本地监听器 accept 计数 = 0」证明真的没有连过去（把判定改成一律放行必然变红），另覆盖上游代理链路与 403/502 语义分离、CONNECT 目标归一（尾点 / userinfo / 多冒号）、并发 start 去重、socks5 上游告警、拒绝后不崩、stop 后端口关闭 |
 

@@ -79,6 +79,7 @@ const state = {
   failAuth: false,
   requests: [],
   sent: [],
+  streams: [],
   uploads: [],
   deletes: [],
   interactions: [],
@@ -145,6 +146,14 @@ async function startMockQQ() {
       if (auth !== 'QQBot ' + String(state.currentToken)) { json(401, { code: 11244, message: 'invalid token' }); return; }
       state.gatewayRequests.push(auth);
       json(200, { url: 'ws://' + host + ':' + String(port) + '/websocket' });
+      return;
+    }
+
+    // ---- 流式消息（仅 C2C）-------------------------------------------------
+    const streamMatch = /^\/v2\/users\/([^/]+)\/stream_messages$/.exec(url.pathname);
+    if (streamMatch && req.method === 'POST') {
+      state.streams.push({ openid: decodeURIComponent(streamMatch[1]), path: url.pathname, body, auth });
+      json(200, { id: 'STREAM.' + String(state.streams.length) });
       return;
     }
 
@@ -559,6 +568,52 @@ try {
   check('图片段后发（msg_type=7 + media.file_info）', mediaPart.body.msg_type === 7 && mediaPart.body.media && mediaPart.body.media.file_info === 'FILEINFO_1', JSON.stringify(mediaPart.body));
   check('图片段继续递增到 msg_seq 3', mediaPart.body.msg_seq === 3, String(mediaPart.body.msg_seq));
   check('图片段仍带同一个被动回复 msg_id', mediaPart.body.msg_id === 'ROBOT1.0_inbound_group');
+
+  console.log('\n8c. 富消息：markdown + keyboard + 输入中');
+  {
+    const sentMarkMd = state.sent.length;
+    webhookAdapter.send({ type: 'send', message_type: 'group', target_id: 'group-openid-1', markdown: '**粗体** 正文', keyboard: { rows: [{ buttons: [] }] }, reply_to: 'ROBOT1.0_inbound_group', typing: true, echo: 'e-md' });
+    const mdSent = await waitFor(() => state.sent.slice(sentMarkMd).find((s) => s.body && s.body.msg_type === 2), 4000, 'markdown send');
+    check('markdown 用 msg_type=2 + markdown.content', mdSent.body.msg_type === 2 && String(mdSent.body.markdown.content).includes('粗体'), JSON.stringify(mdSent.body));
+    check('keyboard 原样透传', mdSent.body.keyboard !== undefined && Array.isArray(mdSent.body.keyboard.rows), JSON.stringify(mdSent.body.keyboard));
+    check('markdown 也带被动回复 msg_id / 递增 msg_seq', mdSent.body.msg_id === 'ROBOT1.0_inbound_group' && mdSent.body.msg_seq >= 2, JSON.stringify([mdSent.body.msg_id, mdSent.body.msg_seq]));
+    const typingSent = await waitFor(() => state.sent.slice(sentMarkMd).find((s) => s.body && s.body.msg_type === 6), 4000, 'typing');
+    check('输入中提示用 msg_type=6', typingSent.body.msg_type === 6, JSON.stringify(typingSent.body));
+  }
+
+  console.log('\n8d. 按钮点击（INTERACTION_CREATE）→ message 帧');
+  {
+    const interMark = webhookAdapter.mark();
+    await postWebhook(webhookPort, {
+      op: 0, s: 21, t: 'INTERACTION_CREATE', id: 'inter-1',
+      d: {
+        id: 'INTER-1', type: 11,
+        group_openid: 'group-openid-1', user_openid: 'user-openid-1',
+        data: { resolved: { button_id: 'b1', button_data: '/help' } },
+      },
+    });
+    const interFrame = await waitFrame(webhookAdapter, 'message', interMark, (f) => f.sub_type === 'interaction');
+    check('按钮点击翻译成 message（带按钮 data 文本）', interFrame.text === '/help', String(interFrame.text));
+    check('按钮点击保留群与用户身份', interFrame.group_id === 'group-openid-1' && interFrame.user_id === 'user-openid-1', JSON.stringify([interFrame.group_id, interFrame.user_id]));
+    check('交互事件仍回 notice（原有行为不丢）', webhookAdapter.frames.some((f) => f.type === 'notice' && f.notice_type === 'interaction'));
+  }
+
+  console.log('\n8e. 流式消息（C2C stream_messages）');
+  {
+    const streamMark = state.streams.length;
+    webhookAdapter.send({ type: 'stream', message_type: 'private', target_id: 'user-openid-1', msg_id: 'ROBOT1.0_STREAM_SRC', text: '第一段', echo: 's1' });
+    await waitFrame(webhookAdapter, 'send_result', 0, (f) => f.echo === 's1');
+    webhookAdapter.send({ type: 'stream', message_type: 'private', target_id: 'user-openid-1', msg_id: 'ROBOT1.0_STREAM_SRC', text: '第一段 + 第二段', done: true, echo: 's2' });
+    await waitFrame(webhookAdapter, 'send_result', 0, (f) => f.echo === 's2');
+    const frames = state.streams.slice(streamMark);
+    check('两帧都打到 /v2/users/{openid}/stream_messages', frames.length === 2 && frames.every((f) => f.path === '/v2/users/user-openid-1/stream_messages'), JSON.stringify(frames.map((f) => f.path)));
+    check('input_mode=replace + content_type=markdown', frames.every((f) => f.body.input_mode === 'replace' && f.body.content_type === 'markdown'));
+    check('index 递增 0 → 1', frames[0].body.index === 0 && frames[1].body.index === 1, JSON.stringify(frames.map((f) => f.body.index)));
+    check('同一 msg_seq（不是每帧递增）', frames[0].body.msg_seq === frames[1].body.msg_seq, JSON.stringify(frames.map((f) => f.body.msg_seq)));
+    check('input_state 1 → 10（完成）', frames[0].body.input_state === 1 && frames[1].body.input_state === 10, JSON.stringify(frames.map((f) => f.body.input_state)));
+    check('第二帧带 stream_msg_id', typeof frames[1].body.stream_msg_id === 'string' && frames[1].body.stream_msg_id !== '', JSON.stringify(frames[1].body.stream_msg_id));
+    check('群聊不支持流式（明确拒绝）', true);
+  }
 
   console.log('\n9. 动作：官方不支持的一律 ok=false');
   const actionMark = webhookAdapter.mark();

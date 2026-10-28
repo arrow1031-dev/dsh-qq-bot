@@ -556,7 +556,10 @@ try {
   walkSchema(ConfigSchema, [], schemaLeaves);
   // 有意不暴露：非 volatile（改它们会整体重挂插件）或纯内部路径
   const NOT_EXPOSED = new Set(['adapterPath', 'nodePath', 'reply.firstTurnHint', 'restart.baseMs', 'restart.maxMs']);
-  const exposedPaths = new Set([...bundleSource.matchAll(/path: \[([^\]]+)\]/g)]
+  // virtual: true 的字段是「纯界面卡片」（例如扫码绑定），不对应 schema 里的配置项，
+  // 不参与「有没有拼错路径」的比对。
+  const exposedPaths = new Set([...bundleSource.matchAll(/path: \[([^\]]+)\]([^\n]*)/g)]
+    .filter((m) => !/virtual: true/.test(m[2]))
     .map((m) => m[1].split(',').map((s) => s.trim().replace(/^'|'$/g, '')).join('.')));
   const uncovered = schemaLeaves.filter((leafPath) => !NOT_EXPOSED.has(leafPath) && !exposedPaths.has(leafPath));
   check('schema 里可配置的字段全部出现在设置页', uncovered.length === 0, '漏掉：' + uncovered.join(', '));
