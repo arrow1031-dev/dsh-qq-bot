@@ -750,12 +750,21 @@ try {
   const typed = numericInputs().find((el) => el.props.value === '123456');
   typed.props.onChange({ target: { value: '123456,12' } });
   await renderSettled();
-  check('非法项当场标红（12 太短）', textsOf(treeN).includes('不是合法的号码'), textsOf(treeN).slice(0, 140));
+  check('非法项不再行内标红（免得输到一半丢焦点）',
+    !textsOf(treeN).includes('不是合法的号码'), textsOf(treeN).slice(0, 140));
+  const stillNumeric = numericInputs();
+  check('输入框仍是裸 input（没有被包进容器）',
+    stillNumeric.length > 0 && stillNumeric.every((el) => el.type === 'input'),
+    JSON.stringify(stillNumeric.map((el) => el.type)));
+  check('输到一半的号码原样留着（123456,12）',
+    stillNumeric.some((el) => el.props.value === '123456,12'),
+    JSON.stringify(stillNumeric.map((el) => el.props.value)));
 
   mutateCalls.length = 0;
   await findByText(treeN, '保存').props.onClick();
+  await renderSettled();
   check('有非法项时保存被拦下（没发 mutate）', mutateCalls.length === 0, JSON.stringify(mutateCalls));
-  check('提示指出正确格式', textsOf(treeN).includes('5–12 位纯数字'), textsOf(treeN).slice(0, 160));
+  check('保存时给出可读的拦截提示', textsOf(treeN).includes('5–12 位纯数字'), textsOf(treeN).slice(0, 160));
 
   const typed2 = numericInputs().find((el) => el.props.value === '123456,12');
   typed2.props.onChange({ target: { value: '123456,789012' } });
@@ -766,6 +775,29 @@ try {
   const listOps = (mutateCalls.length > 0 ? mutateCalls[0].ops : []).filter((op) => op.path.join('.') === 'group.allow');
   check('合法后保存：提交的是拆开的数组', listOps.length === 1 && Array.isArray(listOps[0].value) && listOps[0].value.join(',') === '123456,789012',
     JSON.stringify(listOps));
+
+  // 「只能输数字」和「可以输多个值」是两件事：6 位动态码是单值，连逗号都不该能敲。
+  console.log('\n5b. 单值纯数字字段不吃分隔符');
+  await renderSettled();
+  await clickTabN('高级');
+  // 动态码在「高级 → 闸门区」这个二级标签下，不切过去看不到。
+  const clickSubN = async (label) => {
+    const btn = collectButtons(treeN, [])
+      .find((b) => b.props.role === 'tab' && b.props['data-subtab'] !== undefined && childText(b) === label);
+    if (btn) btn.props.onClick();
+    return renderSettled();
+  };
+  await clickSubN('闸门区');
+  const codeInput = collectInputs(treeN, []).find((el) => el.props.type === 'password'
+    && el.props.inputMode === 'numeric');
+  check('动态码输入框标了 inputMode=numeric', Boolean(codeInput),
+    JSON.stringify(collectInputs(treeN, []).map((el) => el.props.inputMode)));
+  codeInput.props.onChange({ target: { value: '12,34 56' } });
+  await renderSettled();
+  const codeAfter = collectInputs(treeN, []).find((el) => el.props.type === 'password'
+    && el.props.inputMode === 'numeric');
+  check('逗号与空格敲不进单值字段（12,34 56 → 123456）',
+    Boolean(codeAfter) && codeAfter.props.value === '123456', String(codeAfter && codeAfter.props.value));
 
   // ------------------------------------------------------------------
   // 6. 一键还原默认：只改 draft、不保存、密钥字段不碰
