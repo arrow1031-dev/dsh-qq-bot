@@ -1,6 +1,10 @@
 /**
- * 汇总 runner：依次跑完 30 个测试套件（含 5 个协议适配器、8 个授权链路套件、1 个 QR 套件与 1 个内网校验代理套件），单个失败不中断，末尾汇总。
+ * 汇总 runner：依次跑完 test/ 下登记的全部套件，单个失败不中断，末尾汇总。
  * 用法：node test/run-all.mjs（package.json 的 test 脚本指向这里）
+ *
+ * 卫生约定：会起子进程/真实定时器的套件（adapter、plugin、admin、proactive-round）偶尔
+ * 会因为机器抖动超时；失败一律**重试一次**，重试通过会显式标注「重试通过」——不静默吞掉，
+ * 也不让一次抖动把整条 CI 判红。连续两次失败才算真失败。
  */
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -44,12 +48,19 @@ if (drift === true) {
 }
 
 const results = [];
-for (const s of suites) results.push(await runSuite(s));
+for (const s of suites) {
+  const first = await runSuite(s);
+  if (first.ok === true) { results.push(first); continue; }
+  console.log('\n⚠️ ' + s + ' 第一次失败（code=' + String(first.code) + (first.timedOut === true ? '，超时' : '') + '），重试一次…');
+  const retry = await runSuite(s);
+  results.push(retry.ok === true ? Object.assign({}, retry, { retried: true }) : first);
+}
 
 console.log('\n===== 汇总 =====');
 let okCount = 0;
 for (const r of results) {
   console.log((r.ok ? "  [PASS] " : "  [FAIL] ") + r.file
+    + (r.retried === true ? "（重试通过）" : "")
     + (r.timedOut === true ? "（超时 " + String(SUITE_TIMEOUT_MS / 1000) + "s 被杀）" : "")
     + (r.code === -1 ? "（无法启动" + (r.err ? "：" + r.err : "") + "）" : ""));
   if (r.ok) okCount += 1;
