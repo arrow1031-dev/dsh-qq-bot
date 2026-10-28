@@ -8,7 +8,7 @@
  *   - 都没有 → 不假装，给明确错误；
  *   - 偏好文件读写（官方插件那套 fallback）。
  */
-import { createModelRouter, createPrefsFile } from '../lib/model-router.js';
+import { createModelRouter, createPrefsFile, parseModelCommand } from '../lib/model-router.js';
 
 let pass = 0;
 let fail = 0;
@@ -85,6 +85,16 @@ console.log('5. 偏好文件（官方插件那套 fallback）');
   check('删除生效', prefs.get('g1') === null);
   const broken = createPrefsFile({ file: 'y.json', fs: makeFs('not json') });
   check('坏文件当空处理', broken.all() !== null && Object.keys(broken.all()).length === 0);
+}
+
+console.log('\n6. /model 指令解析（群里带 @ 前缀、前后空格）');
+{
+  check('裸 /model', parseModelCommand('/model') !== null && parseModelCommand('/model').rest === '');
+  check('带参数 /model set p m', parseModelCommand('/model set p m').rest === 'set p m');
+  check('群里 @ 前缀 + 空格', parseModelCommand('@319543886  /model').rest === '');
+  check('前后空格/全角空格', parseModelCommand('  /model   ').rest === '');
+  check('/models 不当成 /model', parseModelCommand('/models') === null);
+  check('自定义 prefix', parseModelCommand('!model set a b', '!').rest === 'set a b');
 }
 
 console.log('\n' + pass + ' 通过 / ' + fail + ' 失败');
