@@ -10,6 +10,21 @@
  * 用法：node test/test-valve-assembly.mjs
  */
 import assert from 'node:assert/strict';
+import netModule from 'node:net';
+
+/**
+ * 一个「必然拒绝连接」的代理地址。
+ *
+ * 不用 127.0.0.1:9 这种约定端口：Windows 上它可能被过滤成「一直超时」而不是 ECONNREFUSED，
+ * 断言就变成平台相关。这里临时开一个回环端口再立刻关掉，连接时各平台都会秒拒。
+ */
+async function deadProxyUrl() {
+  const server = netModule.createServer();
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const port = server.address().port;
+  await new Promise((resolve) => server.close(resolve));
+  return 'http://127.0.0.1:' + String(port);
+}
 
 let pass = 0;
 let fail = 0;
@@ -207,7 +222,7 @@ await check('hasProxy 反映当前是否配了代理', async () => {
 // 内网目标在直连与代理两个分支都会被 assertPublicHost 拒掉，那种写法区分不了两条路径；
 // 这里用一个必然连不上的死代理 + 公网目标：只有真的走了代理分支才会 ECONNREFUSED。
 await check('配了代理时请求公网目标确实走代理分支（死代理必连不上）', async () => {
-  const configured = { value: 'http://127.0.0.1:9' };
+  const configured = { value: await deadProxyUrl() };
   let directHits = 0;
   __setNetworkHooks({
     lookup: async () => [{ address: '93.184.216.34', family: 4 }],
@@ -239,7 +254,7 @@ await check('net.fetchText：配了代理走代理，没配代理走直连', asy
   });
   try {
     // 配死代理：必须连不上代理（证明走的是代理分支，而不是偷偷直连）
-    const dead = { value: 'http://127.0.0.1:9' };
+    const dead = { value: await deadProxyUrl() };
     await withValve(dead, async (valve) => {
       let failure = '';
       try { await valve.traffic.fetchText('https://probe.example/x', { useProxy: true, timeoutMs: 4000 }); }
