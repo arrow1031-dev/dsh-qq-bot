@@ -614,7 +614,7 @@ try {
   await sleep(1500);
   check('未 @ 的消息没有触发回复', mock.sent.length === before, String(mock.sent.length - before));
 
-  console.log('\n4a. 回复（引用）机器人消息 -> 视同 @ + 最近相关发言上下文 + 引用回复');
+  console.log('\n4a. 回复（引用）机器人消息 -> 视同 @ + 引用回复（不再自动塞上下文）');
   const botMsgId = 600001;
   mock.history.push({
     message_id: botMsgId, time: Math.floor(Date.now() / 1000) - 120, user_id: 10000,
@@ -695,7 +695,7 @@ try {
   const atOtherText = textOf(atOtherSent[0]);
   check('回复 bot + 正文 @别人：不再自动拉上下文（改由 qq_history）', !atOtherText.includes('早前对话'), JSON.stringify(atOtherText.slice(0, 120)));
 
-  console.log('\n4a4. 回复别人 + 正文 @bot -> 处理 + 引用回复 + 上下文含被@对象（8 条）');
+  console.log('\n4a4. 回复别人 + 正文 @bot -> 处理 + 引用回复（不再自动拉上下文）');
   mock.history.length = 0;
   const tNow = Math.floor(Date.now() / 1000);
   const pushH = (mid, uid, text, nick, t) => mock.history.push({ message_id: mid, time: t, user_id: uid,
@@ -819,7 +819,7 @@ try {
   check('被回复消息不在历史窗口：不再并入上下文（get_msg 仍可用于收被回复图片）', !text6.includes('很旧的那条被回复消息'), JSON.stringify(text6.slice(0, 160)));
   check('上下文不再含发言人/bot 发言（不再自动拉上下文）', !text6.includes('发言人最近发言') && !text6.includes('bot最近发言'), JSON.stringify(text6.slice(0, 160)));
 
-  console.log('\n4a7. 相关发言为空时 -> 最低 2 条兜底（被回复消息 + 发言人本条）');
+  console.log('\n4a7. 相关发言为空时 -> 只留发言人本条（不并入被回复消息）');
   mock.history.length = 0;
   mock.extraMessages.length = 0;
   const botMsg7 = 600060;
@@ -842,19 +842,8 @@ try {
   check('最低 2 条兜底：不硬补其它群友', !text7.includes('别的群友插话'), JSON.stringify(text7.slice(0, 160)));
 
   console.log('\n4b. 图片视觉：模型支持时识别并入 Agent 输入');
-  // 给 example.com 的图片 URL 装 fetch 桩（返回假 PNG），其余请求走真实 fetch。
-  const realFetch = globalThis.fetch;
-  globalThis.fetch = async (url, init) => {
-    if (String(url).startsWith('https://example.com/cat.png')) {
-      return {
-        ok: true, status: 200,
-        headers: { get: (h) => (String(h).toLowerCase() === 'content-type' ? 'image/png' : null) },
-        arrayBuffer: async () => new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]).buffer,
-      };
-    }
-    return realFetch(url, init);
-  };
-  // 识图下载走 publicFetch（node:http 直连 + 地址钉死），fetch 桩拦不到它，用测试网络钩子。
+  // 识图下载走 publicFetch（node:http 直连 + 地址钉死），**globalThis.fetch 桩拦不到它**
+  // （本文件第 27 行就写明了这一点），所以这里用测试网络钩子下发假 PNG。
   // 域名解析仍走判定：example.com → 93.184.216.34 是公网地址，isNonPublicIp 放行后才下发假响应。
   visionModelModalities = ['text', 'image'];
   const sentBeforeVision = mock.sent.length;

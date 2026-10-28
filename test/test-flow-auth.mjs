@@ -168,7 +168,7 @@ console.log('\n9. 授权绑定工具：申请时写什么，就只能跑什么')
   check('取用时省略工具名同样被拒（不能靠「不传」绕过绑定）', omitted.ok === false && omitted.reason === 'wrong-tool', JSON.stringify(omitted));
   const right = a3.takeGrant(g3.grantId, '888', 'subagent');
   check('拿它跑申请的那个工具放行', right.ok === true);
-  // 用途不是工具名（自由文本）时不绑定，任何受闸门工具都能用一次
+  // 用途是自由文本时也照样绑到申请时带的那个工具上（文本只是给人看的说明）
   t3 += 31 * 1000;   // 跨过 30 秒步长，否则同一个码会被判重放
   a3.requestAuth('888', 'just checking', 'subagent');
   const g4 = a3.consumeToken('888', totp(secret, { timeMs: t3 }));

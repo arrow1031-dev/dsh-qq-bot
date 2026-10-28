@@ -63,8 +63,6 @@ check('两次生成不重复', generateSecret(20) !== generateSecret(20));
 const uri = otpauthUri({ secret, issuer: 'DSH QQ Bot', label: 'owner' });
 check('otpauth URI 含 secret / algorithm=SHA1 / digits=6 / period=30', uri.startsWith('otpauth://totp/') && uri.includes('secret=' + secret) && uri.includes('algorithm=SHA1') && uri.includes('digits=6') && uri.includes('period=30'));
 
-check('otpauth URI 含 secret / algorithm=SHA1 / digits=6 / period=30', uri.startsWith('otpauth://totp/') && uri.includes('secret=' + secret) && uri.includes('algorithm=SHA1') && uri.includes('digits=6') && uri.includes('period=30'));
-
 console.log('\n5b. otpauth URI 标准格式（Google / Microsoft Authenticator 能导入）');
 const std = otpauthUri({ secret, issuer: 'dsh-qq-bot', label: 'owner' });
 const parsed = new URL(std.replace('otpauth://', 'https://'));

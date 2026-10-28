@@ -3,10 +3,11 @@
  * 用法：node test/test-imagegen.mjs
  */
 import { generationsUrl, trimBaseUrl, parseImagePayload, generateImage } from '../lib/tools/imagegen.js';
-import { mkdirSync, writeFileSync, symlinkSync, rmSync } from 'node:fs';
+import { mkdirSync, writeFileSync, symlinkSync, rmSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import { qqMsgRootSync, imageCacheDir } from '../lib/session/workspace.js';
 import { meIsAllowedImageFile } from '../lib/tools/imgsearch.js';
+import { resolveSendImagePath } from '../lib/tools/index.js';
 
 let pass = 0;
 let fail = 0;
@@ -104,6 +105,17 @@ console.log('\n7. 本地图片白名单必须解符号链接（2026-10-28 审计
     try { rmSync(link, { force: true }); } catch { /* 不存在 */ }
     symlinkSync(outside, link);
     check('指向白名单外的软链 → 拒绝', meIsAllowedImageFile(link, sessionId) === false, link);
+
+    // qqbot send 走的是另一条判定（lib/tools/index.js 的 resolveSendImagePath）：
+    // 2026-10-29 注释审查发现它当时只做字符串前缀比较，同一个洞还开着。
+    const sendRoot = join(qqMsgRootSync(), 'qq-images');
+    const sendOk = join(sendRoot, 'ok-send.png');
+    writeFileSync(sendOk, 'IMG', 'utf8');
+    check('qqbot send：白名单内的普通图片 → 放行',
+      resolveSendImagePath(sendOk, sendRoot) === realpathSync(sendOk));
+    check('qqbot send：指向白名单外的软链 → 拒绝',
+      resolveSendImagePath(link, sendRoot) === '', link);
+    check('qqbot send：不存在的文件 → 拒绝', resolveSendImagePath(join(sendRoot, 'nope.png'), sendRoot) === '');
 
     const escape = join(ownDir, 'escape.png');
     try { rmSync(escape, { force: true }); } catch { /* 不存在 */ }

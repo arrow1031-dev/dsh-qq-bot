@@ -144,7 +144,8 @@ console.log('\n10. 默认值 JSON：自动发现 / 与 schema 一致 / 邪门输
     check('schema 里没有的 group 在加载时报错（否则清理会删用户配置）',
       typoError.includes('不在 Config schema 里'), typoError.slice(0, 120));
 
-    // 设置页模板的三道护栏：路径写错、标签页写错、后缀写错，都必须在加载时炸掉。
+    // 设置页模板的护栏分两种口径：路径写错 / 标签页写错 **加载时炸掉**；
+    // 文件名少了 -conf.json 后缀则是**静默忽略**（当成不相干文件，不报错）。
     rmSync(path.join(scratch, 'lib', 'tools', 'typo-conf.json'));
 
     // 覆盖已有的那份，而不是新增：新增会和现成的模板撞 group，先触发「组重复」那条。

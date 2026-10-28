@@ -612,7 +612,7 @@ try {
     check('同一 msg_seq（不是每帧递增）', frames[0].body.msg_seq === frames[1].body.msg_seq, JSON.stringify(frames.map((f) => f.body.msg_seq)));
     check('input_state 1 → 10（完成）', frames[0].body.input_state === 1 && frames[1].body.input_state === 10, JSON.stringify(frames.map((f) => f.body.input_state)));
     check('第二帧带 stream_msg_id', typeof frames[1].body.stream_msg_id === 'string' && frames[1].body.stream_msg_id !== '', JSON.stringify(frames[1].body.stream_msg_id));
-    check('群聊不支持流式（明确拒绝）', true);
+    check('群聊不支持流式（适配器不产出 stream 帧）', frames.every((f) => f.type !== 'stream'));
   }
 
   console.log('\n9. 动作：官方不支持的一律 ok=false');

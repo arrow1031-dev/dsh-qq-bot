@@ -102,12 +102,21 @@ try {
   check('segment array became readable text', inbound.text === '@10000 你好，帮我看看[图片]', JSON.stringify(inbound.text));
   check('image attachment counted', inbound.images === 1, String(inbound.images));
   check('sender nickname preserved', inbound.sender && inbound.sender.nickname === '小明', String(inbound.sender && inbound.sender.nickname));
+  check('segment array carries mentions（准入判定只认它，不看正文）',
+    Array.isArray(inbound.mentions) && inbound.mentions.join(',') === '10000', JSON.stringify(inbound.mentions));
 
   console.log('\n3. inbound normalization (legacy CQ string)');
   frames.length = 0;
   mock.injectMessage({ message_type: 'private', user_id: 44444, message: 'hi [CQ:face,id=1] there [CQ:at,qq=all]' });
   const legacy = await waitFor(() => frameOfType('message'), 5000, 'legacy message frame');
   check('legacy CQ string became readable text', legacy.text === 'hi [表情] there @全体成员 ', JSON.stringify(legacy.text));
+  check('legacy CQ string 也带 mentions（漏了就会退回「正文里 @机器人QQ 就算点名」的正则兜底）',
+    Array.isArray(legacy.mentions) && legacy.mentions.join(',') === 'all', JSON.stringify(legacy.mentions));
+
+  frames.length = 0;
+  mock.injectMessage({ message_type: 'group', group_id: 33333, user_id: 44444, message: '[CQ:at,qq=10000] 在吗' });
+  const legacyAt = await waitFor(() => frameOfType('message'), 5000, 'legacy at frame');
+  check('CQ 字符串里的数字 @ 同样进 mentions', Array.isArray(legacyAt.mentions) && legacyAt.mentions[0] === '10000', JSON.stringify(legacyAt.mentions));
   check('private message classified as private', legacy.message_type === 'private');
 
   console.log('\n4. outbound send through the OneBot HTTP API');

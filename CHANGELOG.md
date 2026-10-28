@@ -1,3 +1,34 @@
+## 未发布 —— 注释审计 + 四处真缺陷（2026-10-29）
+
+四路子代理逐行审了 **2.6 万行代码里的注释**（transport 5077 / gateway+tools+api 6514 /
+client+valve+session 6824 / test 9766），交上来 52 条毒注释 + 13 条无效注释 + 17 条存疑，
+逐条回代码交叉验证后**零误报**。审查顺带挖出四处真实缺陷（三处在产品代码、一处在测试），已一并修掉。
+版本号仍是 0.12.7（等实际发布再标）。
+
+### 1. 真缺陷（审注释审出来的 bug，不是注释本身）
+
+| 问题 | 不修的后果 | 修法 |
+| --- | --- | --- |
+| `/model` 在**群聊里必崩**：`ADMIN_USAGE` 列了它（所以 `/help` 说有这么条指令），但 `COMMAND_ARITY` / `COMMAND_PERMISSION` 都没有 `model`，`arity[0]` 抛 `TypeError`，被 `acceptMessage(...).catch()` 吞成一行日志 | 用户在群里敲 `/model` **一条回复都收不到**，而 `/help` 明明列着它；`/model` 本该由下面那个带拥有者校验的专门处理器接管，却永远走不到 | 新增 `DELEGATED_VERBS`（`model` 不由指令层执行，直接 `return false` 让调用方继续）；另加 `assertCommandTables()` 在**挂载期**校验「`/help` 里每条指令都有 arity + permission」，同类漏项以后加载就炸，不会等线上有人敲 |
+| `qqbot send` 的本地图片白名单**只做字符串前缀比较**，没解符号链接 | `qq-images/x.png -> /etc/passwd` 的路径字符串完全在白名单里，`readFileSync` 顺着链接读到目标，再把内容 base64 发进 QQ 会话——与 2026-10-28 在 `qq_imgsearch` 修掉的是同一个洞，这边还开着 | 抽出 `resolveSendImagePath()`：先 `realpathSync` 再比前缀，且**判定与读取用同一个返回值**；顺手把注释里那句「与 qq_imgsearch 同一套白名单语义」（当时是假的）改成真的 |
+| OneBot 11 的 **CQ 字符串**消息路径不给 `mentions`（段数组路径给） | 插件拿不到 `mentions` 就退回「正文里出现 `@机器人QQ` 就算点名」的正则兜底——用户手打一串 @ 就能过 `requireAt`。只在 `post_format: string` 时触发，正好是 A1 那条修复漏掉的一半 | `normalizeMessage()` 的字符串分支用 `[CQ:at,qq=...]` 抽出 `mentions`，与段数组路径的 `atQqsOf` 同一口径（`all` 原样保留） |
+| 测试里一条**恒真断言**：`check('群聊不支持流式（明确拒绝）', true)` | 这条从来没测过任何东西，流式帧真漏出来也不会红 | 改成 `frames.every((f) => f.type !== 'stream')` |
+
+### 2. 注释修正（挑危害最大的几条）
+
+- **`valve/tool/gate-guard.js` 的 JSDoc 把闸门窗口默认值写成 0**，代码是 1，而紧邻的注释专门论证 ±1 是故意的（窗口 0 会让人工填码在步长边界失败）。谁信 JSDoc 去「修回去」，就正好造出它警告的那个故障——这是整轮最危险的一条。
+- `valve/network/policy.js` 说「所有出网动作都必须经过本模块」：`api/update-check.js` 等少数固定目标直接走全局 `fetch`。改成说清「本模块是判定的唯一来源，但不是唯一出口」。
+- `gateway/route-auth.js` 头部仍教人 `ctx.get('client-connection')` 取鉴权服务——那是**插件名**，服务叫 `connection`，同文件正文早已纠正。照头部写就等于复活「静默降级成只做同源校验」那个 bug。
+- `tools/index.js` 说 tools「对本插件是可选的」：`inject` 里已声明，缺了插件根本不挂载，那两条兜底分支是不可达代码。
+- `gateway/plugin.js` 的频率提示说「只私聊回」，**下一行注释**自己写着「群里也回一句」。
+- `config.js` 的默认值文件名示例（`websearch.json` / `valve/security/auth.json`）都不存在，实际是 `*-conf.json`；照文档建文件会被加载器静默忽略。
+- 其余：`imgsearch.js`/`websearch.js` 的 `./http.js`（应为 `../shared/http.js`）、`commands.js` 的 `AUTH_FAIL_TEXT` 位置、`imgsearch.js` 的引擎清单漏 Soutubot、`Tineye` 被说成多步 token 流程（实为单次 POST）、`flow-auth.js` 的「任何拒绝路径都计入失败次数」（实际只有码错才累加）、`owner-settings.js` 的「白名单是唯一来源」（`DENY_PREFIXES` 是独立的第二层）、`settings.js` 的更新提示数据来源指向不存在的 `routes-update.js`，以及一批目录重构后遗留的旧模块名/旧行号。
+
+### 3. 测试
+
+新增 7 条断言（`/model` 委派 + 指令表自洽、CQ 字符串 `mentions` 两条、`qqbot send` 白名单三条），
+删掉 1 条逐字重复的断言。全量 **38 套件 / 1464 项通过**，`tsc --noEmit` 无报错。
+
 ## 未发布 —— 安全加固 + 行为修正 + 文档与死代码清理（2026-10-28）
 
 六路子代理做了一轮对抗性审查（攻防演练 / 边界加固 / 文档审查 / 死代码审查 / 凭据泄露面 /
