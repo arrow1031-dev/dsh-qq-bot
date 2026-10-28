@@ -198,7 +198,15 @@ try {
   check('改名后回退匹配成功', renamedLoaded.ok === true && renamedLoaded.revision === 3, JSON.stringify(renamedLoaded).slice(0, 140));
 
   console.log('\n4. 真实渲染一次（走完异步加载）');
-  const props = { ...faces, close: () => {} };
+  // 设置页模板：字段定义现在住在 lib/**/*-set.json 里，由服务端组装后下发。
+  // 测试直接用同一份组装结果，避免测试自己维护一份会过期的字段表。
+  const settingsModule = await import(pathToFileURL(path.join(here, '..', 'lib', 'config.js')).href);
+  const template = { tabs: settingsModule.SETTINGS_TABS, fields: settingsModule.SETTINGS_FIELDS };
+  const props = {
+    ...faces,
+    loadTemplate: () => Promise.resolve({ ok: true, value: template }),
+    close: () => {},
+  };
   reactRuntime.__beginRender();
   const first = registered.component(props);
   check('首次渲染（加载中）不抛错', first !== null && typeof first === 'object');
@@ -554,11 +562,24 @@ try {
   // 通过渲染验证 when() 分支：切回连接页、改协议需要走内部 draft，
   // 这里直接验证 FIELDS 里该字段存在且带 select 选项（结构断言）。
   const bundleSource = (await import('node:fs')).readFileSync(BUNDLE, 'utf8');
+  // 字段定义已经搬出 bundle（住在 lib/**/*-set.json），所以这里断言的是组装后的模板，
+  // 不再去源码里正则匹配字段字面量。
+  const tplField = (dotted) => settingsModule.SETTINGS_FIELDS.find((f) => f.path.join('.') === dotted);
+  const ob12Mode = tplField('protocols.onebot12.mode');
   check('设置页含 OneBot 12 接入方式字段',
-    bundleSource.includes("path: ['protocols', 'onebot12', 'mode']") && bundleSource.includes('OneBot 12 接入方式'));
+    ob12Mode !== undefined && ob12Mode.kind === 'select' && ob12Mode.options.length === 2,
+    ob12Mode === undefined ? '模板里没有该字段' : JSON.stringify(ob12Mode.options));
+  const ob12Ws = tplField('protocols.onebot12.wsUrl');
+  const ob12Listen = tplField('protocols.onebot12.listen');
   check('OneBot 12 正向/反向字段按 mode 显隐',
-    bundleSource.includes("v.protocols.onebot12.mode === 'reverse'"), '未找到 mode 分支判断');
+    ob12Ws !== undefined && ob12Listen !== undefined
+    && ob12Ws.when && ob12Ws.when['protocols.onebot12.mode'] && ob12Ws.when['protocols.onebot12.mode'].$ne === 'reverse'
+    && ob12Listen.when && ob12Listen.when['protocols.onebot12.mode'] === 'reverse',
+    '正向应 when mode != reverse，反向应 when mode == reverse');
   check('不再有死样式 heading', !/^\s{6}heading:/m.test(bundleSource));
+  // 迁移的回归护栏：字段定义不许再回到 bundle 里（否则又会变成「改个字段要动前端」）。
+  check('bundle 里不再写死字段定义',
+    !/path: \['[a-zA-Z]+', '[a-zA-Z]+'\], label:/.test(bundleSource));
 
   console.log('\n4e. 设置页字段覆盖 schema（防止上游新增字段被静默漏掉）');
   const { Config: ConfigSchema } = await import('../lib/config.js');
@@ -572,10 +593,10 @@ try {
   // 有意不暴露：非 volatile（改它们会整体重挂插件）或纯内部路径
   const NOT_EXPOSED = new Set(['adapterPath', 'nodePath', 'reply.firstTurnHint', 'restart.baseMs', 'restart.maxMs']);
   // virtual: true 的字段是「纯界面卡片」（例如扫码绑定），不对应 schema 里的配置项，
-  // 不参与「有没有拼错路径」的比对。
-  const exposedPaths = new Set([...bundleSource.matchAll(/path: \[([^\]]+)\]([^\n]*)/g)]
-    .filter((m) => !/virtual: true/.test(m[2]))
-    .map((m) => m[1].split(',').map((s) => s.trim().replace(/^'|'$/g, '')).join('.')));
+  // 不参与「有没有拼错路径」的比对。字段来源改为组装后的模板。
+  const exposedPaths = new Set(settingsModule.SETTINGS_FIELDS
+    .filter((f) => f.virtual !== true)
+    .map((f) => f.path.join('.')));
   const uncovered = schemaLeaves.filter((leafPath) => !NOT_EXPOSED.has(leafPath) && !exposedPaths.has(leafPath));
   check('schema 里可配置的字段全部出现在设置页', uncovered.length === 0, '漏掉：' + uncovered.join(', '));
   const orphanFields = [...exposedPaths].filter((onlyInUi) => !schemaLeaves.includes(onlyInUi));

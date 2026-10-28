@@ -1,0 +1,113 @@
+{
+  "group": "flowAuth",
+  "fields": [
+    {
+      "path": [
+        "flowAuth",
+        "enabled"
+      ],
+      "label": "流程授权（子代理 / 队友 / 工作流先要私聊动态码）",
+      "kind": "bool",
+      "hint": "开启后这四个工具开跑前，机器人会在主人私聊里发一条授权请求，主人回 /auth 6位动态码才放行；标准 TOTP，配任意认证器 App，插件不内置万能码",
+      "tab": "advanced",
+      "subtab": "flow"
+    },
+    {
+      "path": [
+        "flowAuth",
+        "enrolledAt"
+      ],
+      "label": "绑定二维码（只展示一次）",
+      "kind": "qr",
+      "tab": "advanced",
+      "subtab": "flow"
+    },
+    {
+      "path": [
+        "flowAuth",
+        "totpSecret"
+      ],
+      "label": "TOTP 密钥（base32）",
+      "kind": "password",
+      "hint": "在服务器上运行 node lib/valve/security/totp-cli.mjs enroll，把输出的 secret 粘到这里（密钥不经 QQ，避免聊天记录泄露）；只写字段，已设置时留空表示保持不变",
+      "tab": "advanced",
+      "subtab": "flow"
+    },
+    {
+      "path": [
+        "flowAuth",
+        "grantTtlSeconds"
+      ],
+      "label": "一次授权有效期（秒）",
+      "kind": "number",
+      "hint": "默认 30 秒（最小 30），一次一用；超时作废——窗口短才叫一次性",
+      "tab": "advanced",
+      "subtab": "flow"
+    },
+    {
+      "path": [
+        "flowAuth",
+        "maxAttempts"
+      ],
+      "label": "连续输错几次锁定",
+      "kind": "number",
+      "tab": "advanced",
+      "subtab": "flow"
+    },
+    {
+      "path": [
+        "flowAuth",
+        "lockoutMinutes"
+      ],
+      "label": "锁定时长（分钟）",
+      "kind": "number",
+      "tab": "advanced",
+      "subtab": "flow"
+    },
+    {
+      "path": [
+        "flowAuth",
+        "gatedTools"
+      ],
+      "label": "需要动态码的工具名",
+      "kind": "list",
+      "hint": "逗号分隔；默认 subagent,subagent_fork,spawn_teammate,workflow,moli_fetch。开了动态码后，改这份名单要先在下面填一次 6 位码",
+      "tab": "advanced",
+      "subtab": "gate"
+    },
+    {
+      "path": [
+        "flowAuth",
+        "gateEditCode"
+      ],
+      "label": "改名单用的动态码（6 位）",
+      "kind": "password",
+      "hint": "填满 6 位即解锁上面的名单；点「保存」才算消费，保存成功后自动重新锁上并清空。离开设置页不保留解锁状态，也不保留未保存的改动",
+      "digitsOnly": true,
+      "tab": "advanced",
+      "subtab": "gate"
+    },
+    {
+      "path": [
+        "flowAuth",
+        "recoveryHashes"
+      ],
+      "label": "恢复码哈希（可选）",
+      "kind": "list",
+      "hint": "逗号分隔的 scrypt 哈希（hex）；手机丢了又没备份时用一次性恢复码换授权（私聊发 /auth XXXXX-XXXXX）。留空 = 不用恢复码；生成命令见 README「流程授权」一节",
+      "tab": "advanced",
+      "subtab": "flow"
+    },
+    {
+      "path": [
+        "flowAuth",
+        "recoverySalt"
+      ],
+      "label": "恢复码哈希用的盐",
+      "kind": "password",
+      "hint": "与上面那串哈希配对；只写字段",
+      "tab": "advanced",
+      "subtab": "flow"
+    }
+  ]
+}

@@ -10,14 +10,43 @@
 ```sh
 git clone https://github.com/arrow1031-dev/dsh-qq-bot
 cd dsh-qq-bot
-npm install          # 只装 schemastery，用于跑测试
+npm install          # 运行时只装 schemastery；开发依赖是 typescript + @types/node
+npm run typecheck    # tsc --noEmit
 node test/run-all.mjs
 ```
 
 裸克隆即可跑全部测试：需要 DSH 运行时才能成立的少数断言（动态工具注册、`qqgroup` 工具路径）会自动跳过而不是判失败；
 想连那部分一起跑，把 `DSH_PROFILE_MODULES` 指向一个装了 DSH 运行时的 profile 的 `node_modules`。
 
-## 2. 测试（37 个套件 / 1385 项）
+### 1.1 类型检查为什么是 JSDoc 而不是 .ts
+
+`tsconfig.json` 走的是 `allowJs` + `checkJs`：**源码仍然是 `.js` / `.mjs`，类型写在 JSDoc 里**，
+`tsc --noEmit` 只做检查、不产出任何文件。没有构建步骤，发布出去的还是原样源码。
+
+这是权衡后的选择，不是将就：
+
+| 方案 | 代价 |
+| --- | --- |
+| 全量迁到 `.ts` | DSH 是把本插件 **import 进它自己的进程**跑的，没法给那个进程加 `--experimental-strip-types`；要么把 `engines.node` 抬到 `>=23.6`（Node 原生剥离类型），要么引入构建步骤。前者把一半用户挡在门外，后者违反「零构建」 |
+| JSDoc + `checkJs` | 无构建、无运行时改动、Node 版本不变，编辑器里同样是完整的类型提示与跳转 |
+
+`strict: false` / `noImplicitAny: false` 是有意的：这是一份存量 JS 代码，一步切到严格模式会淹没在
+噪声里。现在的目标是**先让类型检查跑起来并进 CI**，再逐步收紧。
+
+范围：`lib/**/*.js`、`lib/**/*.mjs`、`lib/**/*.d.ts`。**`lib/client/**` 暂不在内**——那份 bundle 是手写的
+`__ModuleLoader__` 格式、只允许 `require('react')`，类型化它要先把加载器契约描述出来，另开一轮。
+
+外部可选依赖（`@deepseek-ai/dsh-tools`、`@tencent-connect/qqbot-connector`）在 `lib/externals.d.ts` 里
+声明成 ambient module：装没装都能通过检查，符合「零运行时依赖、缺了就降级」的设计。
+
+两个 JSDoc 的坑（踩过）：
+
+- `/** @type {boolean} */ let x = false;` **不管用**——初值仍被控制流分析收窄成字面量 `false`，
+  闭包里的 `x = true` 不被跟踪，后面 `x === true` 照样报 TS2367。要写成 `let x = /** @type {boolean} */ (false);`
+- 用 `@param {X} deps.foo` 这类**限定名**时，父参数必须保持 `@param {object} deps`；
+  把它换成 `Record<string, any>` 会报 TS8032（「限定名不能没有前导的 @param {object}」）
+
+## 2. 测试（37 个套件 / 1393 项）
 
 ```sh
 node test/run-all.mjs      # 一键全量（套件失败会自动重试一次，重试通过会标注）
@@ -33,10 +62,10 @@ npm test                   # 同上
 | `test-adapter-milky.mjs` | 83 | Milky 适配器（含 WebHook 默认准入与读体上限） |
 | `test-adapter-qq-official.mjs` | 109 | QQ 官方适配器（含回调重放防护） |
 | `test-plugin.mjs` | 124 | Host 半边：假 ctx + 真适配器 + 真 `lib/index.js`（入口薄壳 → `lib/gateway/plugin.js`），含 Config 契约、热更新、9 个工具、适配器重启、默认准入 fail-closed 与入站限制（124 项含工具注册段落；解析不到 `@deepseek-ai/dsh-tools` 的裸克隆里为 98 项 + 6 项 `[SKIP]`） |
-| `test-client.mjs` | 125 | 客户端设置页：模拟模块加载器 + 最小 React 渲染 + 四档标签 + 只写密钥护栏 + 纯数字名单校验 + 一键还原默认 |
+| `test-client.mjs` | 130 | 客户端设置页：模拟模块加载器 + 最小 React 渲染 + 四档标签（字段来自服务端模板）+ 只写密钥护栏 + 纯数字名单校验 + 一键还原默认 |
 | `test-admin.mjs` | 38 | 权限 · 群管理 · 访客工具闸 |
 | `test-http.mjs` | 30 | HTTP / 代理隧道 / IP 归一与公网判定 |
-| `test-config.mjs` | 32 | 配置合并、volatile 还原、废弃键清理、默认值 JSON 自动发现与护栏 |
+| `test-config.mjs` | 35 | 配置合并、volatile 还原、废弃键清理、`-conf.json` / `-set.json` 自动发现与三道护栏（组不存在 / 路径不存在 / 标签页不存在） |
 | `test-websearch.mjs` | 5 | 多引擎搜索结果解析 |
 | `test-imagegen.mjs` | 16 | 生图重试 / 轮询 / 响应解析 |
 | `test-session-id.mjs` | 5 | 会话 id 回退 |
@@ -74,7 +103,7 @@ node -e "fetch('http://127.0.0.1:3000/__inject',{method:'POST',headers:{'content
 node -e "fetch('http://127.0.0.1:3000/__sent').then(r=>r.json()).then(j=>console.log(JSON.stringify(j.messages,null,2)))"
 ```
 
-> **文档里的测试数必须自洽**：改测试就同步本表、README 的「37 套件 / 1385 项」与顶部 `tests` 徽章（`tests-1385%20passing`）、`AI-DISCLOSURE.md` 的验证情况。数字以裸克隆跑 `npm test` 的输出为准；能解析到 `@deepseek-ai/dsh-tools` 的环境里 `test-plugin` 与 `test-admin` 会多跑工具注册段落，总数随之更多。跳过项按 `[SKIP]` 单列，不计入通过数；设 `DSH_TOOLS_DISABLE=1` 可以在这台机器上模拟裸克隆（否则 `test/dsh-tools-link.mjs` 会把链接建回来，永远看不到跳过路径——CI 就是这么红的）。
+> **文档里的测试数必须自洽**：改测试就同步本表、README 的「37 套件 / 1393 项」与顶部 `tests` 徽章（`tests-1393%20passing`）、`AI-DISCLOSURE.md` 的验证情况。数字以裸克隆跑 `npm test` 的输出为准；能解析到 `@deepseek-ai/dsh-tools` 的环境里 `test-plugin` 与 `test-admin` 会多跑工具注册段落，总数随之更多。跳过项按 `[SKIP]` 单列，不计入通过数；设 `DSH_TOOLS_DISABLE=1` 可以在这台机器上模拟裸克隆（否则 `test/dsh-tools-link.mjs` 会把链接建回来，永远看不到跳过路径——CI 就是这么红的）。
 
 <a id="完整配置参考"></a>
 ## 3. 完整配置参考
@@ -388,7 +417,10 @@ node -e "fetch('http://127.0.0.1:3000/__sent').then(r=>r.json()).then(j=>console
 | --- | --- |
 | `lib/index.js` | 包入口**薄壳**：只转发到 `lib/gateway/plugin.js`（导出 `name` / `inject` / `Config` / `apply`） |
 | `lib/assemble.js` | **组装根**：按 `STAGE` 表把三道阀门依次成型；`describeAssembly()` 给启动日志 |
-| `lib/config.js` | `Config` schema、`DEFAULTS`、深合并、volatile 还原、废弃键识别 |
+| `lib/config.js` | `Config` schema、`DEFAULTS`、深合并、volatile 还原、废弃键识别；`-conf.json` / `-set.json` 自动发现与三道护栏 |
+| `lib/settings-page-set.json` | 设置页骨架：四个标签页与各自的二级标签（标签、提示语） |
+| `lib/settings-core-set.json` | 不属于任何工具/阀门的设置页字段（与 `CORE_DEFAULTS` 对称） |
+| `tsconfig.json` / `lib/externals.d.ts` | 类型检查配置（`checkJs` + `noEmit`）与可选外部依赖的 ambient 声明 |
 | **阀门层** | |
 | `lib/valve/index.js` | 阀门注册表：有哪几道阀门、成型顺序、依赖关系（**调优先级只改这里**） |
 | `lib/valve/network/` | 网络阀门：`index.js` 门面（能不能出站 / 代理语义）、`policy.js` 纯判定（公网/内网/钉地址）、`guard-proxy.js` 本地校验代理 |
@@ -398,13 +430,14 @@ node -e "fetch('http://127.0.0.1:3000/__sent').then(r=>r.json()).then(j=>console
 | `lib/gateway/plugin.js` | Cordis 插件主体：适配器生命周期、帧分发、回合/回复/视觉、主动发言、配置热更新 |
 | `lib/gateway/index.js` | HTTP 路由统一挂载（`ROUTE_MOUNTS` 表 + webServer 就绪 + 逆序注销） |
 | `lib/gateway/routes-bind.js` | 扫码绑定的两条具名路由 |
+| `lib/gateway/routes-defaults.js` / `routes-settings.js` | `GET /dsh-qq-bot/defaults`（默认值）与 `GET /dsh-qq-bot/settings`（设置页模板：标签页 + 字段）。都只回模板/常量，不含任何配置值 |
 | `lib/gateway/commands.js` | `/auth` `/flow` 解析、拦截判定、产物输入归一 |
 | **消息组装层** | |
 | `lib/message/index.js` | 组装入口：中间发言 → 正文分条 → 流式合并（`assembleReply` 纯函数） |
 | `lib/message/` | `chunk.js` 分条、`stream.js` 流式桥、`interim.js` 中间发言、`segments.mjs` 统一段、`msgid-cache.js` 入站去重 |
 | **工具层** | |
 | `lib/tools/index.js` | 9 个模型工具（统一走 `registerTool`，DSH 0.2 契约） |
-| `lib/tools/` | `websearch.js` 组合搜索、`imgsearch.js` 反搜 + 图床、`imagegen.js` 生图、`moli.js` 引擎封装、`qr.js` 二维码编码器 |
+| `lib/tools/` | `websearch.js` 组合搜索、`imgsearch.js` 反搜 + 图床、`imagegen.js` 生图、`moli.js` 引擎封装、`qr.js` 二维码编码器；同目录的 `*-conf.json`（默认值）/ `*-set.json`（设置页字段）归各自工具所有 |
 | **会话层** | |
 | `lib/session/manager.js` | 会话创建 / 复用、固定命名、访客工具闸、编排工具闸门接管 |
 | `lib/session/` | `model-router.js` 模型选择、`workspace.js` QQ_msg 工作区根、`proactive.js` 主动发言纯逻辑 |
@@ -420,7 +453,7 @@ node -e "fetch('http://127.0.0.1:3000/__sent').then(r=>r.json()).then(j=>console
 | `lib/shared/http.js` | HTTP 传输机制：直连 / CONNECT 代理隧道 / 超时 / 体积上限（判定在 `valve/network/policy.js`） |
 | `lib/shared/compat.js` | DSH 版本兼容自检（只维护两个常量） |
 | **浏览器侧** | |
-| `lib/client/settings.js` | 客户端半边（手写 bundle）：插件面板里的设置区。**模块 id 与插槽 key 必须等于 npm 包名**，设置命名空间仍是条目 id |
+| `lib/client/settings.js` | 客户端半边（手写 bundle）：插件面板里的设置区，**纯渲染器**——字段与标签页由 `GET /dsh-qq-bot/settings` 下发。**模块 id 与插槽 key 必须等于 npm 包名**，设置命名空间仍是条目 id |
 | **其他** | |
 | `cordis.patch.yml` | bundle 补丁：把插件插入 profile 组合树（`id` 固定，`name` 跟包名走） |
 | `test/` | 37 个测试套件 + `mock-onebot.mjs`（零依赖 OneBot 11 模拟器）+ `dsh-tools-link.mjs`（给宿主编译期服务建临时链接） |

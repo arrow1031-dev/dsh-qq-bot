@@ -43,5 +43,8 @@ jobs:
       - name: 安装依赖（npm install）
         run: npm install
 
+      - name: 类型检查（tsc --noEmit，JSDoc + checkJs）
+        run: npm run typecheck
+
       - name: 跑全部测试（run-all 汇总）
         run: npm test

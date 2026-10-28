@@ -55,7 +55,8 @@
     }
   },
   "scripts": {
-    "test": "node test/run-all.mjs"
+    "test": "node test/run-all.mjs",
+    "typecheck": "tsc --noEmit"
   },
   "license": "MIT",
   "keywords": [
@@ -81,5 +82,9 @@
   "author": {
     "name": "arrow1031",
     "url": "https://github.com/arrow1031"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2"
   }
 }

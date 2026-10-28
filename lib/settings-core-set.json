@@ -1,0 +1,1096 @@
+{
+  "fields": [
+    {
+      "path": [
+        "protocol"
+      ],
+      "label": "协议",
+      "kind": "select",
+      "hint": "底层聊天协议；切换后适配器自动重启。OneBot 11 兼容既有配置，QQ 官方机器人选 qq-official",
+      "options": [
+        [
+          "onebot11",
+          "OneBot 11（NapCat / go-cqhttp / Lagrange）"
+        ],
+        [
+          "onebot12",
+          "OneBot 12"
+        ],
+        [
+          "satori",
+          "Satori（Koishi 生态）"
+        ],
+        [
+          "milky",
+          "Milky（NapCat / Yogurt / Lagrange.Milky）"
+        ],
+        [
+          "qq-official",
+          "QQ 官方机器人开放平台 API v2"
+        ]
+      ],
+      "tab": "connection"
+    },
+    {
+      "path": [
+        "mode"
+      ],
+      "label": "连接方式",
+      "kind": "select",
+      "hint": "正向 = DSH 主动连 NapCat（同机/同容器最简单）；反向 = NapCat 连 DSH（跨容器/跨网络）",
+      "options": [
+        [
+          "forward",
+          "正向 WebSocket（DSH → NapCat）"
+        ],
+        [
+          "reverse",
+          "反向 WebSocket（NapCat → DSH）"
+        ]
+      ],
+      "tab": "connection"
+    },
+    {
+      "path": [
+        "onebot",
+        "wsUrl"
+      ],
+      "label": "正向 WS 地址",
+      "kind": "text",
+      "placeholder": "ws://127.0.0.1:3001",
+      "when": {
+        "mode": {
+          "$ne": "reverse"
+        }
+      },
+      "tab": "connection"
+    },
+    {
+      "path": [
+        "onebot",
+        "listen"
+      ],
+      "label": "反向 WS 监听地址",
+      "kind": "text",
+      "placeholder": "0.0.0.0:6199",
+      "when": {
+        "mode": "reverse"
+      },
+      "tab": "connection"
+    },
+    {
+      "path": [
+        "onebot",
+        "httpUrl"
+      ],
+      "label": "HTTP API 地址",
+      "kind": "text",
+      "hint": "留着用来发消息；清空则退回用 WebSocket action",
+      "placeholder": "http://127.0.0.1:3000",
+      "tab": "connection"
+    },
+    {
+      "path": [
+        "onebot",
+        "accessToken"
+      ],
+      "label": "access_token",
+      "kind": "password",
+      "hint": "NapCat 里设了 token 就填这里",
+      "tab": "connection"
+    },
+    {
+      "path": [
+        "protocols",
+        "onebot12",
+        "mode"
+      ],
+      "label": "OneBot 12 接入方式",
+      "kind": "select",
+      "hint": "决定下面填「正向 WS 地址」还是「反向 WS 监听」",
+      "options": [
+        [
+          "forward",
+          "正向 WebSocket（DSH → 端）"
+        ],
+        [
+          "reverse",
+          "反向 WebSocket（端 → DSH）"
+        ]
+      ],
+      "when": {
+        "protocol": "onebot12"
+      },
+      "tab": "connection"
+    },
+    {
+      "path": [
+        "protocols",
+        "onebot12",
+        "wsUrl"
+      ],
+      "label": "OneBot 12 正向 WS",
+      "kind": "text",
+      "placeholder": "ws://127.0.0.1:3001",
+      "when": {
+        "protocol": "onebot12",
+        "protocols.onebot12.mode": {
+          "$ne": "reverse"
+        }
+      },
+      "tab": "connection"
+    },
+    {
+      "path": [
+        "protocols",
+        "onebot12",
+        "listen"
+      ],
+      "label": "OneBot 12 反向 WS 监听",
+      "kind": "text",
+      "placeholder": "0.0.0.0:6199",
+      "when": {
+        "protocol": "onebot12",
+        "protocols.onebot12.mode": "reverse"
+      },
+      "tab": "connection"
+    },
+    {
+      "path": [
+        "protocols",
+        "onebot12",
+        "httpUrl"
+      ],
+      "label": "OneBot 12 HTTP API",
+      "kind": "text",
+      "placeholder": "http://127.0.0.1:3000",
+      "when": {
+        "protocol": "onebot12"
+      },
+      "tab": "connection"
+    },
+    {
+      "path": [
+        "protocols",
+        "onebot12",
+        "accessToken"
+      ],
+      "label": "OneBot 12 access_token",
+      "kind": "password",
+      "when": {
+        "protocol": "onebot12"
+      },
+      "tab": "connection"
+    },
+    {
+      "path": [
+        "protocols",
+        "satori",
+        "wsUrl"
+      ],
+      "label": "Satori WS 地址",
+      "kind": "text",
+      "placeholder": "ws://127.0.0.1:5140",
+      "when": {
+        "protocol": "satori"
+      },
+      "tab": "connection"
+    },
+    {
+      "path": [
+        "protocols",
+        "satori",
+        "httpUrl"
+      ],
+      "label": "Satori HTTP API",
+      "kind": "text",
+      "placeholder": "http://127.0.0.1:5140",
+      "when": {
+        "protocol": "satori"
+      },
+      "tab": "connection"
+    },
+    {
+      "path": [
+        "protocols",
+        "satori",
+        "token"
+      ],
+      "label": "Satori access token",
+      "kind": "password",
+      "when": {
+        "protocol": "satori"
+      },
+      "tab": "connection"
+    },
+    {
+      "path": [
+        "protocols",
+        "satori",
+        "platform"
+      ],
+      "label": "Satori 平台标识",
+      "kind": "text",
+      "placeholder": "qq",
+      "when": {
+        "protocol": "satori"
+      },
+      "tab": "connection"
+    },
+    {
+      "path": [
+        "protocols",
+        "satori",
+        "selfId"
+      ],
+      "label": "Satori bot 自身 id",
+      "kind": "text",
+      "placeholder": "（留空 = 首条事件取）",
+      "when": {
+        "protocol": "satori"
+      },
+      "tab": "connection"
+    },
+    {
+      "path": [
+        "protocols",
+        "milky",
+        "wsUrl"
+      ],
+      "label": "Milky 事件 WS",
+      "kind": "text",
+      "placeholder": "ws://127.0.0.1:3010/event",
+      "when": {
+        "protocol": "milky"
+      },
+      "tab": "connection"
+    },
+    {
+      "path": [
+        "protocols",
+        "milky",
+        "httpUrl"
+      ],
+      "label": "Milky API 基址",
+      "kind": "text",
+      "placeholder": "http://127.0.0.1:3010",
+      "when": {
+        "protocol": "milky"
+      },
+      "tab": "connection"
+    },
+    {
+      "path": [
+        "protocols",
+        "milky",
+        "accessToken"
+      ],
+      "label": "Milky access_token",
+      "kind": "password",
+      "when": {
+        "protocol": "milky"
+      },
+      "tab": "connection"
+    },
+    {
+      "path": [
+        "protocols",
+        "qqOfficial",
+        "mode"
+      ],
+      "label": "QQ 官方接入方式",
+      "kind": "select",
+      "options": [
+        [
+          "webhook",
+          "Webhook 回调"
+        ],
+        [
+          "ws",
+          "WebSocket 网关"
+        ]
+      ],
+      "when": {
+        "protocol": "qq-official"
+      },
+      "tab": "connection"
+    },
+    {
+      "path": [
+        "protocols",
+        "qqOfficial",
+        "appId"
+      ],
+      "label": "AppID",
+      "kind": "text",
+      "when": {
+        "protocol": "qq-official"
+      },
+      "tab": "connection"
+    },
+    {
+      "path": [
+        "protocols",
+        "qqOfficial",
+        "appSecret"
+      ],
+      "label": "AppSecret",
+      "kind": "password",
+      "when": {
+        "protocol": "qq-official"
+      },
+      "tab": "connection"
+    },
+    {
+      "path": [
+        "protocols",
+        "qqOfficial",
+        "botSecret"
+      ],
+      "label": "Webhook 校验 secret",
+      "kind": "password",
+      "when": {
+        "protocol": "qq-official",
+        "protocols.qqOfficial.mode": "webhook"
+      },
+      "tab": "connection"
+    },
+    {
+      "path": [
+        "protocols",
+        "qqOfficial",
+        "selfId"
+      ],
+      "label": "机器人 QQ 号（self_id）",
+      "kind": "text",
+      "hint": "webhook 模式不会有 READY 事件，填了才知道「哪个 @ 是在叫我」；留空则群里任何 @ 都会触发回复",
+      "placeholder": "例如 123456789",
+      "when": {
+        "protocol": "qq-official"
+      },
+      "tab": "connection"
+    },
+    {
+      "path": [
+        "protocols",
+        "qqOfficial",
+        "listen"
+      ],
+      "label": "Webhook 监听地址",
+      "kind": "text",
+      "hint": "端口只能是 80 / 443 / 8080 / 8443",
+      "placeholder": "0.0.0.0:8443",
+      "when": {
+        "protocol": "qq-official",
+        "protocols.qqOfficial.mode": "webhook"
+      },
+      "tab": "connection"
+    },
+    {
+      "path": [
+        "protocols",
+        "qqOfficial",
+        "path"
+      ],
+      "label": "Webhook 回调路径",
+      "kind": "text",
+      "placeholder": "/qqbot",
+      "when": {
+        "protocol": "qq-official",
+        "protocols.qqOfficial.mode": "webhook"
+      },
+      "tab": "connection"
+    },
+    {
+      "path": [
+        "group",
+        "enabled"
+      ],
+      "label": "启用群聊",
+      "kind": "bool",
+      "tab": "basic",
+      "subtab": "access"
+    },
+    {
+      "path": [
+        "commandPrefix"
+      ],
+      "label": "命令前缀",
+      "kind": "text",
+      "hint": "例如 /ai，只有带前缀的消息才会被处理",
+      "placeholder": "（留空 = 不限制）",
+      "tab": "basic",
+      "subtab": "govern"
+    },
+    {
+      "path": [
+        "group",
+        "requireAt"
+      ],
+      "label": "群里必须 @ 机器人才回复",
+      "kind": "bool",
+      "tab": "basic",
+      "subtab": "access"
+    },
+    {
+      "path": [
+        "limits",
+        "perMinute"
+      ],
+      "label": "每人每分钟最多几条",
+      "kind": "number",
+      "hint": "同一会话的同一个人每分钟最多驱动几个回合（防刷）",
+      "tab": "basic",
+      "subtab": "govern"
+    },
+    {
+      "path": [
+        "limits",
+        "queueMax"
+      ],
+      "label": "单会话最多排队几条",
+      "kind": "number",
+      "hint": "超过就直接拒收，不排队",
+      "tab": "basic",
+      "subtab": "govern"
+    },
+    {
+      "path": [
+        "limits",
+        "maxChars"
+      ],
+      "label": "单条消息最大字数（入站）",
+      "kind": "number",
+      "hint": "超出截断，避免超长文本整段进提示词",
+      "tab": "basic",
+      "subtab": "govern"
+    },
+    {
+      "path": [
+        "group",
+        "allow"
+      ],
+      "label": "群号白名单",
+      "kind": "list",
+      "hint": "逗号分隔；留空 = 所有群都能用（清空不等于「谁都不许」）。想彻底停掉群聊请关上面的总开关",
+      "numeric": true,
+      "tab": "basic",
+      "subtab": "access"
+    },
+    {
+      "path": [
+        "private",
+        "enabled"
+      ],
+      "label": "启用私聊",
+      "kind": "bool",
+      "tab": "basic",
+      "subtab": "access"
+    },
+    {
+      "path": [
+        "private",
+        "allow"
+      ],
+      "label": "私聊白名单",
+      "kind": "list",
+      "hint": "逗号分隔；留空 = 所有人都能私聊（清空不等于「谁都不许」）。想彻底停掉私聊请关上面的总开关",
+      "numeric": true,
+      "tab": "basic",
+      "subtab": "access"
+    },
+    {
+      "path": [
+        "admin",
+        "enabled"
+      ],
+      "label": "启用群管理",
+      "kind": "bool",
+      "hint": "总开关；关掉后指令与 qqgroup 工具都会拒绝",
+      "tab": "basic",
+      "subtab": "govern"
+    },
+    {
+      "path": [
+        "admin",
+        "manageGroups"
+      ],
+      "label": "可管理的群号",
+      "kind": "list",
+      "hint": "逗号分隔；留空 = 回退用「群号白名单」，再空 = 不限制到群",
+      "numeric": true,
+      "tab": "basic",
+      "subtab": "govern"
+    },
+    {
+      "path": [
+        "admin",
+        "requireGroupAdmin"
+      ],
+      "label": "承认「本群管理员」这一路权限",
+      "kind": "bool",
+      "hint": "关闭后只有静态名单与动态授权生效",
+      "tab": "basic",
+      "subtab": "govern"
+    },
+    {
+      "path": [
+        "admin",
+        "prefix"
+      ],
+      "label": "指令前缀（必须在消息首位）",
+      "kind": "text",
+      "placeholder": "/",
+      "tab": "basic",
+      "subtab": "govern"
+    },
+    {
+      "path": [
+        "admin",
+        "dryRun"
+      ],
+      "label": "演练模式（只回复将执行什么）",
+      "kind": "bool",
+      "hint": "先用它确认指令解析是否正确，再关掉真执行",
+      "tab": "basic",
+      "subtab": "govern"
+    },
+    {
+      "path": [
+        "admin",
+        "allowConsole"
+      ],
+      "label": "允许非 QQ 来源调用管理工具",
+      "kind": "bool",
+      "hint": "例如从 Web UI 会话里直接让 Agent 踢人。注意：它放行的是「一切非 QQ 会话」——模型驱动的子代理、任务板、工作流同样算在内，不是只认你本人操作的那一个页面。默认关闭",
+      "tab": "basic",
+      "subtab": "govern"
+    },
+    {
+      "path": [
+        "session",
+        "fixedName"
+      ],
+      "label": "固定新建会话名（私聊_<QQ号>/群聊_<群号>）",
+      "kind": "bool",
+      "hint": "开启后新会话不再用 LLM 自动起标题",
+      "tab": "advanced",
+      "subtab": "session"
+    },
+    {
+      "path": [
+        "perChatSession"
+      ],
+      "label": "每个 QQ 会话独立 DSH 会话",
+      "kind": "bool",
+      "tab": "advanced",
+      "subtab": "session"
+    },
+    {
+      "path": [
+        "logAdapterFrames"
+      ],
+      "label": "日志打印每一帧（排错）",
+      "kind": "bool",
+      "tab": "advanced",
+      "subtab": "session"
+    },
+    {
+      "path": [
+        "agentPresetCustom"
+      ],
+      "label": "① 自定义 agent preset id（优先级最高）",
+      "kind": "text",
+      "hint": "如果你不知道你在做什么，最好别动这个。填 DSH 里自建 preset 的 id（例如 qq），它会整档接管人格 + 工具面，这条生效时 ②③ 全被忽略。加装了不影响安全的第三方扩展插件、却没进任何 preset 的，就在自建 preset 的 plugins 里把插件行加进去，再把 id 填到这里——别为了用扩展去改安全相关的项",
+      "placeholder": "（留空 = 用下面的③）",
+      "tab": "advanced",
+      "subtab": "session"
+    },
+    {
+      "path": [
+        "agentPreset"
+      ],
+      "label": "③ Agent preset（兜底）",
+      "kind": "select",
+      "hint": "如果你不知道你在做什么，最好别动这个。默认 standard。①② 都留空时才用它。优先级：① 自定义 id > ② 拥有者/访客分流 > ③ 本项 > 部署默认。只影响新会话",
+      "placeholder": "standard",
+      "options": [
+        [
+          "",
+          "（跟随部署默认）"
+        ],
+        [
+          "standard",
+          "standard（标准工具面，工具直接可见）"
+        ],
+        [
+          "ptc",
+          "ptc（网关模式，工具经 run_code 执行）"
+        ],
+        [
+          "minimal",
+          "minimal（极简）"
+        ],
+        [
+          "cordis",
+          "cordis（插件开发模式）"
+        ]
+      ],
+      "tab": "advanced",
+      "subtab": "session"
+    },
+    {
+      "path": [
+        "proactive",
+        "enabled"
+      ],
+      "label": "启用主动发言",
+      "kind": "bool",
+      "hint": "按间隔看群里的最近消息，由模型自己判断要不要接话；默认关闭",
+      "tab": "capability",
+      "subtab": "dialogue"
+    },
+    {
+      "path": [
+        "proactive",
+        "groups"
+      ],
+      "label": "主动发言生效群号",
+      "kind": "list",
+      "hint": "必须显式列；留空 = 不启用",
+      "numeric": true,
+      "tab": "capability",
+      "subtab": "dialogue"
+    },
+    {
+      "path": [
+        "proactive",
+        "intervalMinutes"
+      ],
+      "label": "检查间隔（分钟）",
+      "kind": "number",
+      "tab": "capability",
+      "subtab": "dialogue"
+    },
+    {
+      "path": [
+        "proactive",
+        "minNewMessages"
+      ],
+      "label": "至少多少条新消息才考虑",
+      "kind": "number",
+      "tab": "capability",
+      "subtab": "dialogue"
+    },
+    {
+      "path": [
+        "proactive",
+        "windowMessages"
+      ],
+      "label": "每次拉取消息条数",
+      "kind": "number",
+      "tab": "capability",
+      "subtab": "dialogue"
+    },
+    {
+      "path": [
+        "proactive",
+        "quietHours"
+      ],
+      "label": "免打扰时段",
+      "kind": "list",
+      "hint": "如 23:00-08:00；逗号分隔可多段",
+      "tab": "capability",
+      "subtab": "dialogue"
+    },
+    {
+      "path": [
+        "proactive",
+        "maxPerHour"
+      ],
+      "label": "每小时上限",
+      "kind": "number",
+      "tab": "capability",
+      "subtab": "dialogue"
+    },
+    {
+      "path": [
+        "proactive",
+        "maxPerDay"
+      ],
+      "label": "每天上限",
+      "kind": "number",
+      "tab": "capability",
+      "subtab": "dialogue"
+    },
+    {
+      "path": [
+        "proactive",
+        "minGapMinutes"
+      ],
+      "label": "两次发言最小间隔（分钟）",
+      "kind": "number",
+      "tab": "capability",
+      "subtab": "dialogue"
+    },
+    {
+      "path": [
+        "proactive",
+        "eventGuard"
+      ],
+      "label": "事件去重（防重复回复）",
+      "kind": "bool",
+      "hint": "跳过已过气的事件、只是应答一句的插话、以及冷却期内刚聊过的话题；关掉 = 旧行为",
+      "tab": "capability",
+      "subtab": "dialogue"
+    },
+    {
+      "path": [
+        "proactive",
+        "staleMinutes"
+      ],
+      "label": "事件过气阈值（分钟）",
+      "kind": "number",
+      "hint": "最新消息超过这么久就不再接话，避免对聊完的事重复回复",
+      "tab": "capability",
+      "subtab": "dialogue"
+    },
+    {
+      "path": [
+        "proactive",
+        "topicCooldownMinutes"
+      ],
+      "label": "话题冷却（分钟）",
+      "kind": "number",
+      "hint": "同一话题在这么久内不再重复接话",
+      "tab": "capability",
+      "subtab": "dialogue"
+    },
+    {
+      "path": [
+        "proactive",
+        "provider"
+      ],
+      "label": "判断用 provider",
+      "kind": "select",
+      "hint": "和识图同一份 DSH 模型目录，走 DSH 已配置的渠道，不需要另外填 key。留空 = 跟随该群会话的模型；群里还没有会话时会按全局 preset 建同一条会话再取",
+      "placeholder": "（留空 = 群会话模型）",
+      "dynamic": "provider",
+      "tab": "capability",
+      "subtab": "dialogue"
+    },
+    {
+      "path": [
+        "proactive",
+        "model"
+      ],
+      "label": "判断用模型",
+      "kind": "select",
+      "hint": "跟随上面选的 provider 列出模型。判断只要一句 JSON，挑个便宜快的即可；留空 = 跟随群会话模型",
+      "placeholder": "（留空 = 群会话模型）",
+      "dynamic": "model",
+      "tab": "capability",
+      "subtab": "dialogue"
+    },
+    {
+      "path": [
+        "proactive",
+        "speakProvider"
+      ],
+      "label": "发言阶段 provider（留空 = 与判断相同）",
+      "kind": "select",
+      "hint": "两段式的发言渠道；留空则沿用判断阶段的 provider",
+      "placeholder": "（留空 = 与判断阶段相同）",
+      "dynamic": "provider",
+      "tab": "capability",
+      "subtab": "dialogue"
+    },
+    {
+      "path": [
+        "proactive",
+        "speakModel"
+      ],
+      "label": "发言阶段模型（留空 = 单段模式）",
+      "kind": "select",
+      "hint": "填了它才启用两段式：判断只出 JSON，正文由这个模型单独写，能用的文风模型和判断解耦；留空则维持现在的单段行为",
+      "placeholder": "（留空 = 单段模式：判断输出里直接带正文）",
+      "dynamic": "model",
+      "tab": "capability",
+      "subtab": "dialogue"
+    },
+    {
+      "path": [
+        "proactive",
+        "speakFallback"
+      ],
+      "label": "两段式：发言失败时回退用判断模型的正文",
+      "kind": "bool",
+      "hint": "默认开启；关掉则发言阶段写不出可用正文时这一轮就不发",
+      "tab": "capability",
+      "subtab": "dialogue"
+    },
+    {
+      "path": [
+        "proactive",
+        "requireCjk"
+      ],
+      "label": "发送前兜底：整句英文（超过 12 字）就丢掉",
+      "kind": "bool",
+      "hint": "默认关。中文群建议开：模型偶尔会掉回英文拒答（Sorry, it looks like I can not…），整句不含任何 CJK 时几乎一定是它；英文群务必关掉。12 字符及以下的 ASCII 回应（666 / OK / lol）不会触发",
+      "tab": "capability",
+      "subtab": "dialogue"
+    },
+    {
+      "path": [
+        "proactive",
+        "timeoutMs"
+      ],
+      "label": "判断请求超时（毫秒）",
+      "kind": "number",
+      "hint": "单次模型判断的超时，低于 5000 会按 5000 处理",
+      "tab": "capability",
+      "subtab": "dialogue"
+    },
+    {
+      "path": [
+        "proactive",
+        "maxChars"
+      ],
+      "label": "单条最大字数",
+      "kind": "number",
+      "tab": "capability",
+      "subtab": "dialogue"
+    },
+    {
+      "path": [
+        "proactive",
+        "interests"
+      ],
+      "label": "话题偏好（可空）",
+      "kind": "text",
+      "tab": "capability",
+      "subtab": "dialogue"
+    },
+    {
+      "path": [
+        "proactive",
+        "persona"
+      ],
+      "label": "主动发言人设（留空 = 复用全局人格）",
+      "kind": "multiline",
+      "hint": "两处人设是「专用 + 兜底」关系：这里填了只用这里；留空则自动复用「人格」组的人格名字与设定，不必重复填写",
+      "placeholder": "（留空 = 用下面「人格」组的名字 + 设定）",
+      "tab": "capability",
+      "subtab": "dialogue"
+    },
+    {
+      "path": [
+        "proactive",
+        "dryRun"
+      ],
+      "label": "演练（只记日志不发送）",
+      "kind": "bool",
+      "tab": "capability",
+      "subtab": "dialogue"
+    },
+    {
+      "path": [
+        "proactive",
+        "verbose"
+      ],
+      "label": "日志打印每次判断",
+      "kind": "bool",
+      "tab": "capability",
+      "subtab": "dialogue"
+    },
+    {
+      "path": [
+        "reply",
+        "maxChars"
+      ],
+      "label": "单条最大字数",
+      "kind": "number",
+      "tab": "basic",
+      "subtab": "govern"
+    },
+    {
+      "path": [
+        "reply",
+        "ackAfterMs"
+      ],
+      "label": "慢回复提示阈值（毫秒）",
+      "kind": "number",
+      "hint": "0 = 关闭「正在处理」提示",
+      "tab": "basic",
+      "subtab": "govern"
+    },
+    {
+      "path": [
+        "reply",
+        "ackText"
+      ],
+      "label": "慢回复提示文案",
+      "kind": "text",
+      "tab": "basic",
+      "subtab": "govern"
+    },
+    {
+      "path": [
+        "reply",
+        "contextHeader"
+      ],
+      "label": "消息附带来源前缀",
+      "kind": "bool",
+      "hint": "形如 [QQ群 123 · 小明(22222)]",
+      "tab": "basic",
+      "subtab": "govern"
+    },
+    {
+      "path": [
+        "reply",
+        "botReply"
+      ],
+      "label": "被回复（引用）机器人消息时视同 @ 处理并响应",
+      "kind": "bool",
+      "hint": "默认开启；含拉取该对话者与 bot 的最近相关发言作上下文，回复用 QQ 引用回复",
+      "tab": "basic",
+      "subtab": "govern"
+    },
+    {
+      "path": [
+        "reply",
+        "interim"
+      ],
+      "label": "中间发言（干活途中先说一句）",
+      "kind": "bool",
+      "hint": "默认开启。长回合里模型每写完一段（比如「我先查一下」）就先发一条，不引用也不 @ 任何人；最终结论仍按正常回复发送",
+      "tab": "basic",
+      "subtab": "govern"
+    },
+    {
+      "path": [
+        "reply",
+        "interimMaxPerTurn"
+      ],
+      "label": "中间发言：每回合最多几条",
+      "kind": "number",
+      "hint": "0 = 关闭（等于关掉上一项）",
+      "tab": "basic",
+      "subtab": "govern"
+    },
+    {
+      "path": [
+        "reply",
+        "interimMinGapMs"
+      ],
+      "label": "中间发言：两条之间最短间隔（毫秒）",
+      "kind": "number",
+      "hint": "低于 500 按 500 处理，避免刷屏",
+      "tab": "basic",
+      "subtab": "govern"
+    },
+    {
+      "path": [
+        "persona",
+        "enabled"
+      ],
+      "label": "自定义人格（每个新会话生效）",
+      "kind": "bool",
+      "hint": "打开后，新会话第一轮末尾会带上下面的身份设定；已建会话不变",
+      "tab": "capability",
+      "subtab": "dialogue"
+    },
+    {
+      "path": [
+        "persona",
+        "name"
+      ],
+      "label": "人格名字",
+      "kind": "text",
+      "placeholder": "（例：小助手）",
+      "tab": "capability",
+      "subtab": "dialogue"
+    },
+    {
+      "path": [
+        "persona",
+        "text"
+      ],
+      "label": "人格设定",
+      "kind": "multiline",
+      "hint": "性格 / 说话风格 / 禁忌；越具体越稳定，留空则不加任何身份设定。主动发言未单独设人设时也会复用这里（含上面的名字）",
+      "tab": "capability",
+      "subtab": "dialogue"
+    },
+    {
+      "path": [
+        "protocols",
+        "qqOfficial",
+        "streaming"
+      ],
+      "label": "私聊流式回复（官方 v2 专属）",
+      "kind": "bool",
+      "hint": "只有官方 API v2 的 C2C 私聊支持流式；开启后中间输出会合并进一条流式消息，结束时补 done。群聊/其它协议自动回退为普通分条。",
+      "when": {
+        "protocol": "qq-official"
+      },
+      "tab": "connection"
+    },
+    {
+      "path": [
+        "protocols",
+        "qqOfficial",
+        "__bind"
+      ],
+      "label": "扫码绑定（手机 QQ）",
+      "kind": "qqbind",
+      "when": {
+        "protocol": "qq-official"
+      },
+      "tab": "connection",
+      "virtual": true
+    },
+    {
+      "path": [
+        "flow",
+        "deliver"
+      ],
+      "label": "产物投递目标",
+      "kind": "text",
+      "hint": "private = 发到主人私聊；group:<群号> = 发到指定群；none = 只回文字结论",
+      "placeholder": "private",
+      "tab": "advanced",
+      "subtab": "flow"
+    },
+    {
+      "path": [
+        "flow",
+        "maxBytes"
+      ],
+      "label": "产物打包上限（字节）",
+      "kind": "number",
+      "tab": "advanced",
+      "subtab": "flow"
+    },
+    {
+      "path": [
+        "flow",
+        "maxFiles"
+      ],
+      "label": "最多打包文件数",
+      "kind": "number",
+      "tab": "advanced",
+      "subtab": "flow"
+    },
+    {
+      "path": [
+        "flow",
+        "skipHidden"
+      ],
+      "label": "打包时跳过隐藏文件",
+      "kind": "bool",
+      "tab": "advanced",
+      "subtab": "flow"
+    }
+  ]
+}

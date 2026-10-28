@@ -273,6 +273,8 @@ let visionModelModalities = null;
 
 try {
   const mod = await import(pathToFileURL(path.join(PKG_ROOT, 'lib', 'index.js')).href);
+  // 设置页字段的组装结果在 config.js 里（index.js 不转出它）。
+  const configMod = await import(pathToFileURL(path.join(PKG_ROOT, 'lib', 'config.js')).href);
   check('模块导出了 name/inject/apply', mod.name === 'dsh-qq-bot' && Array.isArray(mod.inject) && typeof mod.apply === 'function');
   check('inject 声明了 subprocess/sessionController/timer',
     mod.inject.includes('subprocess') && mod.inject.includes('sessionController') && mod.inject.includes('timer'));
@@ -313,15 +315,12 @@ try {
   //   * dsh-settings 的 volatileForm() 只投影 volatile 字段（一个都没有 => 整个条目不出现）
   //   * write() 对非 volatile 路径直接抛 "Config field ... is not volatile"
   // 所以直接从 lib/client/settings.js 里抠出 FIELDS 的 path 逐条核对，避免两边各写一份而漂移。
-  const clientSource = fs.readFileSync(path.join(PKG_ROOT, 'lib', 'client', 'settings.js'), 'utf-8');
-  const fieldPaths = [];
-  for (const match of clientSource.matchAll(/\{\s*path:\s*\[([^\]]+)\]([\s\S]{0,240})/g)) {
-    // virtual: true 的是纯界面卡片（例如扫码绑定），不对应 schema 字段，不参与 volatile 核对。
-    if (/virtual:\s*true/.test(match[2])) continue;
-    const parts = [...match[1].matchAll(/'([^']*)'/g)].map((x) => x[1]);
-    if (parts.length > 0) fieldPaths.push(parts);
-  }
-  check('从 client.js 抠出了表单字段', fieldPaths.length >= 30, String(fieldPaths.length));
+  // 字段定义已从客户端 bundle 搬到各所有者目录的 *-set.json，这里直接看组装结果。
+  // virtual: true 的是纯界面卡片（例如扫码绑定），不对应 schema 字段，不参与 volatile 核对。
+  const fieldPaths = configMod.SETTINGS_FIELDS
+    .filter((field) => field.virtual !== true)
+    .map((field) => field.path);
+  check('从 -set.json 模板里组装出了表单字段', fieldPaths.length >= 30, String(fieldPaths.length));
 
   const isVolatilePath = (schema, p) => {
     if (schema.meta !== undefined && schema.meta.volatile) return true;
