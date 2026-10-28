@@ -1,3 +1,51 @@
+## 未发布 —— 网络阀门拆成两个接口 + 门面措辞与分层说明（2026-10-28）
+
+上一轮审查留下的两条「待决策」按主人意见处理：不重构，改措辞、写清楚；同时把网络阀门的对外
+接口正式拆成两组。
+
+### 网络阀门只暴露两个接口
+
+以前门面是一大坨平铺成员（15 个），哪些是给插件用的、哪些是内部判定，全靠读注释。现在拆成两组：
+
+- **`traffic`（网络流量管控）**：`fetchText` / `request` / `post` / `createGuardProxy`。所有出网动作
+  从这里走，调用方只声明意图（`useProxy` / `timeoutMs` / `binary`），**拿不到代理串**。
+- **`proxyStatus`（代理状态，只读）**：只有 `hasProxy` 一个成员。只回答「有没有配 HTTP 代理」，
+  不含任何出网能力；插件/工具读它来决定自己的行为（某些搜索/反搜引擎只在走代理时可用），
+  而不是自己去嗅探配置或代理串。刻意不再加 `describe()` 之类的便利方法——没人调的方法就是
+  下一个「空门面」，要加先想清楚谁用。
+
+策略判定（`isAllowedTarget` `assertHost` `resolve` `pin` `canonicalHost`）与测试注入
+（`__setHooks` `uninstall`）不在两个接口内，仍平铺在门面上，并在注释里标明「阀门内部与测试用」。
+
+调用点同步迁移：`qq_webfetch` → `net.traffic.fetchText`，识图引擎可用性 → `net.proxyStatus.hasProxy()`。
+新增一条断言锁住接口形状（`traffic` 必须恰好是那四个成员、`proxyStatus` 必须恰好是 `hasProxy`
+一个且不是异步出网方法），防止以后又被揉回一个大对象。
+
+### 门面措辞改成实话
+
+`valve/security/index.js` 文件头原写「身份、动态码、授权与审计的**唯一入口**」，但生产代码实际用的是
+门面暴露的 `flowAuth` / `flowStore` 对象与 history-auth / owner-settings 的判定函数，那四个便捷方法
+（`verifyToken` / `verifyRecovery` / `judgeHistory` / `checkOwnerCaller`）只有测试在调。
+现改为「**集中判定处**」，并在文件头写明现状与「真要收成单一入口需要改哪些直接 import」。
+`valve/tool/index.js` 同样处理（生产取门面暴露的 `gate` 对象，包装方法只有测试在调）。
+
+### 分层倒置写进文档
+
+新增 `docs/ARCHITECTURE.md` **5.5 已知的分层倒置（有意保留）**，逐条写清四处与分层图相反的
+import 方向、为什么保留、真要理顺该怎么做：
+
+- `shared/http.js` → `valve/network/policy.js`（传输层用阀门的纯判定函数）
+- `valve/network/index.js` → `shared/http.js`（阀门调传输层发请求，设计本身）
+  两条合起来是双向依赖，但不成环（`policy.js` 不回指 `http.js`），运行时无问题
+- `transport/adapters/*` → `message/segments.mjs`（段归一只有一份；纯函数，无状态耦合）
+- `tools/index.js` → `valve/network/guard-proxy.js`（moli 兜底，属既定例外）
+
+判断标准也写进去了：这些倒置只跨「无状态纯函数」或「明确单向调用」，**没有形成状态环**；
+哪天某条开始持有状态或回指上层，就必须当场拆开。
+
+另新增 **5.6 门面的「薄包装」现状**，说明 security / tool 那两个门面的定位是「判定与状态集中在这一层」，
+不是「所有调用都必须穿过这些包装方法」。
+
 ## 未发布 —— 五路对抗性审查后的修正（2026-10-28）
 
 对前两条提交做了五路独立审查（代理归属 / 阀门架构 / 目录完整性 / 测试有效性 / 文档一致性），
@@ -22,7 +70,7 @@
 - **假阳性断言**：原「不传代理时按阀门策略走」用「内网目标被拒」当证据，但直连与代理两个分支
   都会 `assertPublicHost` 拒内网，该断言恒真、区分不了路径。改为「死代理 + 公网目标必须连不上代理」
   并断言直连钩子未被命中。
-- **补上阀门门面自身的覆盖**：`net.fetchText` 是 `qq_webfetch` 的唯一出网入口，之前零测试——
+- **补上阀门门面自身的覆盖**：`net.traffic.fetchText` 是 `qq_webfetch` 的唯一出网入口，之前零测试——
   破坏实验证实「让阀门 fetchText 永远直连」时全套件无人报警。现补 3 条（配代理走代理 / 不配直连 /
   `useProxy:false` 强制直连），再跑同样的破坏实验会立刻红。
 - **结构性断言的 allowlist 有洞**：原白名单含 `wsCfg`，导致它本要拦的那行
@@ -69,12 +117,12 @@
   漂移过（三处调用方三种语义）。
 - **现在**：网络阀门在成型时（stage 10）用 `__setProxyResolver` 接管传输层的代理策略，
   `shared/http.js` 不再读配置。工具只声明**意图**：
-  - `net.fetchText(url, { useProxy: true })` —— 走统一策略（配了代理就走，没配就直连）
+  - `net.traffic.fetchText(url, { useProxy: true })` —— 走统一策略（配了代理就走，没配就直连）
   - `multiEngineRequest(…, { useProxy: false })` —— 明确要求直连
   - 不传 spec 的老调用 = 按阀门策略走；显式传字符串仍照用（只留给测试与特例）
 - 连带收敛：**20 个**函数签名里的 `proxy` 形参全部删除（`websearch.js` 8 个 +
   `imgsearch.js` 12 个），另有 `runWebSearch` 内部不再读 `cfg.proxy`；`qq_imgsearch` 判断「哪些引擎可用」改为问
-  `net.hasProxy()`，不再自己嗅探代理串。
+  `net.proxyStatus.hasProxy()`，不再自己嗅探代理串。
 - **保持原样**（按需求）：识图下载与生图结果下载继续走 `publicFetch` 强制直连；
   `moli` 的 `moli.proxy` 覆盖/透传语义不动（那是用户显式配置，不归阀门管）。
 - 顺带修依赖方向：`valve/network/guard-proxy.js` 原来从 `shared/http.js` 取判定函数

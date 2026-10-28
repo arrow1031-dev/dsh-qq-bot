@@ -103,18 +103,29 @@ DSH Agent（默认每个 QQ 会话一个）
 | 文件 | 职责 | 关键导出 |
 | --- | --- | --- |
 | `valve/index.js` | 阀门注册表：有哪几道阀门、成型顺序、依赖关系（**调优先级只改这里**） | `STAGE` `VALVES` `orderedValves` |
-| `valve/network/index.js` | **网络阀门门面**：目标能不能出站、用不用代理、抓回来怎么截断；回环地址永不进代理。成型时用 `__setProxyResolver` 接管传输层的代理策略——**工具层拿不到代理串**，只能声明意图（`useProxy`） | `createNetworkValve` → `isAllowedTarget` `isLoopback` `hasProxy` `assertHost` `resolve` `pin` `fetchText` `request` `post` `uninstall` `createGuardProxy` |
+| `valve/network/index.js` | **网络阀门门面**，对外只有两个接口（见 2.2.1）：**流量管控** `traffic` 与**代理状态** `proxyStatus`。成型时用 `__setProxyResolver` 接管传输层的代理策略——**工具层拿不到代理串**，只能声明意图（`useProxy`） | `createNetworkValve` → `traffic` `proxyStatus`（另有策略判定与测试注入：`isAllowedTarget` `isLoopback` `assertHost` `resolve` `pin` `canonicalHost` `uninstall` `__setHooks`） |
 | `valve/network/policy.js` | 网络阀门**策略层**（纯判定，不发请求）：地址先过 WHATWG URL 归一，再按 8 组/4 段整数判段；`pinnedLookup` 钉死已校验地址（防 DNS rebinding） | `canonicalHost` `isNonPublicIp` `resolvePublicAddresses` `assertPublicHost` `pinnedLookup` `__setNetworkHooks` |
 | `valve/network/guard-proxy.js` | 本地校验代理：给无头浏览器兜底，逐条请求先过策略层，内网目标 403（重定向/子资源/DNS rebinding 都在这层拦） | `createGuardProxy` |
-| `valve/security/index.js` | **安全阀门面**：身份、动态码、授权与审计的唯一入口；红线集中写在文件头 | `createSecurityValve` → `flowAuth` `enabled` `gatedTools` `verifyToken` `verifyRecovery` `judgeHistory` `checkOwnerCaller` |
+| `valve/security/index.js` | **安全阀门面**：身份、动态码、授权与审计的集中判定处；红线集中写在文件头。注意生产代码目前直接用门面暴露的 `flowAuth`/`flowStore` 对象（见 5.5） | `createSecurityValve` → `flowAuth` `enabled` `gatedTools` `verifyToken` `verifyRecovery` `judgeHistory` `checkOwnerCaller` |
 | `valve/security/totp.js` | 零依赖 TOTP/HOTP 与恢复码（RFC 4226/6238、base32 容错、scrypt 哈希、弱密钥拒绝） | `generateSecret` `hotp` `totp` `totpVerify` `generateBackupCodes` `hashBackupCode` `verifyBackupCode` `otpauthUri` |
 | `valve/security/totp-cli.mjs` | 终端绑定：打印 base32 secret / otpauth URI / 终端二维码 / 恢复码（密钥不经 QQ） | —（命令行入口） |
 | `valve/security/flow-auth.js` | 授权状态机 + 闸门：申请 / 验码 / grant / 一次性消费 / 连错锁定 / 审计 | `createFlowAuth` `createFlowGate` |
 | `valve/security/flow-store.js` | 流程脚本只读视图：名字白名单、sha256、路径穿越防护 | `createFlowStore` `isValidFlowName` `sha256` |
 | `valve/security/history-auth.js` | 历史消息的会话定向与鉴权（纯逻辑，三档权限） | `resolveHistoryTarget` `judgeHistoryAccess` `buildHistoryRequest` |
 | `valve/security/owner-settings.js` | 拥有者设置通道：白名单、确认码、限流、审计 | `createOwnerSettings` `SPECS` `checkCaller` |
-| `valve/tool/index.js` | **工具阀门面**：名单判定 + 调用拦截（一次授权只能用一次）+ 改闸门要码；消费安全阀的 grant，不持有密钥 | `createToolValve` → `isGated` `check` `remember` `forget` `names` `blockedText` `decideEdit` |
+| `valve/tool/index.js` | **工具阀门面**：名单判定 + 调用拦截（一次授权只能用一次）+ 改闸门要码；消费安全阀的 grant，不持有密钥。生产代码取门面暴露的 `gate` 对象（见 5.5） | `createToolValve` → `isGated` `check` `remember` `forget` `names` `blockedText` `decideEdit` |
 | `valve/tool/gate-guard.js` | 闸门区改动的判定：改名单 / 关开关都要码（关掉闸门不能比改名单更容易） | `decideGateEdit` `sameToolList` |
+
+#### 2.2.1 网络阀门只暴露两个接口
+
+门面刻意拆成两组，别再把它们揉回一个大对象——两组职责不同，用法也不同：
+
+| 接口 | 成员 | 用途 |
+| --- | --- | --- |
+| **`traffic`**（流量管控） | `fetchText` `request` `post` `createGuardProxy` | 所有出网动作都从这里走。调用方只声明**意图**（`useProxy` / `timeoutMs` / `binary`），代理怎么取、超时多少、体积怎么截断由阀门决定；**调用方拿不到代理串**。 |
+| **`proxyStatus`**（代理状态，只读） | `hasProxy` | 只回答「有没有配 HTTP 代理」，不含任何判定或出网能力。插件/工具读它来决定自己的行为（例如某些搜索/反搜引擎只在走代理时可用），**而不是自己去嗅探配置或代理串**。 |
+
+其余成员（`isAllowedTarget` `assertHost` `resolve` `pin` 等策略判定，以及 `__setHooks` `uninstall` 测试注入）不属于这两个接口，是阀门内部与策略测试用的。
 
 ### 2.3 网关层 `lib/gateway/`
 
@@ -312,3 +323,22 @@ DSH Agent（默认每个 QQ 会话一个）
 - 一个适配器进程对应一份连接配置（OneBot 11 反向模式可接多条链路，取第一条就绪的）；多账号未内建。
 - 消息帧与发送帧的形状是插件与适配器的唯一耦合点，改动必须同步五个适配器与 `test/`。
 - 配置改动分两类：连接方式（`protocol`/`mode`/各协议连接参数）变化会重启适配器；其余 volatile 字段就地生效，下一轮消息即生效。
+
+### 5.5 已知的分层倒置（**有意保留，不是待修的 bug**）
+
+第 1 节那张分层图是「概念方向」，不是 import 方向的硬约束。下面四处与图相反，都跑得通，写在这里免得下一个人以为是漏改：
+
+| 倒置 | 位置 | 为什么保留 |
+| --- | --- | --- |
+| **shared → valve** | `shared/http.js` import `valve/network/policy.js`（`canonicalHost` / `isNonPublicIp` / `assertPublicHost` / `pinnedLookup` / `__setNetworkHooks`） | 传输层每次发请求前都要过一遍「能不能出站」，这些判定函数是**纯函数**、无状态、不反向依赖 shared，拿过来直接用比复制一份或再抽一层更省。真要理顺，得把 `policy.js` 下沉到 `shared/`，同时 `valve/network/index.js` 再 import 回来——换来的是更纯的层次图，代价是一次大范围改动。**暂不划算。** |
+| **valve → shared** | `valve/network/index.js` import `shared/http.js`（`fetchUrlViaProxy` / `publicFetch` / `multiEngineRequest` / `webSearchPost` / `__setProxyResolver`） | 这一条是**设计本身**：阀门管策略，传输层管怎么发，方向就是「阀门调传输」。它和上一条合起来构成 `shared/http.js` ↔ `valve/network/` 的**双向依赖**——单向看都合理，合起来不成环（`policy.js` 不回指 `http.js`），所以运行时不会出问题。 |
+| **transport → message** | `transport/adapters/{onebot11,onebot12,milky,satori,qq-official}.mjs` 都 import `message/segments.mjs` | 适配器要把平台消息归一成**统一段**（`{type,data}`），归一逻辑只有一份、放在 `message/`。按 STAGE 顺序 transport(60) 在 message(40) 之后，方向确实反了；但 `segments.mjs` 是**无依赖的纯函数**，谁 import 都不产生状态耦合。真要理顺就把它下沉到 `shared/segments.mjs`。**暂不划算。** |
+| **tools → valve 内部实现** | `tools/index.js` 直接 import `valve/network/guard-proxy.js` 的 `createGuardProxy`（moli 的兜底校验代理） | 这是 moli 自己的内网防护，属于「moli 语义不归阀门管」的既定例外（见 4. 设计取舍）。要收进 `traffic.createGuardProxy` 只需改一行，但那样 `ensureGuardProxy` 这个模块级单例就得跟着拿到阀门实例，改动面比收益大。 |
+
+判断标准：**这些倒置都只跨「无状态纯函数」或「明确的单向调用」，没有形成状态环**。哪天其中一条开始持有状态或回指上层，就必须当场拆开，别再往这张表里加。
+
+### 5.6 门面的「薄包装」现状
+
+`valve/security` 与 `valve/tool` 的门面里有一批便捷方法（`verifyToken` `verifyRecovery` `judgeHistory` `checkOwnerCaller` / `isGated` `check` `remember` `forget` `blockedText` `noteBlocked` `decideEdit`），它们是对门面已暴露的 `flowAuth` / `gate` 同名方法的**薄包装**，目前只有测试在调；生产代码直接用底层对象，另有一处 `gateway/plugin.js` 直接 import `decideGateEdit`。
+
+所以这两个阀门的定位是「**判定与状态集中在这一层**」，不是「所有调用都必须穿过这些包装方法」。要真正收成单一入口，得把 `tools/` 与 `gateway/` 里的直接 import 一并改过来——那是另一次重构，不是补丁。

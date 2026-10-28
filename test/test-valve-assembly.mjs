@@ -177,12 +177,29 @@ await check('阀门成型后接管传输层的代理策略', async () => {
   });
   assert.equal(currentProxy(), '', '卸下后回到默认直连');
 });
+await check('网络阀门只暴露两个接口：流量管控 + 代理状态', async () => {
+  const configured = { value: 'http://127.0.0.1:7890' };
+  await withValve(configured, async (valve) => {
+    // 接口一：流量管控
+    assert.deepEqual(Object.keys(valve.traffic).sort(), ['createGuardProxy', 'fetchText', 'post', 'request']);
+    // 接口二：代理状态（只读，不含任何出网能力）
+    assert.deepEqual(Object.keys(valve.proxyStatus).sort(), ['hasProxy']);
+    for (const name of Object.keys(valve.proxyStatus)) {
+      assert.equal(typeof valve.proxyStatus[name], 'function');
+      assert.notEqual(valve.proxyStatus[name].constructor.name, 'AsyncFunction', 'proxyStatus 不该是异步出网方法');
+    }
+    // 代理状态要如实反映配置，插件读它就能判断
+    assert.equal(valve.proxyStatus.hasProxy(), true);
+    configured.value = '';
+    assert.equal(valve.proxyStatus.hasProxy(), false);
+  });
+});
 await check('hasProxy 反映当前是否配了代理', async () => {
   const configured = { value: '' };
   await withValve(configured, async (valve) => {
-    assert.equal(valve.hasProxy(), false);
+    assert.equal(valve.proxyStatus.hasProxy(), false);
     configured.value = 'http://127.0.0.1:7890';
-    assert.equal(valve.hasProxy(), true);
+    assert.equal(valve.proxyStatus.hasProxy(), true);
   });
 });
 
@@ -225,7 +242,7 @@ await check('net.fetchText：配了代理走代理，没配代理走直连', asy
     const dead = { value: 'http://127.0.0.1:9' };
     await withValve(dead, async (valve) => {
       let failure = '';
-      try { await valve.fetchText('https://probe.example/x', { useProxy: true, timeoutMs: 4000 }); }
+      try { await valve.traffic.fetchText('https://probe.example/x', { useProxy: true, timeoutMs: 4000 }); }
       catch (error) { failure = String(error && error.message ? error.message : error); }
       assert.ok(failure !== '', '死代理必须抓取失败（成功说明没走代理）');
       assert.equal(directHits, 0, '走代理时不该落到直连');
@@ -234,7 +251,7 @@ await check('net.fetchText：配了代理走代理，没配代理走直连', asy
     directHits = 0;
     const plain = { value: '' };
     await withValve(plain, async (valve) => {
-      const got = await valve.fetchText('https://probe.example/x', { useProxy: true, timeoutMs: 4000 });
+      const got = await valve.traffic.fetchText('https://probe.example/x', { useProxy: true, timeoutMs: 4000 });
       assert.equal(got.status, 200, '没配代理就该直连成功');
       assert.equal(directHits, 1, '直连分支应当命中 request 钩子');
     });
@@ -242,7 +259,7 @@ await check('net.fetchText：配了代理走代理，没配代理走直连', asy
     directHits = 0;
     const configured = { value: 'http://127.0.0.1:9' };
     await withValve(configured, async (valve) => {
-      const got = await valve.fetchText('https://probe.example/x', { useProxy: false, timeoutMs: 4000 });
+      const got = await valve.traffic.fetchText('https://probe.example/x', { useProxy: false, timeoutMs: 4000 });
       assert.equal(got.status, 200, 'useProxy:false 必须直连');
       assert.equal(directHits, 1);
     });
@@ -255,7 +272,8 @@ await check('工具源码里不再读 webSearch.proxy（只有 moli 分支例外
   const imgsearch = await read('imgsearch.js');
   // 这两个文件整份都不该出现 proxy（含注释）。hasProxy() 是「问阀门有没有配代理」，
   // 属于合法用法，先剔掉再查，免得把正解当成违规。
-  const strip = (src) => src.replace(/hasProxy/g, '');
+  // 阀门的两个接口名（traffic / proxyStatus）与 hasProxy() 都是合法用法，先剔除再查。
+  const strip = (src) => src.replace(/hasProxy/g, '').replace(/proxyStatus/g, '').replace(/traffic/g, '');
   assert.ok(!/proxy/i.test(strip(websearch)), 'websearch 不该出现 proxy');
   assert.ok(!/proxy/i.test(strip(imgsearch)), 'imgsearch 不该出现 proxy');
   const index = await read('index.js');
