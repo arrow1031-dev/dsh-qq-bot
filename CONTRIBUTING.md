@@ -33,13 +33,13 @@ node test/run-all.mjs
 
 ## 代码约定
 
-1. **工具注册**：一律走 `lib/tools.js` 的 `registerTool(ctx, make)`。
+1. **工具注册**：一律走 `lib/tools/index.js` 的 `registerTool(ctx, make)`。
    DSH 0.2 的 Cordis Guard 不允许直接读 `ctx.tools`，必须先 `ctx.get('tools')`，
    未就绪时用 `ctx.inject(['tools'], ...)` 动态挂载。绕过它会静默丢掉工具。
 2. **配置**：新字段加到 `lib/config.js` 的 `DEFAULTS` 与 `Config`，可热改的标 `.volatile()`；
-   设置页字段在 `lib/client.js` 的 `FIELDS` 里加。
+   设置页字段在 `lib/client/settings.js` 的 `FIELDS` 里加。
 3. **测试**：新增行为在 `test/` 补用例，并挂到 `test/run-all.mjs`。
-4. **新协议**：读 `lib/bridge/CONTRACT.md`，在 `lib/adapters/` 下加一个 stdin/stdout 适配器，再到 `lib/index.js` 的 `ADAPTER_FILES` 与 `lib/config.js` 的 `protocols` 登记；适配器必须零 npm 依赖，并自带上限为一条的协议端假服务端测试。
+4. **新协议**：读 `lib/transport/bridge/CONTRACT.md`，在 `lib/transport/adapters/` 下加一个 stdin/stdout 适配器，再到 `lib/transport/index.js` 的 `ADAPTER_ENTRIES` 与 `lib/config.js` 的 `protocols` 登记；适配器必须零 npm 依赖，并自带上限为一条的协议端假服务端测试。
 5. **文档**：面向用户的行为变化写进 `CHANGELOG.md`；结构变化同步 `ARCHITECTURE.md`；新协议写进 README 的协议表。
 
 ## 版本与发布

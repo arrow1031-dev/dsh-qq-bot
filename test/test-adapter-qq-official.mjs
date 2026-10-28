@@ -20,10 +20,10 @@ import path from 'node:path';
 import process from 'node:process';
 import http from 'node:http';
 import crypto from 'node:crypto';
-import { acceptKey, encodeTextFrame, decodeFrames } from '../lib/bridge/ws.mjs';
+import { acceptKey, encodeTextFrame, decodeFrames } from '../lib/transport/bridge/ws.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const ADAPTER = path.join(here, '..', 'lib', 'adapters', 'qq-official.mjs');
+const ADAPTER = path.join(here, '..', 'lib', 'transport', 'adapters', 'qq-official.mjs');
 
 const APPID = '102030405';
 const SECRET = 'test-bot-secret';

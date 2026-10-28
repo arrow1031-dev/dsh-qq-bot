@@ -11,8 +11,8 @@
  *   - 没码 / 错码 / 没配 secret 一律拒绝（调用方回滚名单与开关并清码）；
  *   - 什么都没变 → 接受，但顺手把填进来的码清掉（码不落盘）。
  */
-import { sameToolList, decideGateEdit } from '../lib/gate-guard.js';
-import { generateSecret, totp } from '../lib/totp.js';
+import { sameToolList, decideGateEdit } from '../lib/valve/tool/gate-guard.js';
+import { generateSecret, totp } from '../lib/valve/security/totp.js';
 
 let pass = 0;
 let fail = 0;

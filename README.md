@@ -63,7 +63,7 @@ dsh plugin --profile web update
 `--profile` 换成你实际在用的：桌面版是 `--profile desktop`，`dsh web` 部署一般是 `--profile web`。
 也可以在界面里装：**插件 → 添加插件**，填上面那行包名。
 
-装完**重启 DSH**（桌面版重启应用 / CLI 重启 `dsh web`）。`lib/client.js` 是浏览器侧代码，重启后还要**刷新页面**。
+装完**重启 DSH**（桌面版重启应用 / CLI 重启 `dsh web`）。`lib/client/settings.js` 是浏览器侧代码，重启后还要**刷新页面**。
 
 ### 3. 在 QQ 里试
 

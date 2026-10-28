@@ -6,7 +6,7 @@
  *
  * 只测「消息是不是这两条指令、参数是什么」；鉴权与放行不在这里（见 test-flow-auth / test-flow-gate）。
  */
-import { parseAuthCommand, parseFlowCommand, flowInterceptKind, artifactInputLines, flowReasonZh, stripInvisible, FLOW_HELP } from '../lib/flow-commands.js';
+import { parseAuthCommand, parseFlowCommand, flowInterceptKind, artifactInputLines, flowReasonZh, stripInvisible, FLOW_HELP } from '../lib/gateway/commands.js';
 
 let pass = 0;
 let fail = 0;

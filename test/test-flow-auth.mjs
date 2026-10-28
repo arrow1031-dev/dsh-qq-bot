@@ -6,8 +6,8 @@
  *
  * 正确码由「注入时钟 + 真 TOTP」算出来，不存在任何测试专用 bypass。
  */
-import { createFlowAuth } from '../lib/flow-auth.js';
-import { generateSecret, totp, generateBackupCodes, hashBackupCode } from '../lib/totp.js';
+import { createFlowAuth } from '../lib/valve/security/flow-auth.js';
+import { generateSecret, totp, generateBackupCodes, hashBackupCode } from '../lib/valve/security/totp.js';
 
 let pass = 0;
 let fail = 0;

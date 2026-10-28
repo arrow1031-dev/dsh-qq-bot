@@ -2,11 +2,11 @@
 // 跑法：node test/test-security.mjs
 import assert from 'node:assert';
 import { readFile } from 'node:fs/promises';
-import { safeSessionId, sessionWorkdir, imageCacheDir, isInside, qqMsgRootSync } from '../lib/workspace.js';
-import { resolveTargetAuthority, createAdmin } from '../lib/admin.js';
-import { checkCaller } from '../lib/owner-settings.js';
-import { assertPublicHost, publicFetch, multiEngineRequest, pinnedLookup, isNonPublicIp, canonicalHost, __setNetworkHooks, MAX_FETCH_BYTES } from '../lib/http.js';
-import { resolveListenAddress, tokenEquals, decodeFrames } from '../lib/bridge/ws.mjs';
+import { safeSessionId, sessionWorkdir, imageCacheDir, isInside, qqMsgRootSync } from '../lib/session/workspace.js';
+import { resolveTargetAuthority, createAdmin } from '../lib/api/group-admin.js';
+import { checkCaller } from '../lib/valve/security/owner-settings.js';
+import { assertPublicHost, publicFetch, multiEngineRequest, pinnedLookup, isNonPublicIp, canonicalHost, __setNetworkHooks, MAX_FETCH_BYTES } from '../lib/shared/http.js';
+import { resolveListenAddress, tokenEquals, decodeFrames } from '../lib/transport/bridge/ws.mjs';
 
 let pass = 0;
 const fails = [];
@@ -227,7 +227,7 @@ await check('正常小帧不误判', () => {
 console.log('\n8. 回归：识图下载必须走 publicFetch（#15 曾被分支重建回退过一次）');
 // downloadImage 是 apply() 里的闭包，没有导出，运行期测不到；这里锁源码形状：
 // 谁在旧快照上重建分支，这一条会立刻红，而不是等下次渗透测试才发现回归。
-const indexSrc = await readFile(new URL('../lib/index.js', import.meta.url), 'utf8');
+const indexSrc = await readFile(new URL('../lib/gateway/plugin.js', import.meta.url), 'utf8');
 function functionBody(src, signature) {
   const start = src.indexOf(signature);
   if (start < 0) return '';

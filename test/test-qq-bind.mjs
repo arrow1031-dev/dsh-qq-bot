@@ -5,8 +5,8 @@
  * 守的边界：二维码回调 → waiting；凭据只经 onCredentials 一次、不进 state()；
  * 出错给 failed 而不是静默；refresh 会停旧任务；路由响应不含 appSecret。
  */
-import { createQqBind } from '../lib/qq-bind.js';
-import { registerBindRoutes, BIND_STATE_PATH, BIND_REFRESH_PATH } from '../lib/bind-routes.js';
+import { createQqBind } from '../lib/api/qq-bind.js';
+import { registerBindRoutes, BIND_STATE_PATH, BIND_REFRESH_PATH } from '../lib/gateway/routes-bind.js';
 
 let pass = 0;
 let fail = 0;

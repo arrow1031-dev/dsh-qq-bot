@@ -8,7 +8,7 @@
  *   - 都没有 → 不假装，给明确错误；
  *   - 偏好文件读写（官方插件那套 fallback）。
  */
-import { createModelRouter, createPrefsFile, parseModelCommand } from '../lib/model-router.js';
+import { createModelRouter, createPrefsFile, parseModelCommand } from '../lib/session/model-router.js';
 
 let pass = 0;
 let fail = 0;

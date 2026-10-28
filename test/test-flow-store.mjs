@@ -11,7 +11,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createFlowStore, isValidFlowName, sha256 } from '../lib/flow-store.js';
+import { createFlowStore, isValidFlowName, sha256 } from '../lib/valve/security/flow-store.js';
 
 let pass = 0;
 let fail = 0;

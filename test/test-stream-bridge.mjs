@@ -5,7 +5,7 @@
  * 守的是：同会话增量合并（每次发全文）、节流窗口内不重复发、结束时必发 done、
  * 发送失败后停用本会话、群聊/非官方协议不会被这套逻辑“假装支持”。
  */
-import { createStreamBridge, shouldStream } from '../lib/stream-bridge.js';
+import { createStreamBridge, shouldStream } from '../lib/message/stream.js';
 
 let pass = 0;
 let fail = 0;

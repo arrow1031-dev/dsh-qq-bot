@@ -1,3 +1,58 @@
+## 未发布 —— 目录重构：分层 + 三道阀门独立 + 组装优先级（2026-10-28）
+
+纯结构调整，**行为不变**：重构前后 37 个测试套件全绿，插件对外契约（包名、入口路径、
+配置 schema、工具名、路由路径）一个都没动。
+
+### 目录按关注点分层
+
+```
+lib/
+├── index.js        包入口薄壳（只转发，包入口路径是对外契约）
+├── assemble.js     组装根（按 STAGE 表把阀门依次成型）
+├── config.js       配置 schema
+├── valve/          ★ 阀门层（独立、可单测、无插件内部依赖）
+│   ├── network/    policy.js 判定 · index.js 门面 · guard-proxy.js 本地校验代理
+│   ├── security/   totp · flow-auth · flow-store · history-auth · owner-settings
+│   └── tool/       index.js 门面 · gate-guard.js
+├── gateway/        plugin.js 主体 · index.js 路由挂载 · routes-bind · commands
+├── message/        index.js 组装入口 · chunk · stream · interim · segments · msgid-cache
+├── tools/          index.js 注册 · websearch · imgsearch · imagegen · moli · qr
+├── session/        manager · model-router · workspace · proactive
+├── api/            group-admin · qq-bind
+├── transport/      index.js 注册表 · adapters/ · bridge/
+├── shared/         http.js 传输机制 · compat.js
+└── client/         settings.js 浏览器侧设置区
+```
+
+### 五个关注点各自收成一处
+
+- **网关路由**：`gateway/index.js` 的 `ROUTE_MOUNTS` 表统一挂载（等 webServer 就绪、逆序注销、
+  不可用静默降级），新增路由只加一条表项。
+- **消息组装**：`message/index.js` 固定顺序「中间发言 → 正文分条 → 流式合并」，
+  `assembleReply()` 是纯函数，三处各自发送造成的错位不再可能。
+- **网络阀门**：判定（`valve/network/policy.js`）与传输（`shared/http.js`）分离——
+  前者回答「能不能出站」，后者只负责「怎么出站」。回环地址永不进代理；域名不再被误判成本机。
+- **安全阀**：`valve/security/index.js` 把 TOTP / 流程授权 / 历史鉴权 / 拥有者通道收进一个门面，
+  红线集中写在文件头，避免「这个入口要码、那个入口不要」的裂缝。
+- **工具阀**：`valve/tool/index.js` 只管「这个工具要不要卡、这张卡能不能用」，消费安全阀的
+  grant、不持有密钥；改名单与关开关都要码的判定仍在 `gate-guard.js`。
+
+### 组装优先级成型
+
+`valve/index.js` 的 `STAGE` 表：network(10) → security(20) → tool(30) → message(40) →
+gateway(50) → transport(60)。`assemble.js` 照着执行，依赖没成型就装配会直接抛错，
+不会静默降级成「没有阀门」。启动日志打一行 `装配顺序 10:valve/network → …`，排障先看它。
+
+### 测试与文档
+
+- 新增 `test/test-valve-assembly.mjs`（25 项）：锁住三道阀门的契约字段、装配顺序、
+  网络判定口径（编码变体 / 云元数据 / 本机保留名 / 域名不误判）、工具阀的一次性消费语义、
+  消息组装顺序、传输层注册表。套件总数 36 → 37。
+- `ARCHITECTURE.md` 重写「分层」与「模块清单」（按层列表 + 组装优先级表），
+  `DEVELOPMENT.md` 文件清单同步，README 的客户端路径更新。
+- `package.json` 的 `exports`：`./client` → `lib/client/settings.js`，
+  `./adapter` → `lib/transport/onebot-adapter.mjs`（包名与入口 `lib/index.js` 不变）。
+
 ## 0.12.7 —— 稳定性与体验优化（2026-10-28）
 
 ### 原装抓取工具 moli_fetch 进默认 gatedTools（一道验证墙，不叠第二道）

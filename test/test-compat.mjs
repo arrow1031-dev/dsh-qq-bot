@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import {
   parseVersion, compareVersions, judgeCompatibility, detectDshVersion,
   compatibilityInfo, describeCompatibility, SUPPORT_FLOOR, SUPPORT_CEILING,
-} from '../lib/compat.js';
+} from '../lib/shared/compat.js';
 
 let pass = 0;
 let fail = 0;

@@ -2,7 +2,7 @@
 import {
   SPECS, specFor, isDenied, validateValue, nestedPatch, matchNamespace, checkCaller,
   createOwnerSettings, TOKEN_TTL_MS,
-} from '../lib/owner-settings.js';
+} from '../lib/valve/security/owner-settings.js';
 
 let pass = 0;
 let fail = 0;

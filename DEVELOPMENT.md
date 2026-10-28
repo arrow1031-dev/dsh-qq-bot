@@ -32,7 +32,7 @@ npm test                   # 同上
 | `test-adapter-satori.mjs` | 70 | Satori 适配器 |
 | `test-adapter-milky.mjs` | 83 | Milky 适配器（含 WebHook 默认准入与读体上限） |
 | `test-adapter-qq-official.mjs` | 109 | QQ 官方适配器（含回调重放防护） |
-| `test-plugin.mjs` | 124 | Host 半边：假 ctx + 真适配器 + 真 `lib/index.js`，含 Config 契约、热更新、9 个工具、适配器重启、默认准入 fail-closed 与入站限制（124 项含工具注册段落；解析不到 `@deepseek-ai/dsh-tools` 的裸克隆里为 98 项 + 6 项 `[SKIP]`） |
+| `test-plugin.mjs` | 124 | Host 半边：假 ctx + 真适配器 + 真 `lib/index.js`（入口薄壳 → `lib/gateway/plugin.js`），含 Config 契约、热更新、9 个工具、适配器重启、默认准入 fail-closed 与入站限制（124 项含工具注册段落；解析不到 `@deepseek-ai/dsh-tools` 的裸克隆里为 98 项 + 6 项 `[SKIP]`） |
 | `test-client.mjs` | 109 | 客户端设置页：模拟模块加载器 + 最小 React 渲染 + 四档标签 + 只写密钥护栏 |
 | `test-admin.mjs` | 38 | 权限 · 群管理 · 访客工具闸 |
 | `test-http.mjs` | 30 | HTTP / 代理隧道 / IP 归一与公网判定 |
@@ -172,7 +172,7 @@ node -e "fetch('http://127.0.0.1:3000/__sent').then(r=>r.json()).then(j=>console
       maxConcurrentRenders: 2   # 全局同时最多几个渲染在跑（跨会话，0 = 不限；超出的直接返回忙，不排队）
     flowAuth:
       enabled: false   # 流程授权总开关（子代理/队友/工作流需私聊动态码）
-      totpSecret: ''   # base32；node lib/totp-cli.mjs enroll 生成后粘过来（不经 QQ）
+      totpSecret: ''   # base32；node lib/valve/security/totp-cli.mjs enroll 生成后粘过来（不经 QQ）
       enrolledAt: 0   # 0 = 未确认绑定；>0 后设置页不再展示二维码
       grantTtlSeconds: 30
       maxAttempts: 5
@@ -342,10 +342,10 @@ node -e "fetch('http://127.0.0.1:3000/__sent').then(r=>r.json()).then(j=>console
 
 `flowAuth.enabled` 打开后，QQ 会话里的原生编排工具（`subagent` / `subagent_fork` / `spawn_teammate` / `workflow`）与第三方抓取工具（`moli_fetch`）被同名遮蔽接管：拥有者私聊要过一次 6 位动态码，其它会话直接拿到「只能在拥有者私聊里驱动」的拒绝。DSH 里正常建的会话不受影响。
 
-- 密钥导入**不走 QQ**：设置页「高级 → 流程授权 → 绑定二维码」就地生成 base32 密钥并画二维码，认证器扫码绑定；也可以用 `node lib/totp-cli.mjs enroll` 在服务器上生成后粘贴。密钥只存 seed，不写日志。
+- 密钥导入**不走 QQ**：设置页「高级 → 流程授权 → 绑定二维码」就地生成 base32 密钥并画二维码，认证器扫码绑定；也可以用 `node lib/valve/security/totp-cli.mjs enroll` 在服务器上生成后粘贴。密钥只存 seed，不写日志。
 - 授权窗口 `grantTtlSeconds`（默认 30 秒，最小 30）内 **1 次有效**，用掉即弃；连续错 `maxAttempts` 次锁 `lockoutMinutes` 分钟。
 - 这一轮跑完把会话工作区里**本轮新增/改动**的文件打包回传（`flow.deliver`：`private` / `group:<群号>` / `none`），数量与体积受 `flow.maxFiles` / `flow.maxBytes` 限制；产物上传依赖协议端支持 `upload_private_file` / `upload_group_file`。
-- **手机丢了**：`node lib/totp-cli.mjs recovery` 打印盐、8 条一次性恢复码与哈希；把哈希与盐填进设置页，明文抄纸上。之后私聊发 `/auth XXXXX-XXXXX`（字母+数字，靠格式与 6 位动态码区分）。
+- **手机丢了**：`node lib/valve/security/totp-cli.mjs recovery` 打印盐、8 条一次性恢复码与哈希；把哈希与盐填进设置页，明文抄纸上。之后私聊发 `/auth XXXXX-XXXXX`（字母+数字，靠格式与 6 位动态码区分）。
 
 `/flow` 指令（只认拥有者私聊）：
 
@@ -381,37 +381,48 @@ node -e "fetch('http://127.0.0.1:3000/__sent').then(r=>r.json()).then(j=>console
 
 ## 8. 文件清单
 
+目录按关注点分层，阀门独立成模块、由组装根按优先级装起来（详见 `ARCHITECTURE.md`）。
+
 | 文件 | 作用 |
 | --- | --- |
-| `lib/index.js` | Cordis 插件入口（Host 侧）。导出 `name` / `inject` / `Config` / `apply` |
+| `lib/index.js` | 包入口**薄壳**：只转发到 `lib/gateway/plugin.js`（导出 `name` / `inject` / `Config` / `apply`） |
+| `lib/assemble.js` | **组装根**：按 `STAGE` 表把三道阀门依次成型；`describeAssembly()` 给启动日志 |
 | `lib/config.js` | `Config` schema、`DEFAULTS`、深合并、volatile 还原、废弃键识别 |
-| `lib/client.js` | 客户端半边（手写 bundle）：插件面板里的设置区。**模块 id 与插槽 key 必须等于 npm 包名**，设置命名空间仍是条目 id |
-| `lib/session.js` | 会话创建 / 复用、固定命名、访客工具闸、编排工具闸门接管 |
-| `lib/tools.js` | 9 个模型工具（统一走 `registerTool`，DSH 0.2 契约） |
-| `lib/admin.js` | 群管理指令、三路权限、动态授权 |
-| `lib/owner-settings.js` | 拥有者设置通道：白名单、两步确认、限流、审计 |
-| `lib/workspace.js` | `QQ_msg` 工作区根解析、会话独占工作目录 |
-| `lib/bridge/` | 适配器共享层：手写 WebSocket、stdio 契约、消息段归一（`CONTRACT.md` 是写新适配器的入口） |
-| `lib/adapters/` | 协议适配器：onebot11 / onebot12 / satori / milky / qq-official |
-| `lib/onebot-adapter.mjs` | 兼容入口（一行 import 到 `adapters/onebot11.mjs`） |
-| `lib/http.js` | fetch + HTTP CONNECT 代理隧道 + 公网地址校验 |
-| `lib/websearch.js` | Tavily / DuckDuckGo / Yandex / Bing / Wikipedia 组合搜索 |
-| `lib/imgsearch.js` | 图床 + TraceMoe / IQDB / SauceNAO / Soutubot 等反搜 |
-| `lib/imagegen.js` | 生图（`/images/generations` + 重试 + 任务轮询） |
-| `lib/moli.js` | Moli 引擎封装：探测可执行文件、拼 argv（含 `--fail-with-body`）、spawn 与超时、头尾截断 |
-| `lib/totp.js` | 零依赖 TOTP / HOTP / base32 / 恢复码 |
-| `lib/totp-cli.mjs` | 终端绑定：secret / otpauth URI / 二维码 / 恢复码 |
-| `lib/qr.js` | 二维码编码器（字节模式、纠错 M、v1–v9），浏览器版同算法副本 |
-| `lib/flow-auth.js` | 流程授权状态机 + 闸门 |
-| `lib/guard-proxy.js` | 本地校验代理：moli 全部流量逐条过 `guardTargetAllowed`（确定是内网才拒，本机解析不了就交给上游），策略拒绝回 403、连接类失败回 502（只监听 127.0.0.1） |
-| `lib/flow-store.js` | 流程脚本存取（名字白名单、sha256、路径穿越防护） |
-| `lib/flow-commands.js` | `/auth` `/flow` 解析、拦截判定、产物输入归一 |
-| `lib/interim.js` | 中间发言挑选（哪段现在发、哪段留结论） |
-| `lib/history-auth.js` | 历史消息的会话定向与鉴权 |
-| `lib/proactive.js` | 主动发言纯逻辑（时间窗、提示词、决策解析、频率闸、两段式） |
-| `lib/compat.js` | DSH 版本兼容自检（只维护两个常量） |
+| **阀门层** | |
+| `lib/valve/index.js` | 阀门注册表：有哪几道阀门、成型顺序、依赖关系（**调优先级只改这里**） |
+| `lib/valve/network/` | 网络阀门：`index.js` 门面（能不能出站 / 代理语义）、`policy.js` 纯判定（公网/内网/钉地址）、`guard-proxy.js` 本地校验代理 |
+| `lib/valve/security/` | 安全阀：`index.js` 门面 + `totp.js` `flow-auth.js` `flow-store.js` `history-auth.js` `owner-settings.js` `totp-cli.mjs` |
+| `lib/valve/tool/` | 工具阀：`index.js` 门面（名单 / 拦截 / 改闸门要码）+ `gate-guard.js` |
+| **网关层** | |
+| `lib/gateway/plugin.js` | Cordis 插件主体：适配器生命周期、帧分发、回合/回复/视觉、主动发言、配置热更新 |
+| `lib/gateway/index.js` | HTTP 路由统一挂载（`ROUTE_MOUNTS` 表 + webServer 就绪 + 逆序注销） |
+| `lib/gateway/routes-bind.js` | 扫码绑定的两条具名路由 |
+| `lib/gateway/commands.js` | `/auth` `/flow` 解析、拦截判定、产物输入归一 |
+| **消息组装层** | |
+| `lib/message/index.js` | 组装入口：中间发言 → 正文分条 → 流式合并（`assembleReply` 纯函数） |
+| `lib/message/` | `chunk.js` 分条、`stream.js` 流式桥、`interim.js` 中间发言、`segments.mjs` 统一段、`msgid-cache.js` 入站去重 |
+| **工具层** | |
+| `lib/tools/index.js` | 9 个模型工具（统一走 `registerTool`，DSH 0.2 契约） |
+| `lib/tools/` | `websearch.js` 组合搜索、`imgsearch.js` 反搜 + 图床、`imagegen.js` 生图、`moli.js` 引擎封装、`qr.js` 二维码编码器 |
+| **会话层** | |
+| `lib/session/manager.js` | 会话创建 / 复用、固定命名、访客工具闸、编排工具闸门接管 |
+| `lib/session/` | `model-router.js` 模型选择、`workspace.js` QQ_msg 工作区根、`proactive.js` 主动发言纯逻辑 |
+| **平台接口层** | |
+| `lib/api/group-admin.js` | 群管理指令、三路权限、动态授权 |
+| `lib/api/qq-bind.js` | 官方 Bot 扫码绑定状态机 |
+| **传输层** | |
+| `lib/transport/index.js` | 协议名 -> 适配器路径注册表（新增协议只改这里） |
+| `lib/transport/adapters/` | 协议适配器：onebot11 / onebot12 / satori / milky / qq-official |
+| `lib/transport/bridge/` | 适配器共享层：手写 WebSocket、stdio 契约（`CONTRACT.md` 是写新适配器的入口） |
+| `lib/transport/onebot-adapter.mjs` | 兼容入口（一行 import 到 `adapters/onebot11.mjs`） |
+| **公共层** | |
+| `lib/shared/http.js` | HTTP 传输机制：直连 / CONNECT 代理隧道 / 超时 / 体积上限（判定在 `valve/network/policy.js`） |
+| `lib/shared/compat.js` | DSH 版本兼容自检（只维护两个常量） |
+| **浏览器侧** | |
+| `lib/client/settings.js` | 客户端半边（手写 bundle）：插件面板里的设置区。**模块 id 与插槽 key 必须等于 npm 包名**，设置命名空间仍是条目 id |
+| **其他** | |
 | `cordis.patch.yml` | bundle 补丁：把插件插入 profile 组合树（`id` 固定，`name` 跟包名走） |
-| `test/` | 30 个测试套件 + `mock-onebot.mjs`（零依赖 OneBot 11 模拟器）+ `dsh-tools-link.mjs`（给宿主编译期服务建临时链接） |
+| `test/` | 37 个测试套件 + `mock-onebot.mjs`（零依赖 OneBot 11 模拟器）+ `dsh-tools-link.mjs`（给宿主编译期服务建临时链接） |
 | `examples/dynamic-package-host.js` | 动态 Cordis Package 版（不装包也能在当前进程里试） |
 
 ## 9. 设计说明（踩过的坑）
@@ -453,7 +464,7 @@ node -e "fetch('http://127.0.0.1:3000/__sent').then(r=>r.json()).then(j=>console
 
 - **DSH 版本**：要求 `>= 0.2.0-rc.2 < 0.3.0`。插件启动时读实际版本并判定，日志形如
   `[dsh-qq-bot] 运行于 DSH 0.2.1-rc.3（在声明支持范围 0.2.0-rc.2-0 <= v < 0.3.0-0 内）`；`qqbot status` 的 `runtime` 字段给同一结论。
-  支持范围只维护 `lib/compat.js` 的 `SUPPORT_FLOOR` / `SUPPORT_CEILING`，DSH 出新版本不用改代码。识别失败或超范围只提示，不影响收发消息。
+  支持范围只维护 `lib/shared/compat.js` 的 `SUPPORT_FLOOR` / `SUPPORT_CEILING`，DSH 出新版本不用改代码。识别失败或超范围只提示，不影响收发消息。
 - **工具注册与闸门（0.8.0 起）**：注册先 `ctx.get('tools')`，未就绪用 `ctx.inject(['tools'], …)` 动态挂载；闸门走 `agent.ctx.get('tools').guard(…)`，取不到才回退 `agent.ctx.tools`。`tools` 仍是可选服务：没有它插件照常收发消息，只是少几个模型工具。
 - **旧会话不会被删**：旧版本建的 QQ 会话可能绑在别的工作区。插件检测到 `belongs to "…"` 时**不动旧会话**（历史完整保留），改用工作区限定的 id（`qqbot-group-<群号>-ws<6位哈希>`）新建一条，重试一次即成功，日志写明。
 
@@ -466,7 +477,7 @@ node -e "fetch('http://127.0.0.1:3000/__sent').then(r=>r.json()).then(j=>console
 
 ## 14. 维护状态
 
-本仓库就是主干：0.8.0 并入下游分支（模块化重构 + 联网/抓取/反搜/历史工具），0.10.0 把协议层拆成 `lib/bridge/` + `lib/adapters/`（一套插件接五种协议），0.11.0 把设置面板搬进插件详情页，0.12 加入流程授权与中间发言。
+本仓库就是主干：0.8.0 并入下游分支（模块化重构 + 联网/抓取/反搜/历史工具），0.10.0 把协议层拆成 `lib/transport/bridge/` + `lib/transport/adapters/`（一套插件接五种协议），0.11.0 把设置面板搬进插件详情页，0.12 加入流程授权与中间发言。
 
 - 安装跟随 `main`，不再锁 tag；每次合并后在 `main` 打 tag 发 Release。
 - 提 issue / PR / Discussions 都欢迎，活跃贡献者会被邀请为协作者。

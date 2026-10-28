@@ -8,10 +8,10 @@ import http from 'node:http';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
-import { startReverseServer, connectForward } from '../lib/bridge/ws.mjs';
+import { startReverseServer, connectForward } from '../lib/transport/bridge/ws.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const ADAPTER = path.join(here, '..', 'lib', 'adapters', 'onebot12.mjs');
+const ADAPTER = path.join(here, '..', 'lib', 'transport', 'adapters', 'onebot12.mjs');
 
 let pass = 0;
 let fail = 0;

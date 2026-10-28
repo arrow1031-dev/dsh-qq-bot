@@ -18,11 +18,11 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import process from 'node:process';
-import { acceptKey, encodeTextFrame, encodeFrame, decodeFrames } from '../lib/bridge/ws.mjs';
-import { contentToSegments, segmentsToContent, normalizeWsUrl, deriveHttpBase, parseChannelId, eventToFrame } from '../lib/adapters/satori.mjs';
+import { acceptKey, encodeTextFrame, encodeFrame, decodeFrames } from '../lib/transport/bridge/ws.mjs';
+import { contentToSegments, segmentsToContent, normalizeWsUrl, deriveHttpBase, parseChannelId, eventToFrame } from '../lib/transport/adapters/satori.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const ADAPTER = path.join(here, '..', 'lib', 'adapters', 'satori.mjs');
+const ADAPTER = path.join(here, '..', 'lib', 'transport', 'adapters', 'satori.mjs');
 
 let failures = 0;
 const results = [];

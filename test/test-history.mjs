@@ -2,7 +2,7 @@
 import {
   currentConversationOf, resolveHistoryTarget,
   judgeHistoryAccess, buildHistoryRequest, normalizeHistory,
-} from '../lib/history-auth.js';
+} from '../lib/valve/security/history-auth.js';
 
 let pass = 0;
 let fail = 0;

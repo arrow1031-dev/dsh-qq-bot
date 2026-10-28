@@ -23,7 +23,7 @@ import path from 'node:path';
 import process from 'node:process';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const ADAPTER = path.join(here, '..', 'lib', 'adapters', 'milky.mjs');
+const ADAPTER = path.join(here, '..', 'lib', 'transport', 'adapters', 'milky.mjs');
 
 // ====================================================================== 假协议端
 

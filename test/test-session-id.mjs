@@ -2,7 +2,7 @@
  * 会话 id 作用域回退自测：旧工作区会话冲突时不删旧会话，改用工作区限定 id。
  * 用法：node test/test-session-id.mjs
  */
-import { scopedSessionId } from '../lib/session.js';
+import { scopedSessionId } from '../lib/session/manager.js';
 
 let pass = 0, fail = 0;
 function check(name, ok, detail) {

@@ -4,7 +4,7 @@
  *
  *   node test/test-totp.mjs
  */
-import { base32Decode, hotp, totp, totpVerify, generateSecret, otpauthUri, generateBackupCodes, hashBackupCode, verifyBackupCode } from '../lib/totp.js';
+import { base32Decode, hotp, totp, totpVerify, generateSecret, otpauthUri, generateBackupCodes, hashBackupCode, verifyBackupCode } from '../lib/valve/security/totp.js';
 
 let pass = 0;
 let fail = 0;

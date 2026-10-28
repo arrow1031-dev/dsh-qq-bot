@@ -10,7 +10,7 @@
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { totpVerify, verifyBackupCode } from '../lib/totp.js';
+import { totpVerify, verifyBackupCode } from '../lib/valve/security/totp.js';
 
 let pass = 0;
 let fail = 0;
@@ -19,7 +19,7 @@ function check(name, ok, detail = '') {
   else { fail += 1; console.log('  FAIL ' + name + (detail === '' ? '' : ' — ' + detail)); }
 }
 
-const cli = join(dirname(fileURLToPath(import.meta.url)), '..', 'lib', 'totp-cli.mjs');
+const cli = join(dirname(fileURLToPath(import.meta.url)), '..', 'lib', 'valve', 'security', 'totp-cli.mjs');
 
 function run(args) {
   try {
@@ -39,7 +39,7 @@ const secret = secretMatch === null ? '' : secretMatch[1];
 const uriMatch = /otpauth:\/\/totp\/[^\s]+/.exec(enroll.stdout);
 check('打印了 otpauth URI', uriMatch !== null);
 check('URI 里的 secret 与 secret 行一致', uriMatch !== null && uriMatch[0].includes('secret=' + secret));
-const code = (await import('../lib/totp.js')).totp(secret, { timeMs: 1700000000000 });
+const code = (await import('../lib/valve/security/totp.js')).totp(secret, { timeMs: 1700000000000 });
 const verified = totpVerify(secret, code, { timeMs: 1700000000000, window: 0 });
 check('用打印出的 secret 算出的码能验过', verified.ok === true && verified.counter > 0);
 

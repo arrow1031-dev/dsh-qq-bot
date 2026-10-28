@@ -6,8 +6,8 @@
  *
  * 正确码由注入时钟 + 真 TOTP 算出来，没有任何测试专用放行。
  */
-import { createFlowAuth, createFlowGate } from '../lib/flow-auth.js';
-import { generateSecret, totp } from '../lib/totp.js';
+import { createFlowAuth, createFlowGate } from '../lib/valve/security/flow-auth.js';
+import { generateSecret, totp } from '../lib/valve/security/totp.js';
 
 let pass = 0;
 let fail = 0;
