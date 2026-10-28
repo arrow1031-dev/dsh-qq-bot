@@ -1,3 +1,35 @@
+## 未发布 —— 代理收归网络阀门 + 文档收进 docs/（2026-10-28）
+
+### 代理不再由工具自己决定（行为等价，归属改变）
+
+- **问题**：上一轮把「目标能不能出站」的判定收进了网络阀门，但**用不用代理、用哪个代理**
+  仍散在调用点——`qq_webfetch` / `qq_imgsearch` / `runWebSearch` 各自从 `webSearch.proxy`
+  读一次字符串，再层层往下传。工具因此握有一条绕过出口管控的自由裁量权，且历史上已经
+  漂移过（三处调用方三种语义）。
+- **现在**：网络阀门在成型时（stage 10）用 `__setProxyResolver` 接管传输层的代理策略，
+  `shared/http.js` 不再读配置。工具只声明**意图**：
+  - `net.fetchText(url, { useProxy: true })` —— 走统一策略（配了代理就走，没配就直连）
+  - `multiEngineRequest(…, { useProxy: false })` —— 明确要求直连
+  - 不传 spec 的老调用 = 按阀门策略走；显式传字符串仍照用（只留给测试与特例）
+- 连带收敛：`runWebSearch` / `runImageSearch` / `uploadToHost` / `imgSearch*File` 等 12 个
+  函数签名里的 `proxy` 形参全部删除；`qq_imgsearch` 判断「哪些引擎可用」改为问
+  `net.hasProxy()`，不再自己嗅探代理串。
+- **保持原样**（按需求）：识图下载与生图结果下载继续走 `publicFetch` 强制直连；
+  `moli` 的 `moli.proxy` 覆盖/透传语义不动（那是用户显式配置，不归阀门管）。
+- 顺带修依赖方向：`valve/network/guard-proxy.js` 原来从 `shared/http.js` 取判定函数
+  （绕一圈 re-export），改为直接依赖 `valve/network/policy.js`——阀门内部不该反向依赖传输层。
+- 测试：`test-valve-assembly` 新增 4 条（阀门接管传输层 / 配置改了立刻生效 / `hasProxy` /
+  `multiEngineRequest` 不传代理也照阀门走且仍拒内网），并加一条结构性断言锁住
+  「工具源码里不再出现代理串」（moli 分支例外）。套件 37 个 / 1359 项。
+
+### 文档收进 docs/
+
+- 根目录只留 `README.md` 与 `CHANGELOG.md`；`ARCHITECTURE.md`、`DEVELOPMENT.md`、
+  `CONTRIBUTING.md`、`CODE_OF_CONDUCT.md`、`SECURITY.md`、`AI-DISCLOSURE.md` 移入 `docs/`。
+- GitHub 对 `docs/` 下的 CONTRIBUTING / CODE_OF_CONDUCT / SECURITY 仍有原生识别，
+  这几份的入口不会丢。
+- `package.json` 的 `files` 用 `docs` 整目录替代逐份列举；README 与文档间互链同步更新。
+
 ## 未发布 —— 目录重构：分层 + 三道阀门独立 + 组装优先级（2026-10-28）
 
 纯结构调整，**行为不变**：重构前后 37 个测试套件全绿，插件对外契约（包名、入口路径、

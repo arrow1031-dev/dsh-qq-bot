@@ -19,6 +19,8 @@ async function check(name, fn) {
 }
 
 const { STAGE, orderedValves, createNetworkValve, createSecurityValve, createToolValve } = await import('../lib/valve/index.js');
+const { currentProxy } = await import('../lib/shared/http.js');
+const { multiEngineRequest } = await import('../lib/shared/http.js');
 const { assembleValves, describeAssembly, ASSEMBLY_ORDER } = await import('../lib/assemble.js');
 const { assembleReply, ASSEMBLY_STEPS } = await import('../lib/message/index.js');
 const { resolveAdapterPath, supportedProtocols } = await import('../lib/transport/index.js');
@@ -153,6 +155,56 @@ await check('五种协议都有适配器路径', () => {
 });
 await check('未知协议回退 OneBot 11 入口', () => {
   assert.equal(resolveAdapterPath('nope'), resolveAdapterPath('onebot11'));
+});
+
+console.log('\n7. 代理归属：阀门决定，工具不持有');
+await check('阀门成型后接管传输层的代理策略', async () => {
+  // 成型前：默认直连
+  assert.equal(currentProxy(), '');
+  let configured = 'http://127.0.0.1:7890';
+  const valve = createNetworkValve({ proxy: () => configured });
+  // 成型即安装解析器：传输层跟着阀门走
+  assert.equal(currentProxy(), 'http://127.0.0.1:7890');
+  configured = 'http://10.0.0.9:1080';
+  assert.equal(currentProxy(), 'http://10.0.0.9:1080', '配置改了，传输层立刻跟着变');
+  configured = '';
+  assert.equal(currentProxy(), '', '配置清空即直连');
+  valve.uninstall();
+  assert.equal(currentProxy(), '', '卸下后回到默认直连');
+});
+await check('hasProxy 反映当前是否配了代理', async () => {
+  let configured = '';
+  const valve = createNetworkValve({ proxy: () => configured });
+  assert.equal(valve.hasProxy(), false);
+  configured = 'http://127.0.0.1:7890';
+  assert.equal(valve.hasProxy(), true);
+  valve.uninstall();
+});
+await check('工具源码里不再读 webSearch.proxy（只有 moli 分支例外）', async () => {
+  const fs = await import('node:fs/promises');
+  const read = (p) => fs.readFile(new URL('../lib/tools/' + p, import.meta.url), 'utf8');
+  const websearch = await read('websearch.js');
+  const imgsearch = await read('imgsearch.js');
+  assert.ok(!/webSearch\.proxy|\.proxy\b/.test(websearch), 'websearch 不该出现 proxy');
+  assert.ok(!/webSearch\.proxy|\.proxy\b/.test(imgsearch), 'imgsearch 不该出现 proxy');
+  const index = await read('index.js');
+  // index.js 里仅 moli 分支保留代理串（moli 自己的 proxy 语义不归阀门管）
+  const lines = index.split('\n').filter((l) => /\bproxy\b/i.test(l)
+    && !/^\s*\/\//.test(l)          // 注释
+    && !/^\s*import\b/.test(l));     // import 行
+  for (const line of lines) {
+    assert.ok(/moli|guard-?proxy|ensureGuardProxy|wsCfg/i.test(line),
+      '非 moli 分支不该碰代理串：' + line.trim().slice(0, 80));
+  }
+});
+await check('multiEngineRequest 不传代理时按阀门策略走', async () => {
+  // 阀门配了代理 → 走代理分支；内网目标仍被拒（说明策略没被绕过）
+  const valve = createNetworkValve({ proxy: () => 'http://127.0.0.1:7890' });
+  assert.equal(currentProxy(), 'http://127.0.0.1:7890');
+  let blocked = false;
+  try { await multiEngineRequest('GET', 'http://127.0.0.1:1/x', {}, null); } catch (error) { blocked = true; }
+  assert.ok(blocked, '配了代理也不能打内网');
+  valve.uninstall();
 });
 
 console.log('\n' + pass + ' 通过 / ' + fail + ' 失败');

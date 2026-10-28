@@ -20,14 +20,9 @@
     "lib",
     "cordis.patch.yml",
     "README.md",
-    "DEVELOPMENT.md",
-    "ARCHITECTURE.md",
+    "docs",
     "LICENSE",
-    "AI-DISCLOSURE.md",
-    "CHANGELOG.md",
-    "CONTRIBUTING.md",
-    "CODE_OF_CONDUCT.md",
-    "SECURITY.md"
+    "CHANGELOG.md"
   ],
   "engines": {
     "node": ">=22.6",

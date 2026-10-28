@@ -1,6 +1,6 @@
 # 架构（0.12.7）
 
-把 QQ 消息桥给 DSH Agent：五种聊天协议各有一个**独立子进程适配器**，插件内核只认一套 stdio 帧和一套统一消息段（OneBot 11 风格）。帧的权威定义只有一处：[lib/transport/bridge/CONTRACT.md](lib/transport/bridge/CONTRACT.md)。
+把 QQ 消息桥给 DSH Agent：五种聊天协议各有一个**独立子进程适配器**，插件内核只认一套 stdio 帧和一套统一消息段（OneBot 11 风格）。帧的权威定义只有一处：[lib/transport/bridge/CONTRACT.md](../lib/transport/bridge/CONTRACT.md)。
 
 ## 1. 分层
 
@@ -49,8 +49,8 @@ DSH Agent（默认每个 QQ 会话一个）
 ### 组装优先级（谁先成型）
 
 阀门之间**顺序不能乱**：工具阀消费安全阀发出的授权，安全阀的判定又必须在任何出网之前成立。
-顺序写在一张表里（[lib/valve/index.js](lib/valve/index.js) 的 `STAGE`），组装根
-（[lib/assemble.js](lib/assemble.js)）照着执行；调整优先级只改那张表，不用翻调用方。
+顺序写在一张表里（[lib/valve/index.js](../lib/valve/index.js) 的 `STAGE`），组装根
+（[lib/assemble.js](../lib/assemble.js)）照着执行；调整优先级只改那张表，不用翻调用方。
 
 | stage | 层 | 职责 | 依赖 |
 | --- | --- | --- | --- |
@@ -98,7 +98,7 @@ DSH Agent（默认每个 QQ 会话一个）
 | 文件 | 职责 | 关键导出 |
 | --- | --- | --- |
 | `valve/index.js` | 阀门注册表：有哪几道阀门、成型顺序、依赖关系（**调优先级只改这里**） | `STAGE` `VALVES` `orderedValves` |
-| `valve/network/index.js` | **网络阀门门面**：目标能不能出站、用不用代理、抓回来怎么截断；回环地址永不进代理 | `createNetworkValve` → `isAllowedTarget` `isLoopback` `assertHost` `resolve` `pin` `fetchText` `request` `post` `createGuardProxy` |
+| `valve/network/index.js` | **网络阀门门面**：目标能不能出站、用不用代理、抓回来怎么截断；回环地址永不进代理。成型时用 `__setProxyResolver` 接管传输层的代理策略——**工具层拿不到代理串**，只能声明意图（`useProxy`） | `createNetworkValve` → `isAllowedTarget` `isLoopback` `hasProxy` `assertHost` `resolve` `pin` `fetchText` `request` `post` `uninstall` `createGuardProxy` |
 | `valve/network/policy.js` | 网络阀门**策略层**（纯判定，不发请求）：地址先过 WHATWG URL 归一，再按 8 组/4 段整数判段；`pinnedLookup` 钉死已校验地址（防 DNS rebinding） | `canonicalHost` `isNonPublicIp` `resolvePublicAddresses` `assertPublicHost` `pinnedLookup` `__setNetworkHooks` |
 | `valve/network/guard-proxy.js` | 本地校验代理：给无头浏览器兜底，逐条请求先过策略层，内网目标 403（重定向/子资源/DNS rebinding 都在这层拦） | `createGuardProxy` |
 | `valve/security/index.js` | **安全阀门面**：身份、动态码、授权与审计的唯一入口；红线集中写在文件头 | `createSecurityValve` → `flowAuth` `enabled` `gatedTools` `verifyToken` `verifyRecovery` `judgeHistory` `checkOwnerCaller` |
@@ -176,7 +176,7 @@ DSH Agent（默认每个 QQ 会话一个）
 
 | 文件 | 职责 | 关键导出 |
 | --- | --- | --- |
-| `shared/http.js` | HTTP **传输机制**：直连 / CONNECT 隧道、超时、体积上限、截断语义。判定在 `valve/network/policy.js`，这里只负责「怎么出站」 | `multiEngineRequest` `fetchUrlViaProxy` `webSearchPost` `publicFetch` |
+| `shared/http.js` | HTTP **传输机制**：直连 / CONNECT 隧道、超时、体积上限、截断语义。判定在 `valve/network/policy.js`，用哪个代理由阀门安装的解析器决定（`__setProxyResolver`），这里只负责「怎么出站」 | `multiEngineRequest` `fetchUrlViaProxy` `webSearchPost` `publicFetch` `currentProxy` `__setProxyResolver` |
 | `shared/compat.js` | DSH 版本兼容自检（范围只维护两个常量） | `SUPPORT_FLOOR` `SUPPORT_CEILING` `compatibilityInfo` |
 
 ### 2.10 浏览器侧
@@ -275,6 +275,7 @@ DSH Agent（默认每个 QQ 会话一个）
 | 授权一次性消费 + 30 秒窗口 | 动态码会被截图/转发，所以只放行一次调用、只认当前 30 秒窗口（要求 NTP 对齐）；代价是每轮都要有人在私聊里回一条 |
 | 回合身份快照 | 守卫读的是回合开始时的发言人；若读实时发言人，排队期间插话的访客就能被当成拥有者 |
 | 产物只扫会话自己的目录 | 共用 `QQ_msg` 根时「谁写的新文件」分不出来，共用必然串会话，所以开关打开就独占一个会话目录 |
+| 代理由阀门持有、工具只声明意图 | 工具能自己决定「不走代理」等于留了一条绕过出口管控的通道；代理串收到阀门一处，`webSearch.proxy` 改一次全局生效，也杜绝了「某个工具忘了传 proxy」的漂移（历史上三处调用方漂移成三种语义） |
 | 中间发言先出声、结论再引用 | 长任务里用户先收到「在做」，最终答案才带引用；两者走同一发送队列，顺序不会乱 |
 
 ## 5. 已知边界
