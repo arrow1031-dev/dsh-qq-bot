@@ -1,4 +1,5 @@
 {
+  "priority": 60,
   "group": "imgSearch",
   "fields": [
     {

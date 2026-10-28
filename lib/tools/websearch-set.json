@@ -1,4 +1,5 @@
 {
+  "priority": 50,
   "group": "webSearch",
   "fields": [
     {

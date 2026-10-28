@@ -138,10 +138,31 @@ schema 的默认值直接引用组装结果，所以「默认值」只有一处�
 | `*-set.json` | 设置页字段（怎么显示） | `SETTINGS_FIELDS` + `SETTINGS_TABS` |
 
 ```json
-{ "group": "webSearch",
+{ "priority": 50,
+  "group": "webSearch",
   "fields": [{ "path": ["webSearch", "maxUses"], "label": "每次搜索最多触发次数",
                "kind": "number", "tab": "capability", "subtab": "retrieval" }] }
 ```
+
+`priority` 决定这份模板的字段在**同一个标签页/二级标签内**排第几，升序，同值时按文件路径
+兜底（保证确定性）。以前顺序是「按文件路径排序」的副产品：`imgsearch` 排在 `moli` 前面，
+moli 卡片就卡在「能力 → 检索」分区中间，而它本该收尾——改个文件名就换一次版面，没人知道
+顺序是谁定的。现在顺序由模板自己声明：
+
+| 模板 | priority | 落在哪个分区 |
+| --- | --- | --- |
+| `settings-core-set.json` | 10 | 连接 / 基础 / 会话 / 对话 |
+| `valve/security/auth-set.json` | 20 | 基础·准入、会话·会话 |
+| `valve/security/flow-auth-set.json` | 30 | 高级·流程、高级·闸门 |
+| `tools/vision-set.json` | 40 | 能力·视觉 |
+| `tools/websearch-set.json` | 50 | 能力·检索 |
+| `tools/imgsearch-set.json` | 60 | 能力·检索 |
+| `tools/history-set.json` | 70 | 能力·视觉 |
+| `tools/imagegen-set.json` | 80 | 能力·视觉 |
+| `tools/moli-set.json` | 90 | 能力·检索（收尾） |
+
+不写 `priority` 时默认 **500**：内置的都写了 10~90，将来第三方或临时加的文件落在这之后，
+既不插队到连接页前面，也不会莫名掉到最后。写了但不是有限数字 → 加载期直接炸。
 
 `path` 一律写绝对路径，不做「相对 group」的隐式约定。`when` 是**声明式**的
 （`{ "protocol": "onebot12", "protocols.onebot12.mode": { "$ne": "reverse" } }`），
@@ -166,6 +187,7 @@ lib/**/*-set.json  →  SETTINGS_FIELDS  →  GET /dsh-qq-bot/settings  →  客
 | `path` 指向不存在的配置项 | 字段永远编辑不到真实配置；更糟的是 `staleConfigPaths` 会把用户存进去的值当废弃键删掉 | `schemaHasPath()` 逐段走 `Config.dict` |
 | `tab` / `subtab` 写错 | 字段掉进谁也点不到的页 | 与 `settings-page-set.json` 的骨架比对 |
 | `group` 重复 | 两份模板抢同一组，渲染顺序不确定 | 按 group 去重 |
+| `priority` 不是有限数字 | 排序变成 `NaN` 比较，整页顺序不可预期 | 加载期校验 |
 
 两个例外标记：`virtual: true`（纯界面锚点，例如扫码绑定，不对应任何配置项，跳过路径校验）、
 `in: "moli-card"`（渲染在 moli 卡片内部，不占外层位置，但保存/还原仍按普通字段处理）。

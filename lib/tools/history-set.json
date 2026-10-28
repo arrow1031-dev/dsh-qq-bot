@@ -1,4 +1,5 @@
 {
+  "priority": 70,
   "group": "history",
   "fields": [
     {

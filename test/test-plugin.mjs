@@ -401,7 +401,11 @@ try {
   {
     const { createRouteGuard } = await import(pathToFileURL(path.join(PKG_ROOT, 'lib', 'gateway', 'route-auth.js')).href);
     const mkRes = () => { const r = { status: 0, headers: null, body: '' }; r.writeHead = (st, hd) => { r.status = st; r.headers = hd; }; r.end = (b) => { r.body = b; }; return r; };
-    const mkCtx = (auth) => ({ get: (name) => (name === 'client-connection' ? { browserAuth: auth } : (name === 'webServer' ? { protocol: 'http:' } : undefined)) });
+    // 服务名是 `connection`（HostConnectionService 的 super(ctx, "connection")），不是插件名
+    // `client-connection`。这里两种拼法都要能拿到，否则实装时会静默降级成「只做同源校验」。
+    const mkCtx = (auth, serviceName = 'connection') => ({
+      get: (name) => (name === serviceName ? { browserAuth: auth } : (name === 'webServer' ? { protocol: 'http:' } : undefined)),
+    });
 
     // 1) 拿不到 client-connection（桌面端 / 老版本）→ 放行，不把设置页锁死。
     const looseGuard = createRouteGuard({ get: () => undefined }, () => {});
@@ -419,6 +423,14 @@ try {
     const okGuard = createRouteGuard(mkCtx({ isAuthenticated: () => true }), () => {});
     const okRes = mkRes();
     check('已登录 → 放行', okGuard({ method: 'GET', headers: { host: 'h:1' } }, okRes) === true);
+
+    // 3b) 服务名的两种拼法都要认（实装踩过：按插件名取不到 → 静默降级 → 鉴权形同虚设）。
+    const byPluginName = createRouteGuard(mkCtx({ isAuthenticated: () => true }, 'client-connection'), () => {});
+    check('服务名写成 client-connection 也能拿到', byPluginName({ method: 'GET', headers: { host: 'h:1' } }, mkRes()) === true);
+    const byServiceName = createRouteGuard(mkCtx({ isAuthenticated: () => false }, 'connection'), () => {});
+    const svcRes = mkRes();
+    check('服务名写成 connection 时确实在验签（未登录 → 401）',
+      byServiceName({ method: 'GET', headers: { host: 'h:1' } }, svcRes) === false && svcRes.status === 401, String(svcRes.status));
 
     // 4) 跨站请求（Origin 与 Host 不同）直接拒，连验签都不做。
     let called = 0;

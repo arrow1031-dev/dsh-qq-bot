@@ -1,4 +1,5 @@
 {
+  "priority": 30,
   "group": "flowAuth",
   "fields": [
     {
