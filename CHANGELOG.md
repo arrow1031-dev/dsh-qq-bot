@@ -1,5 +1,10 @@
 ## 未发布 —— 注释审计 + 四处真缺陷（2026-10-29）
 
+### gateway/plugin.js 第二阶段（一）：主动发言表面层搬出（P3 2.4）
+
+- `gateway/plugin.js` 的主动发言表面层（配置读取、排程、群级状态、tick 编排）搬到 `gateway/proactive-surface.js`（`createProactiveSurface`，依赖注入、只搬不改）；判定与提示词仍在 `session/proactive.js`。
+- `plugin.js` 2291 → 2025 行（行数只记录）；行为不变：`test-proactive` 84/84、`test-proactive-round` 35/35、`test-plugin` 122/122。
+
 ### gateway/plugin.js 第一阶段：无状态块搬出（P3 2.4，只搬不改）
 
 - `buildPersonaHint` / `dropConfigPaths` / `sanitizeDisplayName` / `summarizeTurnReason` / `idValue` 搬到 `lib/gateway/turn-text.js`；`/model` 的路由与指令搬到 `lib/gateway/model-pick.js`（依赖由插件注入，不持有全局状态）。
