@@ -1,5 +1,47 @@
 ## 未发布 —— P3 结构重构 + 注释审计 + 四处真缺陷（2026-10-29）
 
+### 新增：自动召回已归档会话
+
+QQ 会话在 DSH 侧被「归档」之后，新消息会**彻底石沉大海**——不发模型请求、不报错、日志只有一行
+`blocked`。根因不在本插件，而在宿主的两处归档判定：
+
+1. `dsh-api-session-controller` 的 `ArchivedSessionGate` 挂在 `agent/pre-step` 上，
+   对归档会话（及其 subagent 后代）直接返回 `{ kind: 'reject' }` —— 回合以 blocked 结束，
+   **一个模型请求都不发**；
+2. 同一个包的 `SessionController.create` 里 `reusable` 判定是
+   `!archivedSessionIds.includes(id) && …` —— 归档会话不被重用，插件拿着
+   `qqbot-group-<群号>` 去 create 时宿主要么另建一条会话、要么直接报错，历史断在旧 id 上。
+
+而上游只提供 `archiveSession`，插件侧本来没有解除的入口。本地 DSH 0.2.1-rc.3 的
+`dsh-workspace` registry **有正式方法 `unarchiveSession(sessionId)`**（幂等、不做存在性
+校验、内部串行队列 + 落盘），所以新增 `lib/session/session-archive.js` 直接调它，
+不碰宿主任何内部字段。
+
+语义刻意与「归档动作秒级弹回」区分开：**只在会话被消息真正触发时解除归档**。主人主动归档
+的会话保持归档，不拦归档动作、也不跑定时巡检。
+
+接线两处（`session/manager.js` 的 `getEntry`）：
+
+- **新建分支**：召回放进 `entry.ready` 链的开头，**早于 `sessionController.create`**。
+  放这里而不是 `getEntry` 开头，是因为 `convos.get` 与 `convos.set` 必须留在同一个 tick
+  内保持原子——否则两条并发消息会各自发现「没有条目」、各建一次会话。
+- **已有条目分支**：同样召回。agent 可能还活着，但归档判定是宿主**每次 pre-step 现读集合**，
+  不解除的话这一回合照样被 reject。
+
+全 fail-soft：`workspaceRegistry` 没挂载（headless）、尚未启动（`requireState` 抛
+`workspace registry is not started yet`）、宿主没有该接口、`unarchiveSession` 本身失败
+—— 一律只记日志，绝不挡住收发主链；同一错误 60 秒内只打一次。
+
+配置项 `session.recallArchived`（默认开，设置 → 高级 → 会话与排错）。关闭后行为回到
+0.12.7：归档的 QQ 会话收不到回复。
+
+测试：新增 `test/test-session-archive.mjs`（29 项）。除了常规的「真调了 / 只在归档时调 /
+失败不抛 / 老宿主兼容」，两条重点断言是：
+
+- **`createSawArchived === false`** —— 断言 `create` 被调用那一刻该会话已不在归档集合里。
+  只测「`unarchiveSession` 被调用过」是挡不住「调用顺序反了」的。
+- **并发两条消息只建一次会话** —— 守的是「召回别把 get/set 的原子性拆开」这个坑。
+
 ### 修复：设置页「会话与排错」乱序 —— 排序口径改为按分区
 
 「高级 · 会话与排错」里 ①②③ 是乱的：`① 自定义 preset → ③ 兜底 → ② 拥有者 → ② 非拥有者`。
