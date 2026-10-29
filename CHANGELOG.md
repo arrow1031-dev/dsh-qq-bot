@@ -1,5 +1,10 @@
 ## 未发布 —— 注释审计 + 四处真缺陷（2026-10-29）
 
+### gateway/plugin.js 第三阶段（四）：识图搬出（P3 2.4）
+
+- `describeImages` / `downloadImage` / `askVision` 搬到 `gateway/vision.js`（`createVision`，只搬不改）；`test-security` 的源码形状断言同步指向新文件。
+- `plugin.js` 1376 → 1259 行（行数只记录）；`test-plugin` 122/122、`test-security` 55/55 全绿。
+
 ### gateway/plugin.js 第三阶段（三）：产物收集搬出（P3 2.4）
 
 - `listFreshFiles` / `runPacker` / `packFlowFiles` / `artifactDirs` 搬到 `gateway/artifact-collect.js`（`createArtifactCollect`，只搬不改）；仍是按 mtime 收会话目录、异步 zip/tar。
