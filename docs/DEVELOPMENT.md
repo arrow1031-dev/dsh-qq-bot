@@ -447,6 +447,9 @@ node -e "fetch('http://127.0.0.1:3000/__sent').then(r=>r.json()).then(j=>console
 | `lib/gateway/turn-text.js` | 无状态回合文本工具（人格段 / 配置脱敏 / 昵称清洗 / 失败原因 / id 归一），P3 2.4 第一阶段搬出 |
 | `lib/gateway/model-pick.js` | 模型选择：构建 `modelRouter` + `/model` 指令，依赖由插件注入 |
 | `lib/gateway/proactive-surface.js` | 主动发言表面层：排程、群级状态、tick 编排（P3 2.4 第二阶段搬出） |
+| `lib/gateway/adapter-supervision.js` | 适配器监管：启动参数、子进程、写帧、动作超时、重启退避（P3 2.4 第二阶段搬出） |
+| `lib/gateway/routes-glue.js` | 扫码绑定 / 版本探测 / 路由挂载接线（P3 2.4 第二阶段搬出） |
+| `lib/gateway/flow-delivery.js` | 流程产物打包与投递（P3 2.4 第二阶段搬出） |
 | `lib/gateway/index.js` | HTTP 路由统一挂载（`ROUTE_MOUNTS` 表 + webServer 就绪 + 逆序注销） |
 | `lib/gateway/routes-bind.js` | 扫码绑定的两条具名路由 |
 | `lib/gateway/routes-defaults.js` / `routes-settings.js` | `GET /dsh-qq-bot/defaults`（默认值）与 `GET /dsh-qq-bot/settings`（设置页模板：标签页 + 字段）。都只回模板/常量，不含任何配置值 |
