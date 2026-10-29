@@ -279,8 +279,8 @@ lib/**/*-set.json  →  SETTINGS_FIELDS  →  GET /dsh-qq-bot/settings  →  客
 
 | 文件 | 职责 | 关键导出 |
 | --- | --- | --- |
-| `session/manager.js` | 会话条目与路由、访客工具闸、被回复图片收集 | `createSession` → `sessionRoute` `getEntry` `entryForAgent` `collectReplyImageUrls` |
-| `session/session-archive.js` | **归档召回**：宿主「归档」集合里的 QQ 会话在被消息触发时拉回可见。宿主的 `ArchivedSessionGate` 对归档会话的每一步 `reject`、`create` 的 `reusable` 也排除归档会话，不召回就是消息石沉大海；本地 `dsh-workspace` 有正式 `unarchiveSession`，全 fail-soft | `createSessionArchive` → `recall` `isArchived` `stats` |
+| `session/manager.js` | 会话条目与路由、访客工具闸、被回复图片收集；被删除会话用 `revivedSessionId` 派生确定性 id 重建 | `createSession` → `sessionRoute` `getEntry` `entryForAgent` `collectReplyImageUrls` `scopedSessionId` `revivedSessionId` |
+| `session/session-archive.js` | **归档召回 + 删除探测**：宿主「归档」集合里的 QQ 会话在被消息触发时拉回可见（`ArchivedSessionGate` 会 reject 归档会话的每一步、`create` 的 `reusable` 也排除它，不召回就是石沉大海）；`isDetached` 用「不在任何工作区账本」认出被**真正删除**的会话（dsh-session-manager 与 zh_pro 两种删除器都摘账本、但归档集合留不留 id 不同，所以判据取账本侧）。全 fail-soft | `createSessionArchive` → `recall` `isArchived` `isDetached` `stats` |
 | `session/model-router.js` | 模型选择自动检测：DSH `agentDefaultModel`（可写）→ `llm`（只读）→ 本地 per-chat 偏好 | `createModelRouter` `createPrefsFile` |
 | `session/workspace.js` | QQ_msg 工作区根解析（Documents 解析，与 DSH 默认工作区同级） | `qqMsgRootSync` `sessionWorkdir` |
 | `session/proactive.js` | 主动发言纯逻辑：时间窗、消息清洗、提示词、决策解析、频率闸、两段式模型 | `parseClock` `buildPrompt` `parseDecision` `allowSend` `resolveStageModels` `runSpeakStage` |
