@@ -1,5 +1,30 @@
 ## 未发布 —— P3 结构重构 + 注释审计 + 四处真缺陷（2026-10-29）
 
+### 修复：适配器完全起不来（`subprocess.spawn` 丢了 `this`）
+
+P3 把适配器监管搬进 `gateway/adapter-supervision.js` 后，`plugin.js` 这样注入：
+
+```js
+spawn: subprocess.spawn,        // 裸函数，this 丢失
+```
+
+DSH 的 `subprocess.spawn` 是**服务对象上的方法**，内部要读 `this`（选容器模式）。
+裸传之后 `this` 变成 `undefined`，一调用就抛
+`Cannot read properties of undefined (reading 'selectContainmentMode')`。
+
+后果是灾难性的但很安静：**子进程一个都起不来**，监管层每 30 秒退避重试一次，
+日志里只有一行接一行同样的报错，QQ 侧全程无响应——而当时 41 套件全绿。
+
+- 改成 `spawn: subprocess.spawn.bind(subprocess)`，并在这行写明为什么必须 bind。
+- **加固三处测试桩**（`test-plugin` / `test-admin` / `test-proactive-round` 里的
+  `subprocess`）：让假 `spawn` 也读 `this`，不满足就抛同一条 TypeError。
+  原来的桩是完全不碰 `this` 的普通方法，于是「把方法裸传」这种接线错误在测试里根本看不见。
+- 验证：撤掉 `.bind` → `test-plugin` 复现出**线上那条一模一样的报错**并判定失败
+  （`等待超时：适配器连上假 OneBot`）、`test-proactive-round` 同样变红；恢复 → 41 套件全绿。
+
+> 教训：搬移代码时把「方法引用」当值传出去，`this` 是悄悄丢的，类型检查和测试都拦不住，
+> 只有桩**行为上依赖接收者**才测得出。这类桩「太宽松」比桩「没有」更危险。
+
 ### 换行符统一回 LF + 加 `.gitattributes`
 
 P3 重构把 13 个文件（`gateway/plugin.js` + 11 个新模块 + `tools/index.js` + `test/test-security.mjs`）

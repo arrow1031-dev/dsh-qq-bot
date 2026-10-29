@@ -116,6 +116,13 @@ async function runScenario(options) {
     subprocess: {
       async resolveExecutable() { return process.execPath; },
       spawn(spec) {
+      // 真服务内部要读 this（选容器模式），这里照做——桩要是完全不碰 this，
+      // 「把方法裸传、丢了 this」这种接线错误就永远测不出来。
+      // 曾经为此让线上适配器起不来、每 30 秒重试一次，而当时 148 项测试全绿。
+      if (this === undefined || this === null || typeof this.resolveExecutable !== 'function') {
+        throw new TypeError("Cannot read properties of undefined (reading 'selectContainmentMode')");
+      }
+
         const child = spawn(spec.argv[0], spec.argv.slice(1), { cwd: spec.cwd, stdio: ['pipe', 'pipe', 'pipe'] });
         const done = new Promise((resolve) => child.on('close', (exitCode, signal) => resolve({ exitCode, signal })));
         return { stdin: child.stdin, stdout: child.stdout, stderr: child.stderr, done, terminate() { try { child.kill('SIGTERM'); } catch { /* ignore */ } }, waitForExit: () => done.then(() => true), _child: child };
