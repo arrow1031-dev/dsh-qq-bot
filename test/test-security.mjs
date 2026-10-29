@@ -227,7 +227,7 @@ await check('正常小帧不误判', () => {
 console.log('\n8. 回归：识图下载必须走 publicFetch（#15 曾被分支重建回退过一次）');
 // downloadImage 是 apply() 里的闭包，没有导出，运行期测不到；这里锁源码形状：
 // 谁在旧快照上重建分支，这一条会立刻红，而不是等下次渗透测试才发现回归。
-const indexSrc = await readFile(new URL('../lib/gateway/plugin.js', import.meta.url), 'utf8');
+const indexSrc = await readFile(new URL('../lib/gateway/vision.js', import.meta.url), 'utf8');
 function functionBody(src, signature) {
   const start = src.indexOf(signature);
   if (start < 0) return '';

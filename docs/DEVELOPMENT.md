@@ -453,6 +453,7 @@ node -e "fetch('http://127.0.0.1:3000/__sent').then(r=>r.json()).then(j=>console
 | `lib/gateway/inbound-limits.js` | 入站限制：限流窗口 / 队列深度 / 长度 / 提示去重（P3 2.4 第三阶段搬出） |
 | `lib/gateway/auth-flow.js` | 授权与流程：私聊提示、动态码、`/auth` `/flow`、授权续跑（P3 2.4 第三阶段搬出） |
 | `lib/gateway/artifact-collect.js` | 产物收集与打包：按 mtime 收新文件、异步 zip/tar（P3 2.4 第三阶段搬出） |
+| `lib/gateway/vision.js` | 识图：下载 / 视觉模型描述 / 拼上下文（P3 2.4 第三阶段搬出） |
 | `lib/gateway/index.js` | HTTP 路由统一挂载（`ROUTE_MOUNTS` 表 + webServer 就绪 + 逆序注销） |
 | `lib/gateway/routes-bind.js` | 扫码绑定的两条具名路由 |
 | `lib/gateway/routes-defaults.js` / `routes-settings.js` | `GET /dsh-qq-bot/defaults`（默认值）与 `GET /dsh-qq-bot/settings`（设置页模板：标签页 + 字段）。都只回模板/常量，不含任何配置值 |
