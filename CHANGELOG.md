@@ -1,5 +1,10 @@
 ## 未发布 —— 注释审计 + 四处真缺陷（2026-10-29）
 
+### gateway/plugin.js 第三阶段（三）：产物收集搬出（P3 2.4）
+
+- `listFreshFiles` / `runPacker` / `packFlowFiles` / `artifactDirs` 搬到 `gateway/artifact-collect.js`（`createArtifactCollect`，只搬不改）；仍是按 mtime 收会话目录、异步 zip/tar。
+- `plugin.js` 1445 → 1379 行（行数只记录）；`test-plugin` 122/122、`test-flow-wiring` 23/23 全绿。
+
 ### gateway/plugin.js 第三阶段（二）：授权与流程搬出（P3 2.4）
 
 - 主人私聊提示、动态码校验、`/auth` 与 `/flow` 指令、授权后把被拦回合续上，以及 `writeFlowAuthPatch`，搬到 `gateway/auth-flow.js`（`createAuthFlow`，只搬不改）；状态仍在插件 `state`，判定仍走 valve 的 `flowGate`。
