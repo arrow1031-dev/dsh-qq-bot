@@ -247,6 +247,7 @@ lib/**/*-set.json  →  SETTINGS_FIELDS  →  GET /dsh-qq-bot/settings  →  客
 | `gateway/auth-flow.js` | 授权与流程：主人私聊提示、动态码校验、`/auth` `/flow` 指令、授权后续跑 | `createAuthFlow` |
 | `gateway/artifact-collect.js` | 产物收集与打包：按 mtime 收会话目录新文件，异步 zip/tar | `createArtifactCollect` |
 | `gateway/vision.js` | 识图：下载图片、调视觉模型描述、拼进上下文 | `createVision` |
+| `gateway/turn-runtime.js` | 回合运行时：入站主流程（限流/鉴权/识图/模型回合/回复）与图片缓存清扫 | `createTurnRuntime` |
 | `gateway/index.js` | **HTTP 路由统一挂载**：ROUTE_MOUNTS 表 + 等 webServer 就绪 + 逆序注销 + 失败降级 | `mountHttpRoutes` `mountRoutesWhenReady` |
 | `gateway/route-auth.js` | **路由鉴权闸门**：插件具名路由在 DSH 鉴权层**之前**被处理（`GET /` 回 401，`GET /dsh-qq-bot/settings` 回 200），所以自己过一遍 `client-connection` 的浏览器 cookie 校验 + Origin/Referer 同源校验；拿不到该服务时降级放行（那种环境里 DSH 自己也没鉴权） | `createRouteGuard` |
 | `gateway/routes-bind.js` | 扫码绑定的两条具名路由：只回状态与脱敏 appId，不碰密钥；`waiting` 期会给登录 URL，必须先过 `guard` | `registerBindRoutes` `BIND_STATE_PATH` `BIND_REFRESH_PATH` |

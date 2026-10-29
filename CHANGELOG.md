@@ -1,5 +1,11 @@
 ## 未发布 —— 注释审计 + 四处真缺陷（2026-10-29）
 
+### gateway/plugin.js 第三阶段（五）：回合运行时搬出（P3 2.4）
+
+- `acceptMessage`、`buildPrompt`、`startInterimLoop`、`runTurn`、`extractReply`、`lastTurnReason` 与图片缓存清扫（`cleanupImageCache` / `sweepStaleImages` / `scheduleImageSweep`）搬到 `gateway/turn-runtime.js`（`createTurnRuntime`，只搬不改）；`sendReply` 仍留在插件里（它被别的接线层共用），由工厂注入。
+- `plugin.js` 1259 → **812 行**（行数只记录，不设目标）；现在只剩装配、路由接线、闸门区与生命周期。
+- `test-plugin` 122/122；本机全量 39/40（唯一失败仍是 Windows 符号链接权限的 `test-imagegen` EPERM）。
+
 ### gateway/plugin.js 第三阶段（四）：识图搬出（P3 2.4）
 
 - `describeImages` / `downloadImage` / `askVision` 搬到 `gateway/vision.js`（`createVision`，只搬不改）；`test-security` 的源码形状断言同步指向新文件。
