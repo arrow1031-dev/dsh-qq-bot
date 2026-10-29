@@ -1,5 +1,5 @@
 {
-  "priority": 60,
+  "priority": 200,
   "group": "imgSearch",
   "tab": "capability",
   "subtab": "retrieval",

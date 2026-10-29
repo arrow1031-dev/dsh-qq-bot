@@ -1,5 +1,5 @@
 {
-  "priority": 50,
+  "priority": 100,
   "group": "webSearch",
   "tab": "capability",
   "subtab": "retrieval",

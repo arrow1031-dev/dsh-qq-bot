@@ -132,6 +132,28 @@ console.log('\n10. 默认值 JSON：自动发现 / 与 schema 一致 / 邪门输
     orderOf('retrieval') === 'webSearch → imgSearch → moli', orderOf('retrieval'));
   check('视觉分区按 priority 排：识图 → 历史 → 生图',
     orderOf('vision') === 'vision → history → imageGen', orderOf('vision'));
+  // 排序口径是「先按标签页/二级标签分桶，桶内再按 priority」，所以跨模板交织是可能的：
+  // 会话与排错要的是 ①自定义（核心 100）→ ②按身份（auth 150）→ ③兜底（核心 190），
+  // 以前按文件排只能得到 ①③②②——auth 的 ② 整块落在 core 的 ③ 后面。
+  check('会话分区跨模板交织：核心① → auth② → 核心③',
+    orderOf('session') === '(核心) → auth → (核心)', orderOf('session'));
+  const sessionOrder = SETTINGS_FIELDS.filter((f) => f.subtab === 'session').map((f) => f.path.join('.'));
+  check('会话分区的 ①②③ 顺序与标签上的序号一致',
+    sessionOrder.indexOf('agentPresetCustom') < sessionOrder.indexOf('auth.ownerPreset')
+    && sessionOrder.indexOf('auth.ownerPreset') < sessionOrder.indexOf('agentPreset'),
+    sessionOrder.join(' → '));
+  // priority 只在同一个分区内比较，所以不同分区复用同一个号是正常的：
+  // 100/200/300 就是「该分区的第 1/2/3 位」。以后加内容只看自己那个分区，
+  // 不必去全局序列里找空档，也就不会因为插一个号把别人的顺序顶乱。
+  const prioOf = (group) => SETTINGS_SOURCES.find((s2) => s2.group === group).priority;
+  check('不同分区复用同一个 priority（核心 / vision / webSearch 都是 100）',
+    prioOf('') === 100 && prioOf('vision') === 100 && prioOf('webSearch') === 100,
+    [prioOf(''), prioOf('vision'), prioOf('webSearch')].join('/'));
+  check('分区内按 100 / 200 / 300 的位次递增',
+    prioOf('history') === 200 && prioOf('imageGen') === 300
+    && prioOf('imgSearch') === 200 && prioOf('moli') === 300
+    && prioOf('auth') === 200 && prioOf('flowAuth') === 200,
+    [prioOf('history'), prioOf('imageGen'), prioOf('imgSearch'), prioOf('moli'), prioOf('auth'), prioOf('flowAuth')].join('/'));
   check('每份模板都声明了 priority（内置的 9 份）',
     SETTINGS_SOURCES.every((s2) => typeof s2.priority === 'number') && SETTINGS_SOURCES.length === 9,
     SETTINGS_SOURCES.map((s2) => s2.group + ':' + s2.priority).join(' '));
@@ -216,8 +238,8 @@ console.log('\n10. 默认值 JSON：自动发现 / 与 schema 一致 / 邪门输
     delete noPriority.priority;
     writeFileSync(moliFile, JSON.stringify(noPriority), 'utf8');
     const withoutPriority = readSources();
-    check('不写 priority 时落在内置模板之后（默认 500，不插队）',
-      withoutPriority[withoutPriority.length - 1][0] === 'moli' && withoutPriority[withoutPriority.length - 1][1] === 500,
+    check('不写 priority 时落在内置模板之后（默认 1000，不插队）',
+      withoutPriority[withoutPriority.length - 1][0] === 'moli' && withoutPriority[withoutPriority.length - 1][1] === 1000,
       JSON.stringify(withoutPriority[withoutPriority.length - 1]));
 
     writeFileSync(moliFile, JSON.stringify(Object.assign({}, moliParsed, { priority: '9' })), 'utf8');
@@ -225,6 +247,27 @@ console.log('\n10. 默认值 JSON：自动发现 / 与 schema 一致 / 邪门输
     try { runImport(); } catch (error) { priError = String((error.stderr || '') + (error.message || '')); }
     check('priority 不是数字时在加载时报错', priError.includes('priority 必须是有限数字'), priError.slice(0, 120));
     writeFileSync(moliFile, moliBackup, 'utf8');   // 先还原，后面几条都基于干净的文件
+
+    // 同优先级：靠 tab / subtab 区分，不同分区怎么撞都不影响版面；
+    // 只有「同一分区内同优先级」才回退到文件名（确定，但不再是版面的大局）。
+    const histFile = path.join(scratch, 'lib', 'tools', 'history-set.json');
+    const histBackup = readFileSync(histFile, 'utf8');
+    const histParsed = JSON.parse(histBackup);
+    const readVisionSub = () => JSON.parse(execFileSync(process.execPath,
+      ['--input-type=module', '-e',
+        'const m = await import(' + JSON.stringify(target) + '); console.log(JSON.stringify(m.SETTINGS_FIELDS.filter((f) => f.subtab === "vision").map((f) => f.group)))'],
+      { stdio: 'pipe', encoding: 'utf8' }));
+
+    writeFileSync(histFile, JSON.stringify(Object.assign({}, histParsed, { priority: 200 })), 'utf8');
+    let crossOk = true;
+    try { runImport(); } catch (error) { crossOk = false; }
+    check('不同 tab / subtab 可以同优先级（flowAuth 200 与 history 200 互不干扰）', crossOk === true);
+
+    writeFileSync(histFile, JSON.stringify(Object.assign({}, histParsed, { priority: 100 })), 'utf8');
+    const tied = readVisionSub();
+    check('同一分区内同优先级回退到文件名（history-set 排在 vision-set 之前）',
+      tied[0] === 'history', JSON.stringify(tied.slice(0, 3)));
+    writeFileSync(histFile, histBackup, 'utf8');
 
     // 文件头 tab / subtab：整份模板默认落哪个标签页，单条字段可以覆盖。
     const readFieldTabs = () => JSON.parse(execFileSync(process.execPath,
@@ -239,9 +282,14 @@ console.log('\n10. 默认值 JSON：自动发现 / 与 schema 一致 / 邪门输
     overrideDoc.fields = moliParsed.fields.map((f, i) => (i === 0 ? Object.assign({}, f, { tab: 'advanced', subtab: 'flow' }) : f));
     writeFileSync(moliFile, JSON.stringify(overrideDoc), 'utf8');
     const overridden = readFieldTabs();
+    // 排序改成「先按标签页/二级标签分桶」之后，moli 的字段不再连续了：
+    // 被搬到 advanced/flow 的那条会出现在 advanced 段里，其余仍在 capability/retrieval。
+    const moved = overridden.find((row) => row[0] === 'moli.enabled');   // 模板第一条，被改到 advanced/flow
     check('单条字段写的 tab / subtab 覆盖文件头',
-      overridden[0][1] === 'advanced' && overridden[0][2] === 'flow'
-      && overridden.slice(1).every((row) => row[1] === 'capability'), JSON.stringify(overridden.slice(0, 2)));
+      moved !== undefined && moved[1] === 'advanced' && moved[2] === 'flow'
+      && overridden.filter((row) => row[0] !== 'moli.enabled')
+        .every((row) => row[1] === 'capability' && row[2] === 'retrieval'),
+      JSON.stringify(moved));
 
     const noTabDoc = Object.assign({}, moliParsed);
     delete noTabDoc.tab;
