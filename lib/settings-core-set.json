@@ -580,6 +580,17 @@
     },
     {
       "path": [
+        "session",
+        "recallArchived"
+      ],
+      "label": "自动召回已归档会话",
+      "kind": "bool",
+      "hint": "QQ 消息触发该会话时，把它从 DSH 的「归档」里拉回可见。关闭后：被归档的 QQ 会话新消息不会得到回复（DSH 的归档闸门会直接拒绝该会话的每一步模型请求）",
+      "tab": "advanced",
+      "subtab": "session"
+    },
+    {
+      "path": [
         "perChatSession"
       ],
       "label": "每个 QQ 会话独立 DSH 会话",

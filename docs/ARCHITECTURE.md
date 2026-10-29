@@ -280,6 +280,7 @@ lib/**/*-set.json  →  SETTINGS_FIELDS  →  GET /dsh-qq-bot/settings  →  客
 | 文件 | 职责 | 关键导出 |
 | --- | --- | --- |
 | `session/manager.js` | 会话条目与路由、访客工具闸、被回复图片收集 | `createSession` → `sessionRoute` `getEntry` `entryForAgent` `collectReplyImageUrls` |
+| `session/session-archive.js` | **归档召回**：宿主「归档」集合里的 QQ 会话在被消息触发时拉回可见。宿主的 `ArchivedSessionGate` 对归档会话的每一步 `reject`、`create` 的 `reusable` 也排除归档会话，不召回就是消息石沉大海；本地 `dsh-workspace` 有正式 `unarchiveSession`，全 fail-soft | `createSessionArchive` → `recall` `isArchived` `stats` |
 | `session/model-router.js` | 模型选择自动检测：DSH `agentDefaultModel`（可写）→ `llm`（只读）→ 本地 per-chat 偏好 | `createModelRouter` `createPrefsFile` |
 | `session/workspace.js` | QQ_msg 工作区根解析（Documents 解析，与 DSH 默认工作区同级） | `qqMsgRootSync` `sessionWorkdir` |
 | `session/proactive.js` | 主动发言纯逻辑：时间窗、消息清洗、提示词、决策解析、频率闸、两段式模型 | `parseClock` `buildPrompt` `parseDecision` `allowSend` `resolveStageModels` `runSpeakStage` |
@@ -334,7 +335,7 @@ lib/**/*-set.json  →  SETTINGS_FIELDS  →  GET /dsh-qq-bot/settings  →  客
 | 1 | `lib/transport/adapters/*` | 收协议事件，归一成 CONTRACT 的 `message` 帧写 stdout（文本、图片数/URL、`reply_to`、段数组、`self_id`） |
 | 2 | `gateway/plugin.js onAdapterFrame` | 按行切 JSON，`message` 交给 `acceptMessage` |
 | 3 | `acceptMessage` | 自过滤（`user_id === self_id`）→ **群管理指令优先**（`handleAdminCommand`，命中即结束，不进模型）→ 白名单 → `commandPrefix` → 是否点名（@bot / 回复 bot / 前缀）→ 收集被回复消息里的图片 |
-| 4 | `session/manager.js sessionRoute/getEntry` | 按拥有者/访客取或建会话（`sessionController.create` + `resolveAgent`，只建一次）；记 `entry.speaker`（鉴权依据）与 `entry.currentFrame`（qq_history 的识图锚点） |
+| 4 | `session/manager.js sessionRoute/getEntry` | 按拥有者/访客取或建会话（`sessionController.create` + `resolveAgent`，只建一次）；**取或建之前先做归档召回**（`session-archive.js`，否则宿主的归档闸门会 reject 整回合）；记 `entry.speaker`（鉴权依据）与 `entry.currentFrame`（qq_history 的识图锚点） |
 | 5 | `entry.queue`（串行） | `runTurn`：设 `entry.dshAllowed` → `describeImages`（下载 → `attachments.saveImage` → `llm` 视觉）→ `agent.followup` → `agent.whenIdle` |
 | 6 | `extractReply / sendReply / chunkText` | 只取本条用户消息之后的新 assistant 文本，按 `reply.maxChars` 分片，写 `send` 帧 |
 
