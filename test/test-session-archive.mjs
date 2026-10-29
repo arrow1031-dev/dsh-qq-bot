@@ -13,7 +13,7 @@
  * 用法：node test/test-session-archive.mjs
  */
 import { createSessionArchive } from '../lib/session/session-archive.js';
-import { createSession } from '../lib/session/manager.js';
+import { createSession, revivedSessionId } from '../lib/session/manager.js';
 
 let pass = 0, fail = 0;
 function check(name, ok, detail) {
@@ -31,11 +31,24 @@ async function quiet(fn) {
   finally { console.log = savedLog; console.error = savedError; }
 }
 
-/** 假 registry：只有召回真正需要的那两个成员。 */
-function fakeRegistry(archived) {
-  const state = { archived: archived.slice(), unarchiveCalls: [] };
+/**
+ * 假 registry。`workspaces` 是工作区账本（`list()` 的形状：每项带 sessionIds getter），
+ * 用来区分「归档」与「真正删除」——真宿主里后者会同时把账本槽位摘掉。
+ */
+function fakeRegistry(archived, workspaces) {
+  const state = {
+    archived: archived.slice(),
+    unarchiveCalls: [],
+    workspaces: (workspaces === undefined ? [] : workspaces).map((w) => ({ id: String(w.id), sessionIds: w.sessionIds.slice() })),
+  };
   const registry = {
     get archivedSessionIds() { return state.archived.slice(); },
+    list() {
+      return state.workspaces.map((w) => ({
+        id: w.id,
+        get sessionIds() { return w.sessionIds.slice(); },
+      }));
+    },
     async unarchiveSession(sessionId) {
       state.unarchiveCalls.push(String(sessionId));
       state.archived = state.archived.filter((id) => id !== String(sessionId));
@@ -129,6 +142,62 @@ function ctxOf(registry) {
   check('没有 registry 时 isArchived 恒 false', none.isArchived('qqbot-p') === false);
 }
 
+// ──────────────── isDetached：会话是否已不在任何工作区账本 ────────────────
+
+{
+  // 账本里还在 → 没被删（手动归档也是这种形态：归档不动账本槽位）。
+  const { registry } = fakeRegistry(['qqbot-a'], [{ id: 'ws-1', sessionIds: ['qqbot-a', 'qqbot-b'] }]);
+  const api = createSessionArchive({ ctx: ctxOf(registry) });
+  check('在账本里 → isDetached=false', api.isDetached('qqbot-a') === false);
+  check('不在账本里 → isDetached=true（要不要重建由调用方结合条目判断）', api.isDetached('qqbot-c') === true);
+}
+
+{
+  // dsh-session-manager 删除后的形态：账本槽位摘掉（归档集合里也不再留 id）。
+  const { registry } = fakeRegistry([], [{ id: 'ws-1', sessionIds: ['qqbot-other'] }]);
+  const api = createSessionArchive({ ctx: ctxOf(registry) });
+  check('删除后（账本已摘、归档也无）→ isDetached=true', api.isDetached('qqbot-del') === true);
+}
+
+{
+  // 权威 record 优先：getter 因索引 stale 隐藏了真实成员，也不能误判成删除。
+  const registry = {
+    get archivedSessionIds() { return []; },
+    list() { return [{ id: 'ws-1', record: { sessionIds: ['qqbot-stale'] }, get sessionIds() { return []; } }]; },
+  };
+  const api = createSessionArchive({ ctx: ctxOf(registry) });
+  check('record 里有 → 不误判（getter 只是过滤视图）', api.isDetached('qqbot-stale') === false);
+}
+
+{
+  // 老宿主没有 list()：读不到账本就绝不判删除。
+  const registry = { get archivedSessionIds() { return ['qqbot-x']; } };
+  const api = createSessionArchive({ ctx: ctxOf(registry) });
+  check('读不到工作区列表时不判删除', api.isDetached('qqbot-x') === false);
+}
+
+{
+  const registry = {
+    get archivedSessionIds() { throw new Error('workspace registry is not started yet'); },
+    list() { throw new Error('workspace registry is not started yet'); },
+  };
+  const api = createSessionArchive({ ctx: ctxOf(registry) });
+  let threw = false;
+  let detached;
+  try { detached = api.isDetached('qqbot-y'); } catch { threw = true; }
+  check('registry 未启动时 isDetached 不抛', threw === false && detached === false);
+}
+
+{
+  const a = revivedSessionId('qqbot-group-1');
+  const b = revivedSessionId('qqbot-group-1');
+  const c = revivedSessionId('qqbot-group-2');
+  check('revivedSessionId 确定性（同会话同 id）', a === b);
+  check('不同会话派生不同 id', a !== c);
+  check('派生 id 与原 id 不同', a !== 'qqbot-group-1');
+  check('派生 id 保持原前缀', a.indexOf('qqbot-group-1') === 0, a);
+}
+
 {
   // 老宿主：没有 unarchiveSession 方法。要求静默跳过、不抛（向后兼容）。
   const registry = { get archivedSessionIds() { return ['qqbot-old']; } };
@@ -148,11 +217,16 @@ function ctxOf(registry) {
 function makeWorld(opts) {
   const o = opts || {};
   const archived = Array.isArray(o.archived) ? o.archived.slice() : [];
+  // 工作区账本里的 sessionIds。缺省=空账本（配合 archived 就能构造「已删除」场景）。
+  const ledger = Array.isArray(o.ledger) ? o.ledger.slice() : [];
   const unarchiveCalls = [];
   const createCalls = [];
   const world = { createSawArchived: null };
   const registry = {
     get archivedSessionIds() { return archived.slice(); },
+    list() {
+      return [{ id: 'ws-1', get sessionIds() { return ledger.slice(); } }];
+    },
     async unarchiveSession(sessionId) {
       unarchiveCalls.push(String(sessionId));
       const idx = archived.indexOf(String(sessionId));
@@ -202,11 +276,11 @@ function makeWorld(opts) {
     flowGate: null,
     archiveApi,
   });
-  return { session, archived, unarchiveCalls, createCalls, world };
+  return { session, archived, ledger, unarchiveCalls, createCalls, world };
 }
 
 {
-  const w = makeWorld({ archived: ['qqbot-group-9'] });
+  const w = makeWorld({ archived: ['qqbot-group-9'], ledger: ['qqbot-group-9'] });
   await quiet(() => w.session.getEntry('group-9', 'qqbot-group-9', 'standard', null));
   check('归档会话在 create 之前已被召回', w.world.createSawArchived === false);
   check('召回恰好一次', w.unarchiveCalls.length === 1 && w.unarchiveCalls[0] === 'qqbot-group-9');
@@ -214,7 +288,7 @@ function makeWorld(opts) {
 }
 
 {
-  const w = makeWorld({ archived: [] });
+  const w = makeWorld({ archived: [], ledger: [] });
   await quiet(() => w.session.getEntry('group-10', 'qqbot-group-10', 'standard', null));
   check('未归档的会话不触发召回', w.unarchiveCalls.length === 0);
   check('未归档的会话照常建', w.createCalls.length === 1);
@@ -222,7 +296,7 @@ function makeWorld(opts) {
 
 {
   // 已有条目（agent 还活着）也可能被归档：这一步是新消息能不能继续跑的关键。
-  const w = makeWorld({ archived: [] });
+  const w = makeWorld({ archived: [], ledger: ['qqbot-group-11'] });
   await quiet(() => w.session.getEntry('group-11', 'qqbot-group-11', 'standard', null));
   w.archived.push('qqbot-group-11');   // 模拟主人在 DSH 侧手动归档
   await quiet(() => w.session.getEntry('group-11', 'qqbot-group-11', 'standard', null));
@@ -232,7 +306,7 @@ function makeWorld(opts) {
 
 {
   // 开关关闭：一切都照旧（不召回），但不能崩。
-  const w = makeWorld({ archived: ['qqbot-group-12'], recallArchived: false });
+  const w = makeWorld({ archived: ['qqbot-group-12'], ledger: ['qqbot-group-12'], recallArchived: false });
   await quiet(() => w.session.getEntry('group-12', 'qqbot-group-12', 'standard', null));
   check('开关关闭时不召回', w.unarchiveCalls.length === 0);
   check('开关关闭时仍能建会话', w.createCalls.length === 1);
@@ -242,7 +316,7 @@ function makeWorld(opts) {
   // 竞态回归：两条并发消息到达同一会话，只能建一次会话。
   // 召回必须放进 ready 链里——若放在 getEntry 开头 await，get/set 之间出现空档，
   // 两条消息会各自发现「没有条目」、各建一次。
-  const w = makeWorld({ archived: ['qqbot-group-13'] });
+  const w = makeWorld({ archived: ['qqbot-group-13'], ledger: ['qqbot-group-13'] });
   await quiet(() => Promise.all([
     w.session.getEntry('group-13', 'qqbot-group-13', 'standard', null),
     w.session.getEntry('group-13', 'qqbot-group-13', 'standard', null),
@@ -279,6 +353,58 @@ function makeWorld(opts) {
   });
   await quiet(() => session.getEntry('group-14', 'qqbot-group-14', 'standard', null));
   check('老宿主上召回静默跳过、会话照建', created === 1);
+}
+
+// ─────────────────── 会话被真正删除后的重建（两种删除器） ───────────────────
+
+{
+  // ① dsh-session-manager 的终态：detachFromWorkspaces（摘账本）+ unarchiveSession
+  //    （归档集合也清掉）+ rm 目录。所以在归档集合里**找不到**它 —— 旧判据正是死在这里。
+  const w = makeWorld({ archived: [], ledger: ['qqbot-mgr'] });
+  await quiet(() => w.session.getEntry('mgr', 'qqbot-mgr', 'standard', null));   // 先正常建一次
+  w.ledger.length = 0;                                                          // 模拟删除：账本摘掉
+  await quiet(() => w.session.getEntry('mgr', 'qqbot-mgr', 'standard', null));   // 删除后再来一条
+  const expected = revivedSessionId('qqbot-mgr');
+  check('session-manager 删除后 → 用派生 id 重建', w.createCalls.length === 2 && w.createCalls[1].sessionId === expected, JSON.stringify(w.createCalls[1]));
+  check('重建用的 id 与原 id 不同', expected !== 'qqbot-mgr');
+}
+
+{
+  // ② zh_pro 回收站的终态：摘账本 + 把仍 live 的会话塞进归档集合隐藏 + 移入回收站。
+  //    也就是「归档集合里有 + 账本里没有」。
+  const w = makeWorld({ archived: [], ledger: ['qqbot-zh'] });
+  await quiet(() => w.session.getEntry('zh', 'qqbot-zh', 'standard', null));
+  w.ledger.length = 0;                        // 摘账本
+  w.archived.push('qqbot-zh');                // 塞进归档集合隐藏
+  await quiet(() => w.session.getEntry('zh', 'qqbot-zh', 'standard', null));
+  check('zh_pro 删除后 → 同样用派生 id 重建', w.createCalls.length === 2 && w.createCalls[1].sessionId === revivedSessionId('qqbot-zh'), JSON.stringify(w.createCalls[1]));
+}
+
+{
+  // ③ 重建后连续多条消息：派生 id 确定性，必须复用条目，不能每条消息新建会话。
+  const w = makeWorld({ archived: [], ledger: ['qqbot-del2'] });
+  await quiet(() => w.session.getEntry('del2', 'qqbot-del2', 'standard', null));
+  w.ledger.length = 0;
+  await quiet(() => w.session.getEntry('del2', 'qqbot-del2', 'standard', null));   // 触发重建
+  await quiet(() => w.session.getEntry('del2', 'qqbot-del2', 'standard', null));   // 再来一条
+  await quiet(() => w.session.getEntry('del2', 'qqbot-del2', 'standard', null));   // 再来一条
+  check('重建后连续多条消息都复用同一条会话', w.createCalls.length === 2, String(w.createCalls.length));
+  check('重建后的会话 id 保持派生值', w.createCalls[1].sessionId === revivedSessionId('qqbot-del2'));
+}
+
+{
+  // ④ 从没建过的会话（账本里也没有）：不能误判成删除，必须用原 id 建。
+  const w = makeWorld({ archived: [], ledger: [] });
+  await quiet(() => w.session.getEntry('fresh', 'qqbot-fresh', 'standard', null));
+  check('全新会话用原 id 建（不派生成 -r）', w.createCalls.length === 1 && w.createCalls[0].sessionId === 'qqbot-fresh', JSON.stringify(w.createCalls[0]));
+}
+
+{
+  // ⑤ 普通归档（账本槽位还在）：只召回，绝不能误判成删除。
+  const w = makeWorld({ archived: ['qqbot-arch'], ledger: ['qqbot-arch'] });
+  await quiet(() => w.session.getEntry('arch', 'qqbot-arch', 'standard', null));
+  check('普通归档不触发重建（仍用原 id）', w.createCalls.length === 1 && w.createCalls[0].sessionId === 'qqbot-arch', JSON.stringify(w.createCalls[0]));
+  check('普通归档仍会召回', w.unarchiveCalls.length === 1);
 }
 
 console.log('\n' + pass + '/' + (pass + fail) + ' 项通过');

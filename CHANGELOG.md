@@ -1,5 +1,51 @@
 ## 未发布 —— P3 结构重构 + 注释审计 + 四处真缺陷（2026-10-29）
 
+### 修复：会话被真正删除后，再发消息不会重建会话
+
+现象：把某个 QQ 会话（比如 `群聊_299564047`）在 DSH 里**真正删除**（不是归档）之后，
+群里再 @ 它就没反应了 —— 不会建新会话，消息像掉进黑洞。
+
+根因不在插件自己，而是三件事叠在一起：
+
+1. 两种删除器都**不销毁内存里的 live agent** —— 上游 `agents` 服务只有
+   `create` / `resume` / `get` / `list`，**没有任何按 id 卸载 live agent 的公开 API**；
+2. 两种删除器都会把会话槽位从工作区账本（`workspace.sessionIds`）里摘掉，
+   但**归档集合的处理不一样**：
+   - `dsh-session-manager` 的 `deleteSession`：`detachFromWorkspaces()` → **`unarchiveSession()`**
+     （归档集合里不留 id）→ `rm` 整个会话目录；
+   - zh_pro 的回收站：摘账本 → 把仍 live 的会话**塞进归档集合隐藏** → 移入回收站；
+3. 插件内存里的 `state.convos` 条目也还在（agent 还活着，条目自然没人清）。
+
+于是 `getEntry` 永远命中「已有条目」分支、**一辈子不会调 `sessionController.create`**，
+消息就被喂给一个日志目录已经没了的旧 agent。
+
+> 第一版修复拿「归档集合里有它」当判据，**生产上不生效**：session-manager 会先
+> `unarchiveSession()` 把它摘掉，那个条件永远不成立。判据只能取两种删除器的**共同指纹**：
+> **不在任何工作区账本**。
+
+修复分两步：
+
+- **新增探测** `isDetached(sessionId)`（`session/session-archive.js`）：这个 id 是否已经
+  不在任何工作区账本里。读法上优先用 registry 实体的权威 `record.sessionIds`，退回公开的
+  `sessionIds` getter —— 后者会被 canonical-cwd 索引过滤，索引过期时会隐藏真实成员。
+  读不到工作区列表（老宿主没有 `list()`、registry 未启动）一律返回 false。
+- **调用方叠加「插件已经有它的条目」**（`session/manager.js`）：光看账本不够 ——
+  从没建过的会话同样不在账本里。所以判据是「**条目在 + 账本没了 = 被删了**」，
+  命中就换确定性派生 id 重建（`revivedSessionId()`），并丢掉旧条目、`agent.cancel()` 停掉残留回合。
+
+为什么不用宿主 `createMinted` 出来的新 id：`create` 对不可复用的 sessionId 会自己铸一个
+`session-<uuid>`，但插件下一条消息又会拿 `sessionRoute` 算出的原 id 来要会话 ——
+不把新 id 固定下来，就会**每条消息新建一条会话**。派生 id（`<原 id>-r<sha1 前 6 位>`）
+是确定性的，同一条 QQ 会话每次算出来都一样；条目记着派生 id，之后的消息直接复用。
+
+测试 `test/test-session-archive.mjs` 从 29 项加到 **47 项**，两种删除器的终态各跑一遍：
+session-manager（账本摘掉、归档集合也清空）与 zh_pro（账本摘掉 + 归档集合里留 id），
+都必须用派生 id 重建；另外覆盖「连续多条消息只重建一次」「全新会话不误判」
+「普通归档不触发重建」「record 存在时不被 stale getter 误导」。
+
+> 已知边界：那个被删除但仍驻留内存的孤儿 agent 收不掉 —— 宿主没有卸载 API。
+> 插件这边只是不再引用它，它会一直占着内存到进程重启。
+
 ### 新增：自动召回已归档会话
 
 QQ 会话在 DSH 侧被「归档」之后，新消息会**彻底石沉大海**——不发模型请求、不报错、日志只有一行
