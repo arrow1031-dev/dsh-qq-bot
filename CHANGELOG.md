@@ -1,5 +1,10 @@
 ## 未发布 —— 注释审计 + 四处真缺陷（2026-10-29）
 
+### gateway/plugin.js 第三阶段（一）：入站限制搬出（P3 2.4）
+
+- 滑动窗口限流、队列深度、单条长度与限流提示去重搬到 `gateway/inbound-limits.js`（`createInboundLimits`，只搬不改）；窗口表随模块走，配置每次现取。
+- `plugin.js` 1747 → 1708 行（行数只记录）；`test-plugin` 122/122、`test-security` 55/55 全绿。
+
 ### gateway/plugin.js 第二阶段（三）：适配器 / 路由 / 投递搬出（P3 2.4）
 
 - 适配器监管 → `gateway/adapter-supervision.js`；扫码绑定 + 版本探测 + 路由挂载 → `gateway/routes-glue.js`；流程产物投递 → `gateway/flow-delivery.js`。全部依赖注入、只搬不改，运行状态仍在插件 `state`。
