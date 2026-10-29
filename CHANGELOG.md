@@ -1,5 +1,10 @@
 ## 未发布 —— 注释审计 + 四处真缺陷（2026-10-29）
 
+### gateway/plugin.js 第二阶段（三）：适配器 / 路由 / 投递搬出（P3 2.4）
+
+- 适配器监管 → `gateway/adapter-supervision.js`；扫码绑定 + 版本探测 + 路由挂载 → `gateway/routes-glue.js`；流程产物投递 → `gateway/flow-delivery.js`。全部依赖注入、只搬不改，运行状态仍在插件 `state`。
+- 连同前两块，`plugin.js` 2291 → 1746 行（行数只记录）；`test-plugin` 122/122、三个协议适配器自测、`test-flow-wiring` 23/23 全绿。
+
 ### gateway/plugin.js 第二阶段（一）：主动发言表面层搬出（P3 2.4）
 
 - `gateway/plugin.js` 的主动发言表面层（配置读取、排程、群级状态、tick 编排）搬到 `gateway/proactive-surface.js`（`createProactiveSurface`，依赖注入、只搬不改）；判定与提示词仍在 `session/proactive.js`。

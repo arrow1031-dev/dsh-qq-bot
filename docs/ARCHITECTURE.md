@@ -240,6 +240,9 @@ lib/**/*-set.json  →  SETTINGS_FIELDS  →  GET /dsh-qq-bot/settings  →  客
 | `gateway/turn-text.js` | 无状态回合文本工具：人格段、配置脱敏、昵称清洗、turn 失败原因归一、协议 id 归一（P3 2.4 第一阶段搬出） | `buildPersonaHint` `dropConfigPaths` `sanitizeDisplayName` `summarizeTurnReason` `idValue` |
 | `gateway/model-pick.js` | 模型选择：构建 `modelRouter` + `/model` 指令；依赖（ctx.get / 前缀 / 日志）由插件注入 | `createModelPicker` |
 | `gateway/proactive-surface.js` | 主动发言表面层：配置读取、排程、群级状态与 tick 编排；判定/提示词仍在 `session/proactive.js` | `createProactiveSurface` |
+| `gateway/adapter-supervision.js` | 适配器监管：启动参数、子进程生命周期、stdin 写帧、动作请求/超时、重启退避；状态仍在插件 `state` | `createAdapterSupervision` |
+| `gateway/routes-glue.js` | 扫码绑定 / 版本探测 / 路由挂载的接线层 | `createRouteGlue` |
+| `gateway/flow-delivery.js` | 流程产物投递：按 `flow.deliver` 打包并上传（私聊 / 群 / none） | `createFlowDelivery` |
 | `gateway/index.js` | **HTTP 路由统一挂载**：ROUTE_MOUNTS 表 + 等 webServer 就绪 + 逆序注销 + 失败降级 | `mountHttpRoutes` `mountRoutesWhenReady` |
 | `gateway/route-auth.js` | **路由鉴权闸门**：插件具名路由在 DSH 鉴权层**之前**被处理（`GET /` 回 401，`GET /dsh-qq-bot/settings` 回 200），所以自己过一遍 `client-connection` 的浏览器 cookie 校验 + Origin/Referer 同源校验；拿不到该服务时降级放行（那种环境里 DSH 自己也没鉴权） | `createRouteGuard` |
 | `gateway/routes-bind.js` | 扫码绑定的两条具名路由：只回状态与脱敏 appId，不碰密钥；`waiting` 期会给登录 URL，必须先过 `guard` | `registerBindRoutes` `BIND_STATE_PATH` `BIND_REFRESH_PATH` |
