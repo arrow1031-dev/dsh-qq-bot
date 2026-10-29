@@ -1,5 +1,5 @@
 {
-  "priority": 20,
+  "priority": 200,
   "group": "auth",
   "fields": [
     {
@@ -100,6 +100,7 @@
       "subtab": "access"
     },
     {
+      "priority": 150,
       "path": [
         "auth",
         "ownerPreset"
@@ -112,6 +113,7 @@
       "subtab": "session"
     },
     {
+      "priority": 150,
       "path": [
         "auth",
         "guestPreset"

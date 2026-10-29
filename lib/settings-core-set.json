@@ -1,5 +1,5 @@
 {
-  "priority": 10,
+  "priority": 100,
   "fields": [
     {
       "path": [
@@ -619,6 +619,7 @@
       "subtab": "session"
     },
     {
+      "priority": 190,
       "path": [
         "agentPreset"
       ],
