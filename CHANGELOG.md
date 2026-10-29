@@ -1,5 +1,14 @@
 ## 未发布 —— P3 结构重构 + 注释审计 + 四处真缺陷（2026-10-29）
 
+### 换行符统一回 LF + 加 `.gitattributes`
+
+P3 重构把 13 个文件（`gateway/plugin.js` + 11 个新模块 + `tools/index.js` + `test/test-security.mjs`）
+整体写成了 CRLF。后果不是运行期的（Node 不在乎），而是**可维护性**的：`tools/index.js` 那 45 行
+真实改动显示成 2247 行 diff，`git blame` 全线断掉，以后任何一次回移或三方合并都会整文件冲突。
+
+- 13 个文件统一转回 LF；`git diff --ignore-cr-at-eol` 为空，即**纯换行符变化、零逻辑改动**。
+- 新增 `.gitattributes`（`* text=auto eol=lf`）：比口头约定可靠，编辑器再存一次也翻不了车。
+
 ### 修复：`/auth` 授权后回合续不上（P3 2.4 带出来的回归）
 
 `createTurnRuntime` 没把 `runTurn` 从工厂里导出，而插件注入的是

@@ -1,0 +1,6 @@
+# 统一换行符：仓库里一律存 LF，检出也用 LF。
+#
+# 这次 P3 重构把 13 个文件（plugin.js + 11 个新模块 + tools/index.js）整体写成了 CRLF，
+# 于是 tools/index.js 的 45 行真实改动显示成 2247 行 diff，git blame 全线断掉、以后任何
+# 回移都会整文件冲突。.gitattributes 比口头约定可靠：写在这里，编辑器再存一次也翻不了车。
+* text=auto eol=lf
