@@ -1,5 +1,10 @@
 ## 未发布 —— 注释审计 + 四处真缺陷（2026-10-29）
 
+### gateway/plugin.js 第三阶段（二）：授权与流程搬出（P3 2.4）
+
+- 主人私聊提示、动态码校验、`/auth` 与 `/flow` 指令、授权后把被拦回合续上，以及 `writeFlowAuthPatch`，搬到 `gateway/auth-flow.js`（`createAuthFlow`，只搬不改）；状态仍在插件 `state`，判定仍走 valve 的 `flowGate`。
+- `plugin.js` 1708 → 1445 行（行数只记录）；`test-plugin` 122/122、`test-flow-auth` 43/43、`test-flow-commands` 49/49 全绿。
+
 ### gateway/plugin.js 第三阶段（一）：入站限制搬出（P3 2.4）
 
 - 滑动窗口限流、队列深度、单条长度与限流提示去重搬到 `gateway/inbound-limits.js`（`createInboundLimits`，只搬不改）；窗口表随模块走，配置每次现取。
