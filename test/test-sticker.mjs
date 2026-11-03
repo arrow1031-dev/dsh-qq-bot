@@ -6,7 +6,7 @@
  */
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, utimesSync, existsSync, renameSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import {
   INDEX_FILE,
   createStickerLibrary,
@@ -305,7 +305,9 @@ try {
 
   console.log('\n16. 目录解析：相对路径按 QQ_msg 解析，留空 = sticker 子目录');
   const relLib = makeLibrary('/tmp/qqroot', { sticker: { dir: 'mystickers' } });
-  check('相对目录拼到 QQ_msg 下', relLib.library.resolveDir() === join('/tmp/qqroot', 'mystickers'), relLib.library.resolveDir());
+  // 相对目录在实现里走 resolve(root, dir)（Windows 上会绝对化并带盘符）；期望值也要用 resolve，
+  // 否则 join 在 Windows 上得到无盘符的路径，这条断言只在 POSIX 成立。
+  check('相对目录拼到 QQ_msg 下', relLib.library.resolveDir() === resolve('/tmp/qqroot', 'mystickers'), relLib.library.resolveDir());
   const defaultLib = makeLibrary('/tmp/qqroot', { sticker: { dir: '' } });
   check('留空 = <QQ_msg>/sticker', defaultLib.library.resolveDir() === join('/tmp/qqroot', 'sticker'), defaultLib.library.resolveDir());
 
@@ -313,11 +315,11 @@ try {
   const config = await import('../lib/config.js');
   check('schema 里有 sticker 组且默认开启', config.DEFAULTS.sticker.enabled === true && config.DEFAULTS.sticker.autoTag === true);
   const stickerFields = config.SETTINGS_FIELDS.filter((field) => field.group === 'sticker');
-  check('设置页有 11 个表情包字段（含闸门三项）', stickerFields.length === 11, String(stickerFields.length));
+  check('设置页有 8 个表情包字段', stickerFields.length === 8, String(stickerFields.length));
   check('卡片字段挂在 能力 → 表情包', stickerFields.every((field) => field.tab === 'capability' && field.subtab === 'sticker'));
   check('开关是 kind=sticker 的卡片，其余是卡片内字段',
     stickerFields.find((field) => field.path.join('.') === 'sticker.enabled').kind === 'sticker'
-    && stickerFields.filter((field) => field.in === 'sticker-card').length === 10,
+    && stickerFields.filter((field) => field.in === 'sticker-card').length === 7,
     JSON.stringify(stickerFields.map((field) => [field.path.join('.'), field.kind, field.in || ''])));
   console.log('\n18. 设置页路由：状态 / 重建 / 参数校验');
   const { registerStickerRoutes } = await import('../lib/gateway/routes-sticker.js');
