@@ -477,7 +477,11 @@ try {
     moliRepoLink !== null && childText(moliRepoLink) === '去 GitHub 看 dsh-moli →',
     String(moliRepoLink && childText(moliRepoLink)));
   check('引擎就绪时不显示安装链接', findDataSet(capRetrievalTree, 'data-moli-repo') === null);
-  check('没装时不给「高级设置」入口（先解决引擎）', findDataSet(capMissing, 'data-moli-advanced') === null);
+  // 折叠入口与 canToggle 解绑：引擎没装好时仍然能点开「高级设置」（比如先填引擎路径救场）。
+  // 以前这里断言「没装就看不到入口」，那正是本次要修的行为。
+  check('没装时也能点开「高级设置」（入口不再跟引擎状态绑定）',
+    findDataSet(capMissing, 'data-moli-advanced') !== null,
+    JSON.stringify(findDataSet(capMissing, 'data-moli-advanced') === null ? null : 'present'));
 
   // ---- 插件在、引擎缺失：同样不可启用 ----
   moliPluginRows = [{ entryId: 'dsh-moli', moduleName: 'dsh-moli', enabled: true, fiberPhase: 'active' }];
@@ -943,23 +947,37 @@ try {
   stickerStep = renderWithEffects();
   const collapsedToggle = findDataSet(stickerStep.tree, 'data-sticker-toggle');
   const collapsedText = textsOf(stickerStep.tree);
-  check('未启用时卡片折叠（参数与状态区都不渲染）',
+  // 折叠口径与 moli 对齐：默认折叠，但折叠与否只看「有没有点高级设置」，不看启用开关。
+  check('默认折叠（参数未渲染，但有折叠按钮）',
     collapsedToggle !== null
-    && findDataSet(stickerStep.tree, 'data-sticker-collapsed') !== null
+    && findDataSet(stickerStep.tree, 'data-sticker-advanced') !== null
     && findDataSet(stickerStep.tree, 'data-sticker-rebuild') === null
-    && collapsedText.includes('表情包目录') === false
-    && collapsedText.includes('勾上「启用表情包图库」后展开'),
+    && collapsedText.includes('表情包目录') === false,
+    collapsedText.slice(0, 200));
+  check('未启用时也提示「勾上开关才会真正扫描」',
+    collapsedToggle.props.checked !== true
+    && findDataSet(stickerStep.tree, 'data-sticker-collapsed') !== null,
     collapsedText.slice(0, 200));
 
-  // 勾上开关 → 组件把 sticker.enabled 写进 draft，卡片当场展开。
-  if (collapsedToggle.props.checked !== true) {
-    collapsedToggle.props.onChange({ target: { checked: true } });
-  }
+  // 未启用（没勾开关）也能点开高级设置看参数——这正是这次要改的行为。
+  const advancedBtnOff = findDataSet(stickerStep.tree, 'data-sticker-advanced');
+  check('未启用时折叠按钮可点（不是 disabled）',
+    advancedBtnOff !== null && advancedBtnOff.props.disabled !== true, JSON.stringify(advancedBtnOff === null ? null : advancedBtnOff.props));
+  advancedBtnOff.props.onClick();
+  stickerStep = renderWithEffects();
+  check('未启用也能展开（参数与状态区都渲染出来了）',
+    textsOf(stickerStep.tree).includes('表情包目录')
+    && findDataSet(stickerStep.tree, 'data-sticker-toggle').props.checked !== true,
+    textsOf(stickerStep.tree).slice(0, 200));
+
+  // 勾上开关 → 组件把 sticker.enabled 写进 draft；展开状态由折叠按钮单独管，不受开关影响。
+  const offToggle = findDataSet(stickerStep.tree, 'data-sticker-toggle');
+  offToggle.props.onChange({ target: { checked: true } });
   stickerStep = renderWithEffects();
   const expandedToggle = findDataSet(stickerStep.tree, 'data-sticker-toggle');
-  check('勾上开关后卡片展开（开关变 checked，折叠提示消失）',
+  check('勾上开关后开关变 checked，且折叠状态保持不变',
     expandedToggle !== null && expandedToggle.props.checked === true
-    && findDataSet(stickerStep.tree, 'data-sticker-collapsed') === null,
+    && findDataSet(stickerStep.tree, 'data-sticker-advanced') !== null,
     textsOf(stickerStep.tree).slice(0, 160));
   // 重建按钮住在状态区里：状态区要先拿到 GET 结果才会渲染按钮，所以放到下面那段之后断言。
   check('展开后卡片参数已渲染（目录字段出现）',
