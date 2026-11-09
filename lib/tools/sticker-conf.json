@@ -12,7 +12,7 @@
     "chance": 0.3,
     "maxPerHour": 6,
     "dupTTLHours": 24,
-    "collect": true,
+    "collect": false,
     "collectMaxMb": 2
   }
 }
