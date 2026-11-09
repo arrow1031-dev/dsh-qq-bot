@@ -62,6 +62,27 @@
     {
       "path": [
         "sticker",
+        "collectMaxCount"
+      ],
+      "label": "收图数量上限",
+      "kind": "number",
+      "in": "sticker-card",
+      "hint": "直接填纯数字：get_stickers 系列最多留几张（0 = 不限）。只算自动收来的图，不碰你自己整理好的系列",
+      "digitsOnly": true
+    },
+    {
+      "path": [
+        "sticker",
+        "collectAutoTrim"
+      ],
+      "label": "超上限自动删最早的",
+      "kind": "bool",
+      "in": "sticker-card",
+      "hint": "默认关闭。开启后每当收来的图超过上面那个上限，就按入库时间从最旧的开始删（文件与索引一起删）；只动 get_stickers 系列，删掉的图不可恢复"
+    },
+    {
+      "path": [
+        "sticker",
         "gifCompat"
       ],
       "label": "GIF 兼容模式",
