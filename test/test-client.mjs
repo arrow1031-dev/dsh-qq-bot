@@ -639,6 +639,12 @@ try {
   check('「已设置」旁边仍说明「留空则保持不变」', joined.includes('留空则保持不变'));
   check('未设置时走灰框灰字分支（源码里有 secretBadgeOff 与「未设置」）',
     bundleSource.includes('secretBadgeOff') && bundleSource.includes("'未设置'"));
+  // 同类缺陷：secrets 里每个 secret 字段都会有一条记录（set 可能为 false），
+  // 以前看「条目存在」就当已配置，于是没配过 TOTP 也显示「密钥已经配置好了」。
+  check('TOTP 是否已配置看 secrets 的 set（不是看条目存在）',
+    /secretKey === 'flowAuth\.totpSecret'\) totpSecretSet = entry\.set === true/.test(bundleSource), '');
+  check('扫码绑定的「已绑定 AppID」用去空白后的非空判断',
+    /String\(st\.appId \|\| ''\)\.trim\(\) !== ''/.test(bundleSource), '');
 
   const collectInputs = (node, out) => {
     if (node === null || node === undefined || typeof node !== 'object') return out;
