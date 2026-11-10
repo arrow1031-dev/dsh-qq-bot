@@ -321,7 +321,8 @@ try {
   {
     const policy = await import('../lib/valve/network/policy.js');
     const root = join(tmpRoot, 'collect');
-    const { library: collectLib } = makeLibrary(root, { sticker: { collect: true, collectMaxMb: 1, collectMaxCount: 0, autoTag: false } });
+    // collectChance=1：这一段测的是大小闸/去重/下限，不要被随机闸干扰
+    const { library: collectLib } = makeLibrary(root, { sticker: { collect: true, collectMaxMb: 1, collectMaxCount: 0, autoTag: false, collectChance: 1 } });
     const gifBytes = (size) => {
       const b = Buffer.alloc(size, 0);
       b[0] = 0x47; b[1] = 0x49; b[2] = 0x46; b[3] = 0x39;   // GIF89a
@@ -391,6 +392,21 @@ try {
       check('刚好过 90KB 的图能收', justAbove.status === 'new', JSON.stringify(justAbove));
     }
 
+    // 概率闸：chance=0 恒不收；chance=1 恒收（跳过随机，便于断言）
+    {
+      // makeLibrary 返回 { library, calls, config, ctx }，不是库本身
+      const gate = makeLibrary(join(tmpRoot, 'chance'), { sticker: { collect: true, collectMaxMb: 1, collectMaxCount: 0, autoTag: false, collectChance: 0 } });
+      const gateLib = gate.library;
+      nextBody = gifBytes(900 * 1024);
+      nextTruncated = false;
+      const blocked = await gateLib.collect('https://example.com/chance-blocked.gif');
+      check('collectChance=0 时一张都不收', blocked.status === 'skip' && String(blocked.reason).includes('概率闸'), JSON.stringify(blocked));
+
+      gate.config.sticker.collectChance = 1;
+      const passed = await gateLib.collect('https://example.com/chance-pass.gif');
+      check('collectChance=1 时必收（不受随机影响）', passed.status === 'new', JSON.stringify(passed));
+    }
+
     // 元数据判定：普通照片不收、收藏表情/GIF 收
     const { isStickerLike } = await import('../lib/message/segments.mjs');
     check('普通照片（sub=0 + 空 summary + .jpg）不算表情包',
@@ -405,11 +421,11 @@ try {
   const config = await import('../lib/config.js');
   check('schema 里有 sticker 组且默认开启', config.DEFAULTS.sticker.enabled === true && config.DEFAULTS.sticker.autoTag === true);
   const stickerFields = config.SETTINGS_FIELDS.filter((field) => field.group === 'sticker');
-  check('设置页有 15 个表情包字段（含收图四项）', stickerFields.length === 15, String(stickerFields.length));
+  check('设置页有 16 个表情包字段（含收图五项）', stickerFields.length === 16, String(stickerFields.length));
   check('卡片字段挂在 能力 → 表情包', stickerFields.every((field) => field.tab === 'capability' && field.subtab === 'sticker'));
   check('开关是 kind=sticker 的卡片，其余是卡片内字段',
     stickerFields.find((field) => field.path.join('.') === 'sticker.enabled').kind === 'sticker'
-    && stickerFields.filter((field) => field.in === 'sticker-card').length === 14,
+    && stickerFields.filter((field) => field.in === 'sticker-card').length === 15,
     JSON.stringify(stickerFields.map((field) => [field.path.join('.'), field.kind, field.in || ''])));
   console.log('\n18. 设置页路由：状态 / 重建 / 参数校验');
   const { registerStickerRoutes } = await import('../lib/gateway/routes-sticker.js');

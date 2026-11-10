@@ -62,6 +62,20 @@
     {
       "path": [
         "sticker",
+        "collectChance"
+      ],
+      "label": "收图概率",
+      "kind": "number",
+      "in": "sticker-card",
+      "hint": "0–1：群里每张表情包按这个概率才收进图库。0 = 一张都不收，1 = 全收，默认 0.3（大概每三张收一张）。群里斗图时不会把图库塞爆",
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "slider": true
+    },
+    {
+      "path": [
+        "sticker",
         "collectMaxCount"
       ],
       "label": "收图数量上限",

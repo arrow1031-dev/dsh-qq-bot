@@ -15,6 +15,7 @@
     "collect": false,
     "collectMaxMb": 2,
     "collectMaxCount": 100,
-    "collectAutoTrim": false
+    "collectAutoTrim": false,
+    "collectChance": 0.3
   }
 }
