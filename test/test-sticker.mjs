@@ -356,6 +356,41 @@ try {
     const dup = await collectLib.collect('https://example.com/small.gif');
     check('同图再收一次返回 dup（sha1 命中已有条目）', dup.status === 'dup' && dup.id === okSmall.id, JSON.stringify(dup));
 
+    // GIF 首帧兜底：raw image/gif 打标拿到空文本时，应自动解首帧 PNG 重试
+    {
+      const gifRoot = join(tmpRoot, 'gif-fallback');
+      mkdirSync(join(gifRoot, '系列'), { recursive: true });
+      // 造一个能被 gif.js 解出来的最小 GIF（用库里已有的写图助手不行，直接拷一张真实测试图）
+      const { gifFirstFrameToPng } = await import('../lib/tools/sticker.js');
+      const tinyGif = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
+      check('测试用最小 GIF 能解出首帧', gifFirstFrameToPng(tinyGif) !== null, String(gifFirstFrameToPng(tinyGif) === null));
+      writeFileSync(join(gifRoot, '系列/1.gif'), tinyGif);
+      const fb = makeLibrary(gifRoot, {
+        // 打标空返回会自动重试一次：所以 raw 那条给连两次空（第 1、2 次），
+        // 触发 GIF→首帧 PNG 兜底后才给正常标签（第 3 次）。
+        reply: (n) => (n <= 2 ? '' : '【标签】兜底,测试' + '\n' + '【描述】首帧兜底成功'),
+      });
+      // gifCompat 关：走 raw 失败 → 首帧兜底的路径
+      fb.config.sticker.gifCompat = false;
+      const report = await fb.library.sync({ tag: true });
+      check('GIF 打标失败后自动用首帧重试成功', report.tagged === 1 && report.failed === 0,
+        JSON.stringify({ tagged: report.tagged, failed: report.failed, errors: report.errors }));
+      check('兜底成功时记下了 GIF→PNG 的 tagNote',
+        JSON.stringify(loadIndexAt(gifRoot).index.items[0] || {}).includes('PNG'), '');
+    }
+
+    // 太小不收：90KB 以下一律丢弃（实测 8KB 小图打标稳定空返回）
+    {
+      nextTruncated = false;
+      nextBody = gifBytes(8 * 1024);
+      const tooSmall = await collectLib.collect('https://example.com/tiny.gif');
+      check('小于 90KB 的图一律丢弃（打标模型对这类图稳定空返回）',
+        tooSmall.status === 'skip' && String(tooSmall.reason).includes('太小'), JSON.stringify(tooSmall));
+      nextBody = gifBytes(95 * 1024);
+      const justAbove = await collectLib.collect('https://example.com/edge.gif');
+      check('刚好过 90KB 的图能收', justAbove.status === 'new', JSON.stringify(justAbove));
+    }
+
     // 元数据判定：普通照片不收、收藏表情/GIF 收
     const { isStickerLike } = await import('../lib/message/segments.mjs');
     check('普通照片（sub=0 + 空 summary + .jpg）不算表情包',
