@@ -252,8 +252,9 @@ node -e "fetch('http://127.0.0.1:3000/__sent').then(r=>r.json()).then(j=>console
     logAdapterFrames: false
     vision:
       enabled: true
-      provider: ''   # 视觉 provider（留空 = 会话模型）
-      model: ''   # 视觉模型 id（留空 = 会话模型；须声明 input: [text, image]）
+      provider: ''   # 识图 provider（与 model 都留空 = 复用会话模型，图片当附件直接进会话）
+      model: ''   # 识图模型 id（填了则先识别成文字再并入回复；须声明 input: [text, image]）
+      # 两条路径共用：附件名/落盘名 = 内容 sha1 前 16 位 + 扩展名；正文 [图片] 占位符会换成 [图片<文件名>]
       maxImages: 3   # 单条消息最多送入几张图
       downloadTimeoutMs: 10000
     webSearch:
