@@ -392,6 +392,21 @@ try {
       check('刚好过 90KB 的图能收', justAbove.status === 'new', JSON.stringify(justAbove));
     }
 
+    // 数量上限是硬限制：关掉「自动删最早」时，到顶就不再收（而不是形同虚设）
+    {
+      const cap = makeLibrary(join(tmpRoot, 'cap'), { sticker: { collect: true, collectChance: 1, collectMaxMb: 1, collectMaxCount: 2, collectAutoTrim: false, autoTag: false } });
+      nextTruncated = false;
+      const r = [];
+      for (let i = 0; i < 4; i += 1) {
+        nextBody = gifBytes(900 * 1024 + i);   // 每张内容不同，避免被 dup 掉
+        r.push(await cap.library.collect('https://example.com/cap' + i + '.gif'));
+      }
+      check('关自动删时到上限就不再收（前 2 张收下，后 2 张 skip）',
+        r[0].status === 'new' && r[1].status === 'new' && r[2].status === 'skip' && r[3].status === 'skip'
+        && String(r[2].reason).includes('已到数量上限'),
+        JSON.stringify(r.map((x) => x.status + (x.reason ? ':' + String(x.reason).slice(0, 18) : ''))));
+    }
+
     // 概率闸：chance=0 恒不收；chance=1 恒收（跳过随机，便于断言）
     {
       // makeLibrary 返回 { library, calls, config, ctx }，不是库本身
