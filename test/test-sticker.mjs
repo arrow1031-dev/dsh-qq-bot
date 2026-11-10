@@ -313,6 +313,59 @@ try {
   // 改成 resolve 反而会在 Windows 上失败。
   check('留空 = <QQ_msg>/sticker', defaultLib.library.resolveDir() === join('/tmp/qqroot', 'sticker'), defaultLib.library.resolveDir());
 
+  console.log('\n16b. 偷表情包：大小闸 / 去重 / 元数据判定');
+
+  // 大小闸：publicFetch 是「边读边截」，超限的响应 body 会被截到 maxBytes。
+  // 原来只看 `buf.length > maxBytes`，恒为 false → 超限图被静默截成残缺文件写进库。
+  // 修法是多要 1 字节并看 truncated 标记，这里用网络钩子把两种情形都跑一遍。
+  {
+    const policy = await import('../lib/valve/network/policy.js');
+    const root = join(tmpRoot, 'collect');
+    const { library: collectLib } = makeLibrary(root, { sticker: { collect: true, collectMaxMb: 1, collectMaxCount: 0, autoTag: false } });
+    const gifBytes = (size) => {
+      const b = Buffer.alloc(size, 0);
+      b[0] = 0x47; b[1] = 0x49; b[2] = 0x46; b[3] = 0x39;   // GIF89a
+      return b;
+    };
+    let nextBody = gifBytes(1024);
+    let nextTruncated = false;
+    policy.__setNetworkHooks({
+      lookup: async () => [{ address: '93.184.216.34', family: 4 }],
+      request: async () => ({
+        status: 200, body: nextBody, headers: {}, contentType: 'image/gif',
+        setCookie: '', location: '', truncated: nextTruncated, finalUrl: 'https://example.com/a.gif',
+      }),
+    });
+
+    // 1MB 上限内：收下
+    nextBody = gifBytes(900 * 1024);
+    nextTruncated = false;
+    const okSmall = await collectLib.collect('https://example.com/small.gif');
+    check('1MB 上限内的 gif 能收（status=new）', okSmall.status === 'new', JSON.stringify(okSmall));
+
+    // 超限：响应被截断 → 必须 skip，不能落残缺文件
+    nextBody = gifBytes(1024 * 1024 + 1);
+    nextTruncated = true;
+    const overLimit = await collectLib.collect('https://example.com/big.gif');
+    check('超上限的图按 truncated 判定为 skip（不是静默截断入库）',
+      overLimit.status === 'skip' && String(overLimit.reason).includes('超过大小上限'), JSON.stringify(overLimit));
+
+    // 同一张图第二次：dup，不重复落盘
+    nextBody = gifBytes(900 * 1024);
+    nextTruncated = false;
+    const dup = await collectLib.collect('https://example.com/small.gif');
+    check('同图再收一次返回 dup（sha1 命中已有条目）', dup.status === 'dup' && dup.id === okSmall.id, JSON.stringify(dup));
+
+    // 元数据判定：普通照片不收、收藏表情/GIF 收
+    const { isStickerLike } = await import('../lib/message/segments.mjs');
+    check('普通照片（sub=0 + 空 summary + .jpg）不算表情包',
+      isStickerLike({ subType: 0, summary: '', ext: '.jpg' }) === false);
+    check('收藏表情（sub=1）算表情包', isStickerLike({ subType: 1, summary: '', ext: '.jpg' }) === true);
+    check('自制 GIF（.gif）算表情包', isStickerLike({ subType: 0, summary: '', ext: '.gif' }) === true);
+    check('「动画表情」summary 也算表情包', isStickerLike({ subType: 0, summary: '[动画表情]', ext: '.jpg' }) === true);
+    policy.__setNetworkHooks(null);
+  }
+
   console.log('\n17. 配置契约（默认值与设置字段）');
   const config = await import('../lib/config.js');
   check('schema 里有 sticker 组且默认开启', config.DEFAULTS.sticker.enabled === true && config.DEFAULTS.sticker.autoTag === true);
